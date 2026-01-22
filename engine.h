@@ -1,4 +1,5 @@
 #pragma once
+#include <chrono>
 #include <utility>
 
 #include "chess.h"
@@ -77,9 +78,70 @@ struct board_wrapper
     }
 };
 
+// TODO: copy from board
+struct tt
+{
+};
 
 // TODO: make engine
 struct engine
 {
+    chess::Board m_position;
 
+    // must be set via methods
+    explicit engine() = default;
+
+    int nn_eval()
+    {
+    }
+
+    int negamax(int alpha, int beta, std::vector<chess::Move> &pv_list)
+    {
+    }
+
+    uint64_t perft(int depth)
+    {
+        chess::Movelist moves;
+        chess::movegen::legalmoves(moves, m_position);
+
+        if (depth == 1)
+        {
+            return moves.size();
+        }
+
+        uint64_t total = 0;
+        for (const auto &move: moves)
+        {
+            m_position.makeMove(move);
+            total += perft(depth - 1);
+            m_position.unmakeMove(move);
+        }
+
+        return total;
+    }
+
+    void perft(const chess::Board &reference, int depth)
+    {
+        using namespace std;
+
+        m_position = reference;
+        cout << "benchmarking perft, depth: " << depth << endl;
+        cout << "fen: " << m_position.getFen() << endl;
+
+        const auto t1    = chrono::high_resolution_clock::now();
+        const auto nodes = perft(depth);
+        const auto t2    = chrono::high_resolution_clock::now();
+        const auto ms    = chrono::duration_cast<chrono::milliseconds>(t2 - t1).count();
+
+        auto original = std::cout.getloc();
+        std::cout.imbue(std::locale("en_US.UTF-8"));
+        cout << "nodes: " << nodes << ", took " << ms << "ms" << endl;
+        cout << "nps: " << nodes * 1000 / ms << endl;
+        std::cout.imbue(original);
+    }
+
+    chess::Move search(const chess::Board &reference, int ms)
+    {
+        m_position = reference;
+    }
 };

@@ -1,14 +1,20 @@
 #include <iostream>
-#include "engine.h"
+#define CHESS_USE_PEXT
 #include "chess.h"
 
+#include "engine.h"
 
 
+void perft()
+{
+    engine engine;
+    chess::Board board{};
+    engine.perft(board, 7);
+}
 
 int main()
 {
+    perft();
 
-    board_wrapper board = board_wrapper::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    std::cout << board.display() << std::endl;
     return 0;
 }

@@ -1,0 +1,13 @@
+[perft]
+
+# default
+benchmarking perft, depth: 7
+fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+nodes: 3,195,901,860, took 6,036ms
+nps: 529,473,469
+
+# with native and pext
+benchmarking perft, depth: 7
+fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+nodes: 3,195,901,860, took 5,592ms
+nps: 571,513,208
