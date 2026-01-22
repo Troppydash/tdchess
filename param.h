@@ -7,9 +7,9 @@ namespace param
 constexpr int32_t CHECKMATE = 9000000;
 constexpr int32_t INF = 10000000;
 
-// int exact_flag = 0;
-// int alpha_flag = 1;
-// int beta_flag = 2;
+constexpr uint8_t EXACT_FLAG = 0;
+constexpr uint8_t ALPHA_FLAG = 1;
+constexpr uint8_t BETA_FLAG = 2;
 
 constexpr uint8_t MAX_DEPTH = 255;
 

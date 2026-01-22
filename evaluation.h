@@ -6,7 +6,6 @@
 // from http://www.tckerrigan.com/Chess/TSCP/Community/
 namespace pesto
 {
-
 int32_t mg_value[6] = {82, 337, 365, 477, 1025, 0};
 int32_t eg_value[6] = {94, 281, 297, 512, 936, 0};
 
@@ -167,7 +166,7 @@ int32_t gamephaseInc[12] = {0, 0, 1, 1, 1, 1, 2, 2, 4, 4, 0, 0};
 int32_t mg_table[12][64];
 int32_t eg_table[12][64];
 
-constexpr int flip(int x)
+constexpr uint32_t flip(uint32_t x)
 {
     return x ^ 56;
 }

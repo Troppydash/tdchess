@@ -6,6 +6,7 @@
 #include "param.h"
 #include "evaluation.h"
 #include "timer.h"
+#include "table.h"
 
 // TODO: copy from board
 struct tt
@@ -42,6 +43,7 @@ struct search_result
 struct engine_stats
 {
     uint32_t nodes_searched;
+    uint8_t tt_occupancy;
     std::chrono::milliseconds total_time;
 
     void display_delta(const engine_stats &old, const search_result &result) const
@@ -74,13 +76,14 @@ struct engine_stats
         uint32_t nps = nodes_searched * 1000 / std::max(1L, total_time.count());
 
         printf(
-            "info depth %d seldepth %d multipv 1 score cp %d nodes %d nps %d time %ld pv",
+            "info depth %d seldepth %d multipv 1 score cp %d nodes %d nps %d time %ld ttocc %d pv",
             result.depth,
             result.depth,
             result.score,
             nodes_searched,
             nps,
-            total_time.count()
+            total_time.count(),
+            tt_occupancy
         );
 
         for (auto &m: result.pv_line)
@@ -96,9 +99,11 @@ struct engine
     chess::Board m_position;
     timer m_timer;
     engine_stats m_stats;
+    table m_table;
 
     // must be set via methods
-    explicit engine()
+    explicit engine(int table_size_in_mb = 512)
+        : m_table(table_size_in_mb)
     {
         // init tables
         pesto::init();
@@ -122,19 +127,48 @@ struct engine
         if (m_timer.is_stopped())
             return 0;
 
+        // check draw
+        if (m_position.isInsufficientMaterial())
+            return 0;
+
+        // 50 move limit
+        if (m_position.isHalfMoveDraw())
+        {
+            auto [_, type] = m_position.getHalfMoveDrawType();
+            if (type == chess::GameResult::DRAW)
+                return 0;
+
+            return -param::INF + ply;
+        }
+
         if (ply >= param::MAX_DEPTH)
             return evaluate();
 
         if (depth <= 0)
             return evaluate();
 
-        std::vector<chess::Move> child_pv_line;
 
+        bool is_root = ply == 0;
+        bool is_pv_node = (beta - alpha) != 1;
+
+        // [tt lookup]
+        auto &entry = m_table.probe(m_position.hash());
+        auto tt_result = entry.get(m_position.hash(), ply, depth, alpha, beta);
+        if (tt_result.hit && !is_root)
+        {
+            return tt_result.score;
+        }
+
+
+        uint8_t tt_flag = param::ALPHA_FLAG;
+        int legal_moves = 0;
         chess::Movelist moves;
         chess::movegen::legalmoves(moves, m_position);
+        legal_moves = moves.size();
 
         int32_t best_score = std::numeric_limits<int32_t>::min();
         chess::Move best_move = chess::Move::NULL_MOVE;
+        std::vector<chess::Move> child_pv_line;
         for (int i = 0; i < moves.size(); ++i)
         {
             const chess::Move &move = moves[i];
@@ -153,11 +187,13 @@ struct engine
 
             if (score >= beta)
             {
+                tt_flag = param::BETA_FLAG;
                 break;
             }
 
             if (score > alpha)
             {
+                tt_flag = param::EXACT_FLAG;
                 alpha = score;
                 pv_line.clear();
                 pv_line.push_back(move);
@@ -166,6 +202,21 @@ struct engine
             }
 
             child_pv_line.clear();
+        }
+
+        // checkmate or draw
+        if (legal_moves == 0)
+        {
+            if (m_position.inCheck())
+                return -param::INF + ply;
+
+            // draw
+            return 0;
+        }
+
+        if (depth > entry.m_depth && !m_timer.is_stopped())
+        {
+            entry.set(m_position.hash(), best_score, best_move, ply, depth, tt_flag);
         }
 
         return best_score;
@@ -219,7 +270,7 @@ struct engine
         m_position = reference;
         m_timer.start(ms);
         auto reference_time = timer::now();
-        m_stats = engine_stats{0, timer::now() - reference_time};
+        m_stats = engine_stats{0, 0, timer::now() - reference_time};
 
         std::vector<chess::Move> pv_line{};
         int32_t alpha = -param::INF, beta = param::INF;
@@ -246,6 +297,7 @@ struct engine
             if (verbose)
             {
                 m_stats.total_time = timer::now() - reference_time;
+                m_stats.tt_occupancy = m_table.occupied();
                 if (uci)
                     m_stats.display_delta_uci(last_stats, result);
                 else
