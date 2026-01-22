@@ -17,7 +17,7 @@ struct tt
 struct search_result
 {
     std::vector<chess::Move> pv_line;
-    uint8_t depth;
+    int16_t depth;
     int32_t score;
 
     [[nodiscard]] std::string get_score() const
@@ -94,29 +94,49 @@ struct engine_stats
     }
 };
 
+struct engine_param
+{
+    int lmr[param::MAX_DEPTH][100];
+    int lmr_depth_ration = 4;
+    int lmr_move_ratio = 12;
+
+    explicit engine_param()
+    {
+        for (int depth = 0; depth < param::MAX_DEPTH; ++depth)
+        {
+            for (int move = 0; move < 100; ++move)
+            {
+                lmr[depth][move] =
+                        std::max(2, depth / std::max(1, lmr_depth_ration)) + move / std::max(1, lmr_move_ratio);
+            }
+        }
+    }
+};
+
 struct engine
 {
     chess::Board m_position;
     timer m_timer;
     engine_stats m_stats;
     table m_table;
+    engine_param m_param;
 
     // must be set via methods
-    explicit engine(int table_size_in_mb = 512)
-        : m_table(table_size_in_mb)
+    explicit engine(const int table_size_in_mb = 512)
+        : m_stats(), m_table(table_size_in_mb)
     {
         // init tables
         pesto::init();
     };
 
-    int32_t evaluate()
+    [[nodiscard]] int32_t evaluate() const
     {
         return pesto::evaluate(m_position);
     }
 
     int32_t negamax(
         int32_t alpha, int32_t beta,
-        uint8_t depth, uint8_t ply,
+        int16_t depth, uint8_t ply,
         std::vector<chess::Move> &pv_line
     )
     {
@@ -159,9 +179,9 @@ struct engine
             return tt_result.score;
         }
 
-
         uint8_t tt_flag = param::ALPHA_FLAG;
         int legal_moves = 0;
+        int explored_moves = 0;
         chess::Movelist moves;
         chess::movegen::legalmoves(moves, m_position);
         legal_moves = moves.size();
@@ -173,7 +193,35 @@ struct engine
         {
             const chess::Move &move = moves[i];
             m_position.makeMove(move);
-            int32_t score = -negamax(-beta, -alpha, depth - 1, ply + 1, child_pv_line);
+
+            int32_t score;
+            if (explored_moves == 0)
+            {
+                score = -negamax(-beta, -alpha, depth - 1, ply + 1, child_pv_line);
+            } else
+            {
+                int16_t reduction = 0;
+                if (!is_pv_node && explored_moves >= 4 && depth >= 3)
+                    reduction = m_param.lmr[depth][explored_moves];
+
+                // [pv search]
+                score = -negamax(-(alpha + 1), -alpha, depth - 1 - reduction, ply + 1, child_pv_line);
+                if (alpha < score && reduction > 0)
+                {
+                    child_pv_line.clear();
+                    score = -negamax(-(alpha + 1), -alpha, depth - 1, ply + 1, child_pv_line);
+                    if (alpha < score)
+                    {
+                        child_pv_line.clear();
+                        score = -negamax(-beta, -alpha, depth - 1, ply + 1, child_pv_line);
+                    }
+                } else if (alpha < score && score < beta)
+                {
+                    child_pv_line.clear();
+                    score = -negamax(-beta, -alpha, depth - 1, ply + 1, child_pv_line);
+                }
+            }
+
             m_position.unmakeMove(move);
 
             if (m_timer.is_stopped())
@@ -202,6 +250,7 @@ struct engine
             }
 
             child_pv_line.clear();
+            explored_moves += 1;
         }
 
         // checkmate or draw
@@ -264,7 +313,7 @@ struct engine
     }
 
 
-    search_result search(const chess::Board &reference, uint8_t max_depth, int ms, bool verbose = false,
+    search_result search(const chess::Board &reference, int16_t max_depth, int ms, bool verbose = false,
                          bool uci = false)
     {
         m_position = reference;
@@ -274,7 +323,7 @@ struct engine
 
         std::vector<chess::Move> pv_line{};
         int32_t alpha = -param::INF, beta = param::INF;
-        uint8_t depth = 1;
+        int16_t depth = 1;
 
         engine_stats last_stats = m_stats;
 
