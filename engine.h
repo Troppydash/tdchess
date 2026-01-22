@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "chess.h"
+#include "evaluation.h"
 
 struct board_wrapper
 {
@@ -249,11 +250,15 @@ struct engine
     engine_stats m_stats;
 
     // must be set via methods
-    explicit engine() = default;
+    explicit engine()
+    {
+        // init tables
+        pesto::init();
+    };
 
     int32_t evaluate()
     {
-        return 0;
+        return pesto::evaluate(m_position);
     }
 
     int32_t qsearch()
