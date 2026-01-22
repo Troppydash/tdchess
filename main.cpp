@@ -1,4 +1,6 @@
 #include <iostream>
+
+// use pext extension for performance, this include must be first
 #define CHESS_USE_PEXT
 #include "chess.h"
 
