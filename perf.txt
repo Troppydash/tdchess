@@ -11,3 +11,15 @@ benchmarking perft, depth: 7
 fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 nodes: 3,195,901,860, took 5,592ms
 nps: 571,513,208
+
+
+[uci]
+uci
+id name Tdchess 1.0.0
+id author troppydash
+uciok
+isready
+readyok
+ucinewgame
+position startpos
+go depth 2

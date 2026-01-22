@@ -153,7 +153,7 @@ constexpr int32_t INF = 10000000;
 // int alpha_flag = 1;
 // int beta_flag = 2;
 
-constexpr int MAX_DEPTH = 255;
+constexpr uint8_t MAX_DEPTH = 255;
 
 constexpr int32_t BASE_SCORE = (1 << 30);
 
@@ -165,7 +165,7 @@ constexpr int32_t end_move_score = 490;
 
 struct search_result
 {
-    chess::Move best_move;
+    std::vector<chess::Move> pv_line;
     uint8_t depth;
     int32_t score;
 
@@ -197,11 +197,11 @@ struct engine_stats
     void display_delta(const engine_stats &old, const search_result &result) const
     {
         long delta = (total_time - old.total_time).count();
-        uint32_t depth_nps = (nodes_searched - old.nodes_searched) / std::max(1L, delta);
-        uint32_t nps = nodes_searched / total_time.count();
+        uint32_t depth_nps = (nodes_searched - old.nodes_searched) * 1000 / std::max(1L, delta);
+        uint32_t nps = nodes_searched * 1000 / std::max(1L, total_time.count());
 
         printf(
-            "[engine] depth %2d, nodes %10d, score %10s (%7d), nps %10d/%10d\n",
+            "info depth %2d, nodes %10d, score %10s (%7d), nps %10d/%10d, moves",
             result.depth,
             nodes_searched,
             result.get_score().c_str(),
@@ -209,6 +209,35 @@ struct engine_stats
             depth_nps,
             nps
         );
+
+        for (auto &m: result.pv_line)
+        {
+            std::cout << " " << chess::uci::moveToUci(m);
+        }
+        std::cout << std::endl;
+    }
+
+    void display_delta_uci(const engine_stats &old, const search_result &result) const
+    {
+        long delta = (total_time - old.total_time).count();
+        uint32_t depth_nps = (nodes_searched - old.nodes_searched) * 1000 / std::max(1L, delta);
+        uint32_t nps = nodes_searched * 1000 / std::max(1L, total_time.count());
+
+        printf(
+            "info depth %d seldepth %d multipv 1 score cp %d nodes %d nps %d time %ld pv",
+            result.depth,
+            result.depth,
+            result.score,
+            nodes_searched,
+            nps,
+            total_time.count()
+        );
+
+        for (auto &m: result.pv_line)
+        {
+            std::cout << " " << chess::uci::moveToUci(m);
+        }
+        std::cout << std::endl;
     }
 };
 
@@ -335,7 +364,8 @@ struct engine
     }
 
 
-    search_result search(const chess::Board &reference, int ms, bool verbose = true)
+    search_result search(const chess::Board &reference, uint8_t max_depth, int ms, bool verbose = false,
+                         bool uci = false)
     {
         m_position = reference;
         m_timer.start(ms);
@@ -349,7 +379,7 @@ struct engine
         engine_stats last_stats = m_stats;
 
         search_result result{};
-        while (depth < param::MAX_DEPTH)
+        while (depth <= max_depth)
         {
             int32_t score = negamax(alpha, beta, depth, 0, pv_line);
             // TODO: use this extra info
@@ -359,7 +389,7 @@ struct engine
             // TODO: asp window
 
             result.score = score;
-            result.best_move = pv_line[0];
+            result.pv_line = std::vector<chess::Move>(pv_line.begin(), pv_line.end());
             result.depth = depth;
 
 
@@ -367,9 +397,13 @@ struct engine
             if (verbose)
             {
                 m_stats.total_time = timer::now() - reference_time;
-                m_stats.display_delta(last_stats, result);
+                if (uci)
+                    m_stats.display_delta_uci(last_stats, result);
+                else
+                    m_stats.display_delta(last_stats, result);
                 last_stats = m_stats;
             }
+
 
             depth += 1;
             pv_line.clear();

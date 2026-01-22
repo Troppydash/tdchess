@@ -5,6 +5,7 @@
 #include "chess.h"
 
 #include "engine.h"
+#include "uci.h"
 
 
 void perft()
@@ -16,7 +17,15 @@ void perft()
 
 int main()
 {
-    perft();
+    // perft();
+
+    // engine engine;
+    // chess::Board board{};
+    // std::cout << board << std::endl;
+    // engine.search(board, 5000, true);
+
+    uci_handler handler{};
+    handler.loop();
 
     return 0;
 }
