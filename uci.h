@@ -80,7 +80,7 @@ struct uci_handler
                 std::cout << "uciok\n";
             } else if (lead == "position")
             {
-                int moves = 2;
+                size_t moves = 2;
                 if (parts[1] == "fen")
                 {
                     std::string fen = parts[2] + parts[3] + parts[4] + parts[5] + parts[6] + parts[7];
@@ -93,7 +93,7 @@ struct uci_handler
 
                 if (moves < parts.size() && parts[moves] == "moves")
                 {
-                    for (int move = moves + 1; move < parts.size(); ++move)
+                    for (size_t move = moves + 1; move < parts.size(); ++move)
                     {
                         const auto m = chess::uci::uciToMove(m_position, parts[move]);
                         m_position.makeMove(m);
@@ -110,7 +110,7 @@ struct uci_handler
                 uint8_t max_depth = param::MAX_DEPTH;
                 int ms = 1000000;
 
-                for (int i = 1; i < parts.size(); i++)
+                for (size_t i = 1; i < parts.size(); i++)
                 {
                     if (i >= parts.size())
                         break;

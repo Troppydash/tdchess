@@ -3,92 +3,15 @@
 #include <utility>
 
 #include "chess.h"
+#include "param.h"
 #include "evaluation.h"
+#include "timer.h"
 
 // TODO: copy from board
 struct tt
 {
 };
 
-
-class timer
-{
-private:
-    std::chrono::milliseconds m_target;
-    bool m_is_stopped = false;
-    bool m_forced_stopped = false;
-
-public:
-    void stop()
-    {
-        m_forced_stopped = true;
-    }
-
-    void unstop()
-    {
-        m_forced_stopped = false;
-    }
-
-    void start(int ms)
-    {
-        m_target = now() + std::chrono::milliseconds(ms);
-        m_is_stopped = false;
-        m_forced_stopped = false;
-    }
-
-    void add(int ms)
-    {
-        m_target = m_target + std::chrono::milliseconds(ms);
-        m_is_stopped = false;
-    }
-
-    bool is_force_stopped() const
-    {
-        return m_forced_stopped;
-    }
-
-    bool is_stopped() const
-    {
-        return m_is_stopped || m_forced_stopped;
-    }
-
-    void check()
-    {
-        if (m_is_stopped || m_forced_stopped)
-            return;
-
-        auto current = now();
-        if (current > m_target)
-        {
-            m_is_stopped = true;
-        }
-    }
-
-    static std::chrono::milliseconds now()
-    {
-        return std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::high_resolution_clock::now().time_since_epoch());
-    }
-};
-
-namespace param
-{
-constexpr int32_t CHECKMATE = 9000000;
-constexpr int32_t INF = 10000000;
-
-// int exact_flag = 0;
-// int alpha_flag = 1;
-// int beta_flag = 2;
-
-constexpr uint8_t MAX_DEPTH = 255;
-
-constexpr int32_t BASE_SCORE = (1 << 30);
-
-constexpr int32_t pv_move_score = 500;
-constexpr int32_t killer_move_score = 480;
-constexpr int32_t killer_move_score2 = 470;
-constexpr int32_t end_move_score = 490;
-}
 
 struct search_result
 {
@@ -146,8 +69,8 @@ struct engine_stats
 
     void display_delta_uci(const engine_stats &old, const search_result &result) const
     {
-        long delta = (total_time - old.total_time).count();
-        uint32_t depth_nps = (nodes_searched - old.nodes_searched) * 1000 / std::max(1L, delta);
+        // long delta = (total_time - old.total_time).count();
+        // uint32_t depth_nps = (nodes_searched - old.nodes_searched) * 1000 / std::max(1L, delta);
         uint32_t nps = nodes_searched * 1000 / std::max(1L, total_time.count());
 
         printf(
@@ -168,7 +91,6 @@ struct engine_stats
     }
 };
 
-// TODO: make engine
 struct engine
 {
     chess::Board m_position;
@@ -185,10 +107,6 @@ struct engine
     int32_t evaluate()
     {
         return pesto::evaluate(m_position);
-    }
-
-    int32_t qsearch()
-    {
     }
 
     int32_t negamax(
