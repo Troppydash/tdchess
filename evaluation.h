@@ -178,11 +178,11 @@ void init()
         for (int sq = 0; sq < 64; sq++)
         {
             // white
-            mg_table[p][sq] = mg_value[p] + mg_pesto_table[p][sq];
-            eg_table[p][sq] = eg_value[p] + eg_pesto_table[p][sq];
+            mg_table[p][flip(sq)] = mg_value[p] + mg_pesto_table[p][sq];
+            eg_table[p][flip(sq)] = eg_value[p] + eg_pesto_table[p][sq];
             // black
-            mg_table[p + 6][sq] = mg_value[p] + mg_pesto_table[p][flip(sq)];
-            eg_table[p + 6][sq] = eg_value[p] + eg_pesto_table[p][flip(sq)];
+            mg_table[p + 6][flip(sq)] = mg_value[p] + mg_pesto_table[p][flip(sq)];
+            eg_table[p + 6][flip(sq)] = eg_value[p] + eg_pesto_table[p][flip(sq)];
         }
     }
 }

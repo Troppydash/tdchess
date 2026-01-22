@@ -97,7 +97,7 @@ public:
         return m_entries[index];
     }
 
-    uint8_t occupied() const
+    int16_t occupied() const
     {
         size_t count = 0;
         for (const auto &entry: m_entries)
@@ -106,6 +106,6 @@ public:
                 count++;
         }
 
-        return count * 100 / m_entries.size();
+        return static_cast<int16_t>(count * 100 / m_entries.size());
     }
 };

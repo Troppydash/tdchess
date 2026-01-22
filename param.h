@@ -13,10 +13,12 @@ constexpr uint8_t BETA_FLAG = 2;
 
 constexpr int16_t MAX_DEPTH = 255;
 
-constexpr int32_t BASE_SCORE = (1 << 30);
+constexpr int16_t base_score = (1 << 14);
 
-constexpr int32_t pv_move_score = 500;
-constexpr int32_t killer_move_score = 480;
-constexpr int32_t killer_move_score2 = 470;
-constexpr int32_t end_move_score = 490;
+constexpr int16_t pv_move_score = 500;
+constexpr int16_t promo_move_score = 490;
+constexpr int16_t capture_move_score = 485;
+constexpr int16_t killer_move_score = 480;
+constexpr int16_t killer_move_score2 = 470;
+constexpr int16_t end_move_score = 490;
 }

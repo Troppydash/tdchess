@@ -42,8 +42,8 @@ struct search_result
 
 struct engine_stats
 {
-    uint32_t nodes_searched;
-    uint8_t tt_occupancy;
+    int32_t nodes_searched;
+    int16_t tt_occupancy;
     std::chrono::milliseconds total_time;
 
     void display_delta(const engine_stats &old, const search_result &result) const
@@ -73,18 +73,17 @@ struct engine_stats
     {
         // long delta = (total_time - old.total_time).count();
         // uint32_t depth_nps = (nodes_searched - old.nodes_searched) * 1000 / std::max(1L, delta);
-        uint32_t nps = nodes_searched * 1000 / std::max(1L, total_time.count());
+        long nps = static_cast<long>(nodes_searched) * 1000 / std::max(1L, total_time.count());
 
-        printf(
-            "info depth %d seldepth %d multipv 1 score cp %d nodes %d nps %d time %ld ttocc %d pv",
-            result.depth,
-            result.depth,
-            result.score,
-            nodes_searched,
-            nps,
-            total_time.count(),
-            tt_occupancy
-        );
+        std::cout << "info depth " << result.depth
+                << " seldepth " << result.depth
+                << " multipv 1"
+                << " score cp " << result.score
+                << " nodes " << nodes_searched
+                << " nps " << nps
+                << " time " << total_time.count()
+                << " ttoc " << tt_occupancy
+                << " pv";
 
         for (auto &m: result.pv_line)
         {
@@ -96,7 +95,7 @@ struct engine_stats
 
 struct engine_param
 {
-    int lmr[param::MAX_DEPTH][100];
+    int16_t lmr[param::MAX_DEPTH][100];
     int lmr_depth_ration = 4;
     int lmr_move_ratio = 12;
 
@@ -107,7 +106,7 @@ struct engine_param
             for (int move = 0; move < 100; ++move)
             {
                 lmr[depth][move] =
-                        std::max(2, depth / std::max(1, lmr_depth_ration)) + move / std::max(1, lmr_move_ratio);
+                        std::max(1, depth / std::max(1, lmr_depth_ration)) + move / std::max(1, lmr_move_ratio);
             }
         }
     }
@@ -131,7 +130,45 @@ struct engine
 
     [[nodiscard]] int32_t evaluate() const
     {
-        return pesto::evaluate(m_position);
+        int32_t tempo = 15;
+        return pesto::evaluate(m_position) + tempo;
+    }
+
+    void score_moves(
+        chess::Movelist &movelist, const chess::Move &pv_move, int ply
+    )
+    {
+        for (auto &move: movelist)
+        {
+            int16_t score = 0;
+            auto captured = m_position.at(move.to()).type();
+
+            if (move == pv_move)
+                score += param::base_score + param::pv_move_score;
+            else if (move.typeOf() == chess::Move::CASTLING || move.typeOf() == chess::Move::PROMOTION)
+                score += param::base_score + param::promo_move_score;
+            else if (captured != chess::PieceType::NONE)
+                score += param::base_score + param::capture_move_score;
+
+            move.setScore(score);
+        }
+    }
+
+    void sort_moves(
+        chess::Movelist &movelist, int i
+    )
+    {
+        int highest_score = movelist[i].score();
+        int highest_index = i;
+        for (int j = i + 1; j < movelist.size(); ++j)
+        {
+            if (movelist[j].score() > highest_score)
+            {
+                highest_score = movelist[j].score();
+                highest_index = j;
+            }
+        }
+        std::swap(movelist[i], movelist[highest_index]);
     }
 
     int32_t negamax(
@@ -182,15 +219,29 @@ struct engine
         uint8_t tt_flag = param::ALPHA_FLAG;
         int legal_moves = 0;
         int explored_moves = 0;
+
+        // [tt-move generation]
         chess::Movelist moves;
-        chess::movegen::legalmoves(moves, m_position);
-        legal_moves = moves.size();
+        bool lazy_move_gen = tt_result.move != chess::Move::NULL_MOVE;
+        if (lazy_move_gen)
+        {
+            tt_result.move.setScore(0);
+            moves.add(tt_result.move);
+            legal_moves = 1;
+        } else
+        {
+            chess::movegen::legalmoves(moves, m_position);
+            score_moves(moves, tt_result.move, ply);
+            legal_moves = moves.size();
+        }
+
 
         int32_t best_score = std::numeric_limits<int32_t>::min();
         chess::Move best_move = chess::Move::NULL_MOVE;
         std::vector<chess::Move> child_pv_line;
         for (int i = 0; i < moves.size(); ++i)
         {
+            sort_moves(moves, i);
             const chess::Move &move = moves[i];
             m_position.makeMove(move);
 
@@ -251,6 +302,13 @@ struct engine
 
             child_pv_line.clear();
             explored_moves += 1;
+
+            if (lazy_move_gen && explored_moves == 1)
+            {
+                chess::movegen::legalmoves(moves, m_position);
+                score_moves(moves, tt_result.move, ply);
+                legal_moves = moves.size();
+            }
         }
 
         // checkmate or draw
