@@ -7,8 +7,8 @@ struct see
 {
     constexpr static std::array<int32_t, 7> piece_values = {
         100,
-        300,
-        300,
+        290,
+        310,
         500,
         900,
         100000000,
