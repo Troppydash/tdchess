@@ -181,7 +181,7 @@ struct move_ordering
         chess::Movelist &movelist,
         const chess::Move &pv_move,
         const chess::Move &prev_move,
-        int ply
+        int16_t ply
     )
     {
         for (auto &move: movelist)
@@ -263,9 +263,6 @@ struct move_ordering
 
     void decr_history(const chess::Board &position, const chess::Move &move)
     {
-        // if (!move.is_slient())
-        //     return;
-
         if (is_slient_move(position, move))
             if (m_history[position.sideToMove()][move.from().index()][move.to().index()] > 0)
                 m_history[position.sideToMove()][move.from().index()][move.to().index()] -= 1;
@@ -315,7 +312,7 @@ struct engine
         return pesto::evaluate(m_position) + tempo;
     }
 
-    int32_t qsearch(int32_t alpha, int32_t beta, uint8_t base_ply, uint8_t ply, std::vector<chess::Move> &pv_line)
+    int32_t qsearch(int32_t alpha, int32_t beta, int16_t base_ply, int16_t ply, std::vector<chess::Move> &pv_line)
     {
         m_stats.sel_depth = std::max(m_stats.sel_depth, static_cast<int16_t>(base_ply + ply));
         m_stats.nodes_searched += 1;
@@ -387,7 +384,7 @@ struct engine
 
     int32_t negamax(
         int32_t alpha, int32_t beta,
-        int16_t depth, uint8_t ply,
+        int16_t depth, int16_t ply,
         std::vector<chess::Move> &pv_line,
         const chess::Move &prev_move
     )
@@ -417,7 +414,7 @@ struct engine
             return evaluate();
 
         if (depth <= 0)
-            return qsearch(ply, 0, alpha, beta, pv_line);
+            return qsearch(alpha, beta, ply, 0, pv_line);
 
         const bool is_root = ply == 0;
         const bool is_pv_node = (beta - alpha) != 1;
