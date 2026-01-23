@@ -18,10 +18,11 @@ struct uci_handler
 {
     chess::Board m_position;
 
-    engine m_engine;
+    std::unique_ptr<engine> m_engine;
     std::thread m_engine_thread;
 
     explicit uci_handler()
+        : m_engine(std::make_unique<engine>(engine{}))
     {
     }
 
@@ -32,8 +33,8 @@ struct uci_handler
         m_engine_thread = std::thread{
             [&]()
             {
-                m_engine = engine{};
-                auto result = m_engine.search(m_position, depth, ms, true, true);
+                m_engine = std::make_unique<engine>(engine{});
+                auto result = m_engine->search(m_position, depth, ms, true, true);
 
                 // display results
                 std::cout << "bestmove " << chess::uci::moveToUci(result.pv_line[0]);
@@ -49,7 +50,7 @@ struct uci_handler
     void stop_search()
     {
         // end current thread
-        m_engine.m_timer.stop();
+        m_engine->m_timer.stop();
         if (m_engine_thread.joinable())
             m_engine_thread.join();
     }

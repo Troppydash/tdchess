@@ -95,60 +95,102 @@ struct engine_stats
 
 struct engine_param
 {
+    // pruning
     int16_t lmr[param::MAX_DEPTH][100];
     int lmr_depth_ration = 4;
     int lmr_move_ratio = 12;
 
+    // move ordering
+    std::array<std::array<int16_t, 6>, 7> mvv_lva;
+    int16_t mvv_offset = 1 << 14;
+    int16_t pv_score = 200;
+    int16_t first_killer = -10;
+    int16_t second_killer = -20;
+    int16_t counter_bonus = 15;
+
+    // TODO: move ordering
+
     explicit engine_param()
     {
+        // set lmr
         for (int depth = 0; depth < param::MAX_DEPTH; ++depth)
-        {
             for (int move = 0; move < 100; ++move)
-            {
                 lmr[depth][move] =
                         std::max(1, depth / std::max(1, lmr_depth_ration)) + move / std::max(1, lmr_move_ratio);
-            }
-        }
+
+        // set mvv_lva
+        mvv_lva = {
+            std::array<int16_t, 6>{15, 14, 13, 12, 11, 10}, // victim Pawn
+            {25, 24, 23, 22, 21, 20}, // victim Knight
+            {35, 34, 33, 32, 31, 30}, // victim Bishop
+            {45, 44, 43, 42, 41, 40}, // victim Rook
+            {55, 54, 53, 52, 51, 50}, // victim Queen
+            {0, 0, 0, 0, 0, 0}, // victim King
+            {0, 0, 0, 0, 0, 0}, // No piece
+        };
     }
 };
 
-struct engine
+struct move_ordering
 {
-    chess::Board m_position;
-    timer m_timer;
-    engine_stats m_stats;
-    table m_table;
-    engine_param m_param;
+    chess::Move m_killers[param::MAX_DEPTH][2];
+    chess::Move m_counter[2][64][64];
+    int16_t m_history[2][64][64];
+    const engine_param m_param;
 
-    // must be set via methods
-    explicit engine(const int table_size_in_mb = 512)
-        : m_stats(), m_table(table_size_in_mb)
+    explicit move_ordering(const engine_param &param)
+        : m_param(param)
     {
-        // init tables
-        pesto::init();
-    };
+        // init killer/counter/history
+        for (auto &i: m_history)
+            for (auto &j: i)
+                for (int16_t &k: j)
+                    k = 0;
 
-    [[nodiscard]] int32_t evaluate() const
-    {
-        int32_t tempo = 15;
-        return pesto::evaluate(m_position) + tempo;
+        for (auto &m: m_killers)
+        {
+            m[0] = m[1] = chess::Move::NULL_MOVE;
+        }
+
+        for (auto &i: m_counter)
+            for (auto &j: i)
+                for (auto &k: j)
+                    k = chess::Move::NULL_MOVE;
     }
 
+
     void score_moves(
+        const chess::Board &position,
         chess::Movelist &movelist, const chess::Move &pv_move, int ply
     )
     {
         for (auto &move: movelist)
         {
             int16_t score = 0;
-            auto captured = m_position.at(move.to()).type();
+            auto captured = position.at(move.to()).type();
 
             if (move == pv_move)
-                score += param::base_score + param::pv_move_score;
-            else if (move.typeOf() == chess::Move::CASTLING || move.typeOf() == chess::Move::PROMOTION)
-                score += param::base_score + param::promo_move_score;
+                score += m_param.mvv_offset + m_param.pv_score;
+                // else if (move.typeOf() == chess::Move::CASTLING || move.typeOf() == chess::Move::PROMOTION)
+                // score += param::base_score + param::promo_move_score;
             else if (captured != chess::PieceType::NONE)
-                score += param::base_score + param::capture_move_score;
+            {
+                auto moved = position.at(move.from()).type();
+                score += m_param.mvv_offset + m_param.mvv_lva[captured][moved];
+            } else if (move == m_killers[ply][0])
+                score += m_param.mvv_offset - m_param.first_killer;
+            else if (move == m_killers[ply][1])
+                score += m_param.mvv_offset - m_param.second_killer;
+            else
+            {
+                const auto &counter = m_counter[position.sideToMove()][move.from().index()][move.to().index()];
+                int16_t history_score = m_history[position.sideToMove()][move.from().index()][move.to().index()];
+
+                if (move == counter)
+                    score += m_param.counter_bonus;
+
+                score += history_score;
+            }
 
             move.setScore(score);
         }
@@ -170,6 +212,39 @@ struct engine
         }
         std::swap(movelist[i], movelist[highest_index]);
     }
+};
+
+struct engine
+{
+    chess::Board m_position;
+    timer m_timer;
+    engine_stats m_stats;
+    const engine_param m_param;
+
+    table m_table;
+    move_ordering m_move_ordering;
+
+    // must be set via methods
+    explicit engine(const int table_size_in_mb = 512)
+        : m_stats(), m_table(table_size_in_mb), m_move_ordering(m_param)
+
+    {
+        // init tables
+        pesto::init();
+    };
+
+    [[nodiscard]] int32_t evaluate() const
+    {
+        int32_t tempo = 15;
+        return pesto::evaluate(m_position) + tempo;
+    }
+
+    int32_t qsearch() const
+    {
+        // TODO: this
+        return 0;
+    }
+
 
     int32_t negamax(
         int32_t alpha, int32_t beta,
@@ -231,7 +306,7 @@ struct engine
         } else
         {
             chess::movegen::legalmoves(moves, m_position);
-            score_moves(moves, tt_result.move, ply);
+            m_move_ordering.score_moves(m_position, moves, tt_result.move, ply);
             legal_moves = moves.size();
         }
 
@@ -241,7 +316,7 @@ struct engine
         std::vector<chess::Move> child_pv_line;
         for (int i = 0; i < moves.size(); ++i)
         {
-            sort_moves(moves, i);
+            m_move_ordering.sort_moves(moves, i);
             const chess::Move &move = moves[i];
             m_position.makeMove(move);
 
@@ -306,7 +381,7 @@ struct engine
             if (lazy_move_gen && explored_moves == 1)
             {
                 chess::movegen::legalmoves(moves, m_position);
-                score_moves(moves, tt_result.move, ply);
+                m_move_ordering.score_moves(m_position, moves, tt_result.move, ply);
                 legal_moves = moves.size();
             }
         }
