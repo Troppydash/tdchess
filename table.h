@@ -19,7 +19,7 @@ public:
     int16_t m_depth = 0;
     uint8_t m_flag = 0;
 
-    [[nodiscard]] table_entry_result get(uint64_t hash, uint8_t ply, uint8_t depth, int32_t alpha, int32_t beta) const
+    [[nodiscard]] table_entry_result get(uint64_t hash, int16_t ply, int16_t depth, int32_t alpha, int32_t beta) const
     {
         int32_t adj_score = 0;
         bool should_use = false;
@@ -32,7 +32,7 @@ public:
 
             if (m_depth >= depth)
             {
-                int score = m_score;
+                int32_t score = m_score;
 
                 // normalize for depth
                 if (score > param::CHECKMATE)
@@ -59,7 +59,7 @@ public:
         return {adj_score, should_use, best_move};
     }
 
-    void set(uint64_t hash, int32_t score, const chess::Move &best_move, uint8_t ply, uint8_t depth, uint8_t flag)
+    void set(uint64_t hash, int32_t score, const chess::Move &best_move, int16_t ply, int16_t depth, uint8_t flag)
     {
         m_hash = hash;
         m_depth = depth;

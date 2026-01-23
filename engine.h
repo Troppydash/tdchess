@@ -7,6 +7,7 @@
 #include "evaluation.h"
 #include "timer.h"
 #include "table.h"
+#include "lib/Fathom/src/tbprobe.h"
 
 // TODO: copy from board
 struct tt
@@ -89,7 +90,7 @@ struct engine_stats
         std::cout << std::endl;
     }
 
-    void display_delta_uci(const engine_stats &old, const search_result &result) const
+    void display_uci(const search_result &result) const
     {
         // long delta = (total_time - old.total_time).count();
         // uint32_t depth_nps = (nodes_searched - old.nodes_searched) * 1000 / std::max(1L, delta);
@@ -298,6 +299,154 @@ struct move_ordering
     }
 };
 
+struct endgame_table
+{
+    explicit endgame_table(const std::string &path)
+    {
+        bool success = tb_init(path.c_str());
+        if (!success)
+        {
+            std::cout << "info failed database\n";
+        }
+    }
+
+    bool is_stored(const chess::Board &position)
+    {
+        int pieces = position.occ().count();
+        return 3 <= pieces && pieces <= 5 && !(
+                   position.castlingRights().has(chess::Color::WHITE)
+                   || position.castlingRights().has(chess::Color::BLACK));
+    }
+
+    std::pair<chess::Move, int32_t> probe_dtz(const chess::Board &position)
+    {
+        unsigned ep = position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
+        unsigned result = tb_probe_root(
+            position.us(chess::Color::WHITE).getBits(),
+            position.us(chess::Color::BLACK).getBits(),
+            position.pieces(chess::PieceType::KING).getBits(),
+            position.pieces(chess::PieceType::QUEEN).getBits(),
+            position.pieces(chess::PieceType::ROOK).getBits(),
+            position.pieces(chess::PieceType::BISHOP).getBits(),
+            position.pieces(chess::PieceType::KNIGHT).getBits(),
+            position.pieces(chess::PieceType::PAWN).getBits(),
+            position.halfMoveClock(),
+            0,
+            ep,
+            position.sideToMove() == chess::Color::WHITE,
+            nullptr
+        );
+
+        if (result == TB_RESULT_FAILED || result == TB_RESULT_STALEMATE || result == TB_RESULT_CHECKMATE)
+        {
+            std::cout << "info failed probe";
+            std::cout << position << std::endl;
+            throw std::runtime_error("failed probe");
+        }
+
+        int wdl = TB_GET_WDL(result);
+        int dtz = TB_GET_DTZ(result);
+
+        // TODO: this is wrong, dtz =/= dtm
+        int32_t score = 0;
+        switch (wdl)
+        {
+            case TB_WIN:
+                score = param::INF - dtz * 2;
+                break;
+            case TB_CURSED_WIN:
+                score = 0;
+                break;
+            case TB_DRAW:
+                score = 0;
+                break;
+            case TB_BLESSED_LOSS:
+                score = 0;
+                break;
+            case TB_LOSS:
+                score = -param::INF + dtz * 2;
+                break;
+        }
+
+        int from = TB_GET_FROM(result);
+        int to = TB_GET_TO(result);
+        int promotes = TB_GET_PROMOTES(result);
+        int ep_ = TB_GET_EP(result);
+
+        chess::Movelist moves;
+        chess::movegen::legalmoves(moves, position);
+        for (auto &m: moves)
+        {
+            if (m.from().index() == from && m.to().index() == to)
+            {
+                if (m.typeOf() == chess::Move::PROMOTION)
+                {
+                    if (m.promotionType() == promotes)
+                        return {m, score};
+                } else if (m.typeOf() == chess::Move::ENPASSANT)
+                {
+                    if (ep_ == m.to().index())
+                        return {m, score};
+                } else
+                {
+                    return {m, score};
+                }
+            }
+        }
+
+        throw std::runtime_error{"impossible"};
+    }
+
+
+    int32_t probe_wdl(const chess::Board &position, int16_t ply)
+    {
+        unsigned ep = position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
+        unsigned result = tb_probe_wdl(
+            position.us(chess::Color::WHITE).getBits(),
+            position.us(chess::Color::BLACK).getBits(),
+            position.pieces(chess::PieceType::KING).getBits(),
+            position.pieces(chess::PieceType::QUEEN).getBits(),
+            position.pieces(chess::PieceType::ROOK).getBits(),
+            position.pieces(chess::PieceType::BISHOP).getBits(),
+            position.pieces(chess::PieceType::KNIGHT).getBits(),
+            position.pieces(chess::PieceType::PAWN).getBits(),
+            0,
+            0,
+            ep,
+            position.sideToMove() == chess::Color::WHITE
+        );
+
+        switch (result)
+        {
+            case TB_LOSS:
+                return -param::SYZYGY + ply;
+            case TB_BLESSED_LOSS:
+                return -param::SYZYGY50;
+            case TB_DRAW:
+                return 0;
+            case TB_CURSED_WIN:
+                return param::SYZYGY50;
+            case TB_WIN:
+                return param::SYZYGY - ply;
+        }
+
+        if (result == TB_RESULT_FAILED)
+        {
+            std::cout << "info failed probe";
+            std::cout << position << std::endl;
+            throw std::runtime_error("failed probe");
+        }
+
+        throw std::runtime_error("impossible value");
+    }
+
+
+    virtual ~endgame_table()
+    {
+        tb_free();
+    }
+};
+
 struct engine
 {
     chess::Board m_position;
@@ -308,16 +457,24 @@ struct engine
     table m_table;
     move_ordering m_move_ordering;
 
+    endgame_table *m_endgame = nullptr;
+
     // must be set via methods
     explicit engine(const int table_size_in_mb = 1024)
-        : m_stats(), m_table(table_size_in_mb), m_move_ordering(m_param)
-
+        : engine(nullptr, table_size_in_mb)
     {
         // init tables
         pesto::init();
     };
 
-    [[nodiscard]] int32_t evaluate() const
+    explicit engine(endgame_table *endgame, const int table_size_in_mb = 1024)
+        : m_stats(), m_table(table_size_in_mb), m_move_ordering(m_param), m_endgame(endgame)
+    {
+        // init tables
+        pesto::init();
+    };
+
+    [[nodiscard]] int32_t evaluate(int16_t ply) const
     {
         int32_t tempo = 15;
         return pesto::evaluate(m_position) + tempo;
@@ -334,9 +491,23 @@ struct engine
             return 0;
 
         if (base_ply + ply >= param::MAX_DEPTH)
-            return evaluate();
+            return evaluate(base_ply + ply);
 
-        int32_t best_score = evaluate();
+        // check draw
+        if (m_position.isInsufficientMaterial() || m_position.isRepetition(2))
+            return 0;
+
+        // 50 move limit
+        if (m_position.isHalfMoveDraw())
+        {
+            auto [_, type] = m_position.getHalfMoveDrawType();
+            if (type == chess::GameResult::DRAW)
+                return 0;
+
+            return -param::INF + ply;
+        }
+
+        int32_t best_score = evaluate(base_ply + ply);
         bool in_check = ply <= 2 && m_position.inCheck();
 
         if (!in_check && best_score >= beta)
@@ -404,22 +575,8 @@ struct engine
         if (m_timer.is_stopped())
             return 0;
 
-        // check draw
-        if (m_position.isInsufficientMaterial() || m_position.isRepetition(2))
-            return 0;
-
-        // 50 move limit
-        if (m_position.isHalfMoveDraw())
-        {
-            auto [_, type] = m_position.getHalfMoveDrawType();
-            if (type == chess::GameResult::DRAW)
-                return 0;
-
-            return -param::INF + ply;
-        }
-
         if (ply >= param::MAX_DEPTH)
-            return evaluate();
+            return evaluate(ply);
 
         const bool is_root = ply == 0;
         const bool is_pv_node = (beta - alpha) != 1;
@@ -435,6 +592,20 @@ struct engine
             return qsearch(alpha, beta, ply, 0, pv_line);
         }
 
+        // check draw
+        if (m_position.isInsufficientMaterial() || m_position.isRepetition(2))
+            return 0;
+
+        // 50 move limit
+        if (m_position.isHalfMoveDraw())
+        {
+            auto [_, type] = m_position.getHalfMoveDrawType();
+            if (type == chess::GameResult::DRAW)
+                return 0;
+
+            return -param::INF + ply;
+        }
+
         // [tt lookup]
         auto &entry = m_table.probe(m_position.hash());
         auto tt_result = entry.get(m_position.hash(), ply, depth, alpha, beta);
@@ -443,10 +614,21 @@ struct engine
             return tt_result.score;
         }
 
+        // check syzygy
+        if (m_endgame != nullptr && !is_root && m_endgame->is_stored(m_position))
+        {
+            int32_t score = m_endgame->probe_wdl(m_position, ply);
+            if (score >= beta)
+                return score;
+
+            if (score <= alpha)
+                return score;
+        }
+
         // [static null move pruning]
         if (!in_check && !is_pv_node && std::abs(beta) < param::CHECKMATE)
         {
-            int32_t static_score = evaluate();
+            int32_t static_score = evaluate(ply);
             int32_t margin = m_param.static_null_base_margin + depth;
             if (static_score - margin >= beta)
                 return static_score - margin;
@@ -503,7 +685,7 @@ struct engine
 
             // [late move pruning]
             if (
-                depth < m_param.lmp_margins.size()
+                depth < static_cast<int16_t>(m_param.lmp_margins.size())
                 && !is_pv_node
                 && explored_moves > m_param.lmp_margins[depth])
             {
@@ -669,6 +851,27 @@ struct engine
         engine_stats last_stats = m_stats;
 
         search_result result{};
+
+        if (m_endgame != nullptr && m_endgame->is_stored(m_position))
+        {
+            // root search
+            auto probe = m_endgame->probe_dtz(m_position);
+            result.pv_line.clear();
+            result.pv_line.push_back(probe.first);
+            result.depth = 1;
+            result.score = probe.second;
+
+            if (verbose)
+            {
+                if (uci)
+                {
+                    m_stats.display_uci(result);
+                }
+            }
+
+            return result;
+        }
+
         while (depth <= max_depth)
         {
             chess::Move null = chess::Move::NULL_MOVE;
@@ -686,11 +889,15 @@ struct engine
             {
                 alpha = -param::INF;
                 beta = param::INF;
+                pv_line.clear();
                 continue;
             }
 
-            alpha = score - m_param.window_size;
-            beta = score + m_param.window_size;
+            if (std::abs(score) < param::CHECKMATE)
+            {
+                alpha = score - m_param.window_size;
+                beta = score + m_param.window_size;
+            }
 
             result.score = score;
             result.pv_line = std::vector<chess::Move>(pv_line.begin(), pv_line.end());
@@ -703,7 +910,7 @@ struct engine
                 m_stats.total_time = timer::now() - reference_time;
                 m_stats.tt_occupancy = m_table.occupied();
                 if (uci)
-                    m_stats.display_delta_uci(last_stats, result);
+                    m_stats.display_uci(result);
                 else
                     m_stats.display_delta(last_stats, result);
                 last_stats = m_stats;

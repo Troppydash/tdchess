@@ -17,13 +17,20 @@ std::vector<std::string> string_split(std::string const &input)
 struct uci_handler
 {
     chess::Board m_position;
+    endgame_table *m_table;
 
     std::unique_ptr<engine> m_engine;
     std::thread m_engine_thread;
 
     explicit uci_handler()
-        : m_engine(std::make_unique<engine>(engine{}))
+        : m_table{nullptr}, m_engine(std::make_unique<engine>(engine{}))
     {
+    }
+
+    ~uci_handler()
+    {
+        if (m_table != nullptr)
+            delete m_table;
     }
 
     void start_search(uint8_t depth, int ms)
@@ -33,7 +40,11 @@ struct uci_handler
         m_engine_thread = std::thread{
             [&]()
             {
-                m_engine = std::make_unique<engine>(engine{});
+                if (m_table == nullptr)
+                    m_engine = std::make_unique<engine>(engine{});
+                else
+                    m_engine = std::make_unique<engine>(engine{m_table});
+
                 auto result = m_engine->search(m_position, depth, ms, true, true);
 
                 // display results
@@ -78,13 +89,23 @@ struct uci_handler
             {
                 std::cout << "id name Tdchess 1.0.1\n";
                 std::cout << "id author troppydash\n";
+                std::cout << "option name SyzygyPath type string default <empty>\n";
                 std::cout << "uciok\n";
+            } else if (lead == "setoption")
+            {
+                if (parts[2] == "SyzygyPath")
+                {
+                    if (m_table != nullptr)
+                        delete m_table;
+                    m_table = new endgame_table{parts[4]};
+                }
             } else if (lead == "position")
             {
                 size_t moves = 2;
                 if (parts[1] == "fen")
                 {
-                    std::string fen = std::format("{} {} {} {} {} {}", parts[2], parts[3], parts[4], parts[5], parts[6], parts[7]);
+                    std::string fen = std::format("{} {} {} {} {} {}", parts[2], parts[3], parts[4], parts[5], parts[6],
+                                                  parts[7]);
                     m_position = chess::Board::fromFen(fen);
                     moves = 8;
                 } else if (parts[1] == "startpos")

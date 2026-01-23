@@ -17,6 +17,16 @@ void perft()
 
 int main()
 {
+
+    // endgame_table table{"../syzygy"};
+    // auto result =table.probe(chess::Board::fromFen("8/8/4kq2/5q2/8/3Q4/8/4K3 w - - 0 1"));
+    // if (result == endgame_table::WIN)
+    // {
+    //     std::cout << "win\n";
+    // } else if (result == endgame_table::LOSS)
+    // {
+    //     std::cout << "loss\n";
+    // }
     // perft();
 
     // engine engine;
