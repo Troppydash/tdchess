@@ -1,3 +1,8 @@
 .idea
 cmake-build-debug
 cmake-build-release
+
+syzygy/
+
+lib/**/*.so
+lib/**/*.o

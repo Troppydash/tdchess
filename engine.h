@@ -318,7 +318,50 @@ struct endgame_table
                    || position.castlingRights().has(chess::Color::BLACK));
     }
 
-    std::pair<chess::Move, int32_t> probe_dtz(const chess::Board &position)
+    std::pair<std::vector<chess::Move>, int32_t> probe_dtm(const chess::Board &reference)
+    {
+        chess::Board position{reference};
+        std::vector<chess::Move> pv_line;
+
+        int16_t ply = 0;
+        auto [_, wdl] = probe_dtz(position);
+
+        while (true)
+        {
+            auto [reason, status] = position.isGameOver();
+            if (status != chess::GameResult::NONE)
+                break;
+
+            auto [move, _] = probe_dtz(position);
+            pv_line.push_back(move);
+            ply += 1;
+
+            position.makeMove(move);
+        }
+
+        int32_t score = 0;
+        switch (wdl)
+        {
+            case TB_WIN:
+                score = param::INF - ply;
+                break;
+            case TB_CURSED_WIN:
+            case TB_DRAW:
+            case TB_BLESSED_LOSS:
+                score = 0;
+                break;
+            case TB_LOSS:
+                score = -param::INF + ply;
+                break;
+            default:
+                throw std::runtime_error{"impossible wdl"};
+        }
+
+        return {pv_line, score};
+    }
+
+
+    std::pair<chess::Move, int> probe_dtz(const chess::Board &position)
     {
         unsigned ep = position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
         unsigned result = tb_probe_root(
@@ -345,29 +388,6 @@ struct endgame_table
         }
 
         int wdl = TB_GET_WDL(result);
-        int dtz = TB_GET_DTZ(result);
-
-        // TODO: this is wrong, dtz =/= dtm
-        int32_t score = 0;
-        switch (wdl)
-        {
-            case TB_WIN:
-                score = param::INF - dtz * 2;
-                break;
-            case TB_CURSED_WIN:
-                score = 0;
-                break;
-            case TB_DRAW:
-                score = 0;
-                break;
-            case TB_BLESSED_LOSS:
-                score = 0;
-                break;
-            case TB_LOSS:
-                score = -param::INF + dtz * 2;
-                break;
-        }
-
         int from = TB_GET_FROM(result);
         int to = TB_GET_TO(result);
         int promotes = TB_GET_PROMOTES(result);
@@ -382,14 +402,14 @@ struct endgame_table
                 if (m.typeOf() == chess::Move::PROMOTION)
                 {
                     if (m.promotionType() == promotes)
-                        return {m, score};
+                        return {m, wdl};
                 } else if (m.typeOf() == chess::Move::ENPASSANT)
                 {
                     if (ep_ == m.to().index())
-                        return {m, score};
+                        return {m, wdl};
                 } else
                 {
-                    return {m, score};
+                    return {m, wdl};
                 }
             }
         }
@@ -618,11 +638,7 @@ struct engine
         if (m_endgame != nullptr && !is_root && m_endgame->is_stored(m_position))
         {
             int32_t score = m_endgame->probe_wdl(m_position, ply);
-            if (score >= beta)
-                return score;
-
-            if (score <= alpha)
-                return score;
+            return score;
         }
 
         // [static null move pruning]
@@ -855,9 +871,8 @@ struct engine
         if (m_endgame != nullptr && m_endgame->is_stored(m_position))
         {
             // root search
-            auto probe = m_endgame->probe_dtz(m_position);
-            result.pv_line.clear();
-            result.pv_line.push_back(probe.first);
+            auto probe = m_endgame->probe_dtm(m_position);
+            result.pv_line = probe.first;
             result.depth = 1;
             result.score = probe.second;
 
