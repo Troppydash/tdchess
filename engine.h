@@ -20,6 +20,23 @@ struct search_result
     int16_t depth;
     int32_t score;
 
+    [[nodiscard]] std::string get_score_uci() const
+    {
+        if (score > param::CHECKMATE)
+        {
+            int32_t ply = param::INF - score;
+            return std::string{"mate "} + std::to_string(ply);
+        }
+
+        if (score < -param::CHECKMATE)
+        {
+            int32_t ply = -param::INF - score;
+            return std::string{"mate "} + std::to_string(ply);
+        }
+
+        return std::string{"cp "} + std::to_string(score);
+    }
+
     [[nodiscard]] std::string get_score() const
     {
         if (score > param::CHECKMATE)
@@ -44,6 +61,7 @@ struct engine_stats
 {
     int32_t nodes_searched;
     int16_t tt_occupancy;
+    int16_t sel_depth;
     std::chrono::milliseconds total_time;
 
     void display_delta(const engine_stats &old, const search_result &result) const
@@ -76,13 +94,13 @@ struct engine_stats
         long nps = static_cast<long>(nodes_searched) * 1000 / std::max(1L, total_time.count());
 
         std::cout << "info depth " << result.depth
-                << " seldepth " << result.depth
+                << " seldepth " << sel_depth
                 << " multipv 1"
-                << " score cp " << result.score
+                << " score " << result.get_score_uci()
                 << " nodes " << nodes_searched
                 << " nps " << nps
                 << " time " << total_time.count()
-                << " ttoc " << tt_occupancy
+                << " hashfull " << tt_occupancy
                 << " pv";
 
         for (auto &m: result.pv_line)
@@ -99,7 +117,7 @@ struct engine_param
     int16_t lmr[param::MAX_DEPTH][100];
     int lmr_depth_ration = 4;
     int lmr_move_ratio = 12;
-    int window_size = 100;
+    int window_size = 50;
 
     // move ordering
     std::array<std::array<int16_t, 6>, 7> mvv_lva;
@@ -108,8 +126,6 @@ struct engine_param
     int16_t first_killer = -10;
     int16_t second_killer = -20;
     int16_t counter_bonus = 15;
-
-    // TODO: move ordering
 
     explicit engine_param()
     {
@@ -175,7 +191,7 @@ struct move_ordering
 
             if (move == pv_move)
                 score += m_param.mvv_offset + m_param.pv_score;
-            else if (captured != chess::PieceType::NONE)
+            else if (position.isCapture(move) && captured != chess::PieceType::NONE)
             {
                 auto moved = position.at(move.from()).type();
                 score += m_param.mvv_offset + m_param.mvv_lva[captured][moved];
@@ -299,10 +315,73 @@ struct engine
         return pesto::evaluate(m_position) + tempo;
     }
 
-    int32_t qsearch() const
+    int32_t qsearch(int32_t alpha, int32_t beta, uint8_t base_ply, uint8_t ply, std::vector<chess::Move> &pv_line)
     {
-        // TODO: this
-        return 0;
+        m_stats.sel_depth = std::max(m_stats.sel_depth, static_cast<int16_t>(base_ply + ply));
+        m_stats.nodes_searched += 1;
+        if (m_stats.nodes_searched % 2048 == 0)
+            m_timer.check();
+
+        if (m_timer.is_stopped())
+            return 0;
+
+        if (base_ply + ply >= param::MAX_DEPTH)
+            return evaluate();
+
+        int32_t best_score = evaluate();
+        bool in_check = ply <= 2 && m_position.inCheck();
+
+        if (!in_check && best_score >= beta)
+            return best_score;
+
+        if (best_score > alpha)
+            alpha = best_score;
+
+        chess::Movelist moves;
+        if (in_check)
+            chess::movegen::legalmoves(moves, m_position);
+        else
+        {
+            chess::Movelist captures_and_promotions;
+            chess::movegen::legalmoves(captures_and_promotions, m_position);
+            for (const auto &m: captures_and_promotions)
+                if (m_position.isCapture(m) || m.typeOf() == chess::Move::PROMOTION)
+                    moves.add(m);
+        }
+
+        m_move_ordering.score_moves(m_position, moves, chess::Move::NULL_MOVE, chess::Move::NULL_MOVE, base_ply);
+        std::vector<chess::Move> child_pv_line;
+
+        for (int i = 0; i < moves.size(); ++i)
+        {
+            m_move_ordering.sort_moves(moves, i);
+
+            const chess::Move &move = moves[i];
+            // TODO: see
+
+            m_position.makeMove(move);
+            int32_t score = -qsearch(-beta, -alpha, base_ply, ply + 1, child_pv_line);
+            m_position.unmakeMove(move);
+
+            if (score > best_score)
+                best_score = score;
+
+            if (score >= beta)
+                break;
+
+            if (score > alpha)
+            {
+                alpha = score;
+                pv_line.clear();
+                pv_line.push_back(move);
+                for (const auto &m: child_pv_line)
+                    pv_line.push_back(m);
+            }
+
+            child_pv_line.clear();
+        }
+
+        return best_score;
     }
 
 
@@ -338,7 +417,7 @@ struct engine
             return evaluate();
 
         if (depth <= 0)
-            return evaluate();
+            return qsearch(ply, 0, alpha, beta, pv_line);
 
         const bool is_root = ply == 0;
         const bool is_pv_node = (beta - alpha) != 1;
@@ -522,7 +601,7 @@ struct engine
         m_position = reference;
         m_timer.start(ms);
         auto reference_time = timer::now();
-        m_stats = engine_stats{0, 0, timer::now() - reference_time};
+        m_stats = engine_stats{0, 0, 0, timer::now() - reference_time};
 
         std::vector<chess::Move> pv_line{};
         int32_t alpha = -param::INF, beta = param::INF;

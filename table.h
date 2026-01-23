@@ -106,6 +106,6 @@ public:
                 count++;
         }
 
-        return static_cast<int16_t>(count * 100 / m_entries.size());
+        return static_cast<int16_t>(count * 1000 / m_entries.size());
     }
 };

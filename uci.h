@@ -132,7 +132,6 @@ struct uci_handler
                     }
                 }
 
-                std::cout << "info searching with depth " << (int) max_depth << " time " << ms << std::endl;
                 start_search(max_depth, ms);
             } else if (lead == "stop")
             {
