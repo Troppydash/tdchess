@@ -3,16 +3,12 @@
 #include <utility>
 
 #include "chess.h"
+#include "endgame.h"
 #include "param.h"
 #include "evaluation.h"
 #include "timer.h"
 #include "table.h"
 #include "lib/Fathom/src/tbprobe.h"
-
-// TODO: copy from board
-struct tt
-{
-};
 
 
 struct search_result
@@ -92,8 +88,6 @@ struct engine_stats
 
     void display_uci(const search_result &result) const
     {
-        // long delta = (total_time - old.total_time).count();
-        // uint32_t depth_nps = (nodes_searched - old.nodes_searched) * 1000 / std::max(1L, delta);
         long nps = static_cast<long>(nodes_searched) * 1000 / std::max(1L, total_time.count());
 
         std::cout << "info depth " << result.depth
@@ -121,7 +115,7 @@ struct engine_param
     std::array<int, 6> lmp_margins;
     int lmr_depth_ration = 4;
     int lmr_move_ratio = 12;
-    int window_size = 50;
+    int window_size = 35;
     int32_t static_null_base_margin = 85;
     int16_t nmp_depth_limit = 2;
     int16_t nmp_depth_base = 3;
@@ -215,12 +209,11 @@ struct move_ordering
             {
                 const auto &counter = m_counter[position.sideToMove()]
                         [prev_move.from().index()][prev_move.to().index()];
-                int16_t history_score = m_history[position.sideToMove()]
-                        [move.from().index()][move.to().index()];
-
                 if (move == counter)
                     score += m_param.counter_bonus;
 
+                int16_t history_score = m_history[position.sideToMove()]
+                        [move.from().index()][move.to().index()];
                 score += history_score;
             }
 
@@ -299,173 +292,6 @@ struct move_ordering
     }
 };
 
-struct endgame_table
-{
-    explicit endgame_table(const std::string &path)
-    {
-        bool success = tb_init(path.c_str());
-        if (!success)
-        {
-            std::cout << "info failed database\n";
-        }
-    }
-
-    bool is_stored(const chess::Board &position)
-    {
-        int pieces = position.occ().count();
-        return 3 <= pieces && pieces <= 5 && !(
-                   position.castlingRights().has(chess::Color::WHITE)
-                   || position.castlingRights().has(chess::Color::BLACK));
-    }
-
-    std::pair<std::vector<chess::Move>, int32_t> probe_dtm(const chess::Board &reference)
-    {
-        chess::Board position{reference};
-        std::vector<chess::Move> pv_line;
-
-        int16_t ply = 0;
-        auto [_, wdl] = probe_dtz(position);
-
-        while (true)
-        {
-            auto [reason, status] = position.isGameOver();
-            if (status != chess::GameResult::NONE)
-                break;
-
-            auto [move, _] = probe_dtz(position);
-            pv_line.push_back(move);
-            ply += 1;
-
-            position.makeMove(move);
-        }
-
-        int32_t score = 0;
-        switch (wdl)
-        {
-            case TB_WIN:
-                score = param::INF - ply;
-                break;
-            case TB_CURSED_WIN:
-            case TB_DRAW:
-            case TB_BLESSED_LOSS:
-                score = 0;
-                break;
-            case TB_LOSS:
-                score = -param::INF + ply;
-                break;
-            default:
-                throw std::runtime_error{"impossible wdl"};
-        }
-
-        return {pv_line, score};
-    }
-
-
-    std::pair<chess::Move, int> probe_dtz(const chess::Board &position)
-    {
-        unsigned ep = position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
-        unsigned result = tb_probe_root(
-            position.us(chess::Color::WHITE).getBits(),
-            position.us(chess::Color::BLACK).getBits(),
-            position.pieces(chess::PieceType::KING).getBits(),
-            position.pieces(chess::PieceType::QUEEN).getBits(),
-            position.pieces(chess::PieceType::ROOK).getBits(),
-            position.pieces(chess::PieceType::BISHOP).getBits(),
-            position.pieces(chess::PieceType::KNIGHT).getBits(),
-            position.pieces(chess::PieceType::PAWN).getBits(),
-            position.halfMoveClock(),
-            0,
-            ep,
-            position.sideToMove() == chess::Color::WHITE,
-            nullptr
-        );
-
-        if (result == TB_RESULT_FAILED || result == TB_RESULT_STALEMATE || result == TB_RESULT_CHECKMATE)
-        {
-            std::cout << "info failed probe";
-            std::cout << position << std::endl;
-            throw std::runtime_error("failed probe");
-        }
-
-        int wdl = TB_GET_WDL(result);
-        int from = TB_GET_FROM(result);
-        int to = TB_GET_TO(result);
-        int promotes = TB_GET_PROMOTES(result);
-        int ep_ = TB_GET_EP(result);
-
-        chess::Movelist moves;
-        chess::movegen::legalmoves(moves, position);
-        for (auto &m: moves)
-        {
-            if (m.from().index() == from && m.to().index() == to)
-            {
-                if (m.typeOf() == chess::Move::PROMOTION)
-                {
-                    if (m.promotionType() == promotes)
-                        return {m, wdl};
-                } else if (m.typeOf() == chess::Move::ENPASSANT)
-                {
-                    if (ep_ == m.to().index())
-                        return {m, wdl};
-                } else
-                {
-                    return {m, wdl};
-                }
-            }
-        }
-
-        throw std::runtime_error{"impossible"};
-    }
-
-
-    int32_t probe_wdl(const chess::Board &position, int16_t ply)
-    {
-        unsigned ep = position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
-        unsigned result = tb_probe_wdl(
-            position.us(chess::Color::WHITE).getBits(),
-            position.us(chess::Color::BLACK).getBits(),
-            position.pieces(chess::PieceType::KING).getBits(),
-            position.pieces(chess::PieceType::QUEEN).getBits(),
-            position.pieces(chess::PieceType::ROOK).getBits(),
-            position.pieces(chess::PieceType::BISHOP).getBits(),
-            position.pieces(chess::PieceType::KNIGHT).getBits(),
-            position.pieces(chess::PieceType::PAWN).getBits(),
-            0,
-            0,
-            ep,
-            position.sideToMove() == chess::Color::WHITE
-        );
-
-        switch (result)
-        {
-            case TB_LOSS:
-                return -param::SYZYGY + ply;
-            case TB_BLESSED_LOSS:
-                return -param::SYZYGY50;
-            case TB_DRAW:
-                return 0;
-            case TB_CURSED_WIN:
-                return param::SYZYGY50;
-            case TB_WIN:
-                return param::SYZYGY - ply;
-        }
-
-        if (result == TB_RESULT_FAILED)
-        {
-            std::cout << "info failed probe";
-            std::cout << position << std::endl;
-            throw std::runtime_error("failed probe");
-        }
-
-        throw std::runtime_error("impossible value");
-    }
-
-
-    virtual ~endgame_table()
-    {
-        tb_free();
-    }
-};
 
 struct engine
 {
@@ -513,19 +339,6 @@ struct engine
         if (base_ply + ply >= param::MAX_DEPTH)
             return evaluate(base_ply + ply);
 
-        // check draw
-        if (m_position.isInsufficientMaterial() || m_position.isRepetition(2))
-            return 0;
-
-        // 50 move limit
-        if (m_position.isHalfMoveDraw())
-        {
-            auto [_, type] = m_position.getHalfMoveDrawType();
-            if (type == chess::GameResult::DRAW)
-                return 0;
-
-            return -param::INF + ply;
-        }
 
         int32_t best_score = evaluate(base_ply + ply);
         bool in_check = ply <= 2 && m_position.inCheck();
@@ -613,11 +426,11 @@ struct engine
         }
 
         // check draw
-        if (m_position.isInsufficientMaterial() || m_position.isRepetition(2))
+        if (!is_root && (m_position.isInsufficientMaterial() || m_position.isRepetition(1)))
             return 0;
 
         // 50 move limit
-        if (m_position.isHalfMoveDraw())
+        if (!is_root && m_position.isHalfMoveDraw())
         {
             auto [_, type] = m_position.getHalfMoveDrawType();
             if (type == chess::GameResult::DRAW)
