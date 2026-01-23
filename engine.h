@@ -196,8 +196,6 @@ struct move_ordering
 
             if (move == pv_move)
                 score += m_param.mvv_offset + m_param.pv_score;
-            else if (move.typeOf() == chess::Move::CASTLING)
-                score += m_param.mvv_offset + m_param.pv_score;
             else if (position.isCapture(move) && captured != chess::PieceType::NONE)
             {
                 auto moved = position.at(move.from()).type();
@@ -255,7 +253,7 @@ struct move_ordering
 
     bool is_slient_move(const chess::Board &position, const chess::Move &move) const
     {
-        return position.at(move.from()).type() == chess::PieceType::NONE;
+        return position.isCapture(move);
     }
 
     void incr_history(const chess::Board &position, const chess::Move &move, int16_t depth)
@@ -327,7 +325,7 @@ struct engine
         return pesto::evaluate(m_position) + tempo;
     }
 
-    int32_t qsearch(int32_t alpha, int32_t beta, int16_t base_ply, int16_t ply, std::vector<chess::Move> &pv_line)
+    int32_t qsearch(int32_t alpha, int32_t beta, int16_t base_ply, int16_t ply)
     {
         m_stats.sel_depth = std::max(m_stats.sel_depth, static_cast<int16_t>(base_ply + ply));
         m_stats.nodes_searched += 1;
@@ -359,7 +357,6 @@ struct engine
         }
 
         m_move_ordering.score_moves(m_position, moves, chess::Move::NULL_MOVE, chess::Move::NULL_MOVE, base_ply);
-        std::vector<chess::Move> child_pv_line;
 
         for (int i = 0; i < moves.size(); ++i)
         {
@@ -370,7 +367,7 @@ struct engine
                 continue;
 
             m_position.makeMove(move);
-            int32_t score = -qsearch(-beta, -alpha, base_ply, ply + 1, child_pv_line);
+            int32_t score = -qsearch(-beta, -alpha, base_ply, ply + 1);
             m_position.unmakeMove(move);
 
             if (score > best_score)
@@ -382,13 +379,7 @@ struct engine
             if (score > alpha)
             {
                 alpha = score;
-                pv_line.clear();
-                pv_line.push_back(move);
-                for (const auto &m: child_pv_line)
-                    pv_line.push_back(m);
             }
-
-            child_pv_line.clear();
         }
 
         return best_score;
@@ -418,7 +409,7 @@ struct engine
         const bool in_check = m_position.inCheck();
 
         // [check extension]
-        if (in_check)
+        if (in_check && ply < depth * 2)
             depth += 1;
 
 
@@ -448,6 +439,7 @@ struct engine
         if (m_endgame != nullptr && !is_root && m_endgame->is_stored(m_position))
         {
             int32_t score = m_endgame->probe_wdl(m_position, ply);
+            entry = m_table.store(m_position.hash(), param::TB_DEPTH);
             entry.set(m_position.hash(), score, chess::Move::NULL_MOVE, ply, param::TB_DEPTH, param::EXACT_FLAG);
             return score;
         }
@@ -455,7 +447,7 @@ struct engine
         if (depth <= 0)
         {
             m_stats.nodes_searched -= 1;
-            return qsearch(alpha, beta, ply, 0, pv_line);
+            return qsearch(alpha, beta, ply, 0);
         }
 
         // [static null move pruning]
@@ -492,7 +484,7 @@ struct engine
         int explored_moves = 0;
 
         // [tt-move generation]
-        chess::Movelist moves;
+        chess::Movelist moves{};
         bool lazy_move_gen = tt_result.move != chess::Move::NULL_MOVE;
         if (lazy_move_gen)
         {
@@ -512,6 +504,9 @@ struct engine
         {
             m_move_ordering.sort_moves(moves, i);
             const chess::Move &move = moves[i];
+
+            // ignore pv move
+            if (lazy_move_gen && explored_moves > 0 && move == tt_result.move) continue;
 
             m_position.makeMove(move);
 
@@ -591,9 +586,6 @@ struct engine
                     pv_line.push_back(m);
 
                 m_move_ordering.incr_history(m_position, move, depth);
-            } else
-            {
-                m_move_ordering.decr_history(m_position, move);
             }
 
             child_pv_line.clear();
@@ -617,7 +609,7 @@ struct engine
             return 0;
         }
 
-        if (depth > entry.m_depth && !m_timer.is_stopped())
+        if (depth >= entry.m_depth && !m_timer.is_stopped())
         {
             entry = m_table.store(m_position.hash(), depth);
             entry.set(m_position.hash(), best_score, best_move, ply, depth, tt_flag);
