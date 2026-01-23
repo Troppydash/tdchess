@@ -200,6 +200,8 @@ struct move_ordering
 
             if (move == pv_move)
                 score += m_param.mvv_offset + m_param.pv_score;
+            else if (move.typeOf() == chess::Move::CASTLING)
+                score += m_param.mvv_offset + m_param.pv_score;
             else if (position.isCapture(move) && captured != chess::PieceType::NONE)
             {
                 auto moved = position.at(move.from()).type();
@@ -348,11 +350,7 @@ struct engine
             chess::movegen::legalmoves(moves, m_position);
         else
         {
-            chess::Movelist captures_and_promotions;
-            chess::movegen::legalmoves(captures_and_promotions, m_position);
-            for (const auto &m: captures_and_promotions)
-                if (m_position.isCapture(m) || m.typeOf() == chess::Move::PROMOTION)
-                    moves.add(m);
+            chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves, m_position);
         }
 
         m_move_ordering.score_moves(m_position, moves, chess::Move::NULL_MOVE, chess::Move::NULL_MOVE, base_ply);
@@ -675,10 +673,13 @@ struct engine
         {
             chess::Move null = chess::Move::NULL_MOVE;
             int32_t score = negamax(alpha, beta, depth, 0, pv_line, null, true);
-            // TODO: use this extra info
-
             if (m_timer.is_stopped())
+            {
+                if (!pv_line.empty() && pv_line[0].typeOf() != chess::Move::NULL_MOVE)
+                    result.pv_line = pv_line;
+
                 break;
+            }
 
             // [asp window]
             if (score <= alpha || score >= beta)

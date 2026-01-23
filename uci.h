@@ -84,7 +84,7 @@ struct uci_handler
                 size_t moves = 2;
                 if (parts[1] == "fen")
                 {
-                    std::string fen = parts[2] + parts[3] + parts[4] + parts[5] + parts[6] + parts[7];
+                    std::string fen = std::format("{} {} {} {} {} {}", parts[2], parts[3], parts[4], parts[5], parts[6], parts[7]);
                     m_position = chess::Board::fromFen(fen);
                     moves = 8;
                 } else if (parts[1] == "startpos")
