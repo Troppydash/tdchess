@@ -251,30 +251,32 @@ struct move_ordering
         }
     }
 
-    bool is_slient_move(const chess::Board &position, const chess::Move &move) const
+    bool is_quiet(const chess::Board &position, const chess::Move &move) const
     {
         return !position.isCapture(move);
     }
 
     void incr_history(const chess::Board &position, const chess::Move &move, int16_t depth)
     {
-        if (is_slient_move(position, move))
-            m_history[position.sideToMove()][move.from().index()][move.to().index()] += depth * depth;
+        auto &score = m_history[position.sideToMove()][move.from().index()][move.to().index()];
+        score += depth * depth;
 
-        if (m_history[position.sideToMove()][move.from().index()][move.to().index()] >= m_param.mvv_offset - 30)
+        if (score >= m_param.mvv_offset - 30)
             age_history();
     }
 
-    void decr_history(const chess::Board &position, const chess::Move &move)
+    void decr_history(const chess::Board &position, const chess::Move &move, int16_t depth)
     {
-        if (is_slient_move(position, move))
-            if (m_history[position.sideToMove()][move.from().index()][move.to().index()] > 0)
-                m_history[position.sideToMove()][move.from().index()][move.to().index()] -= 1;
+        auto &score = m_history[position.sideToMove()][move.from().index()][move.to().index()];
+
+        score -= depth * depth;
+        if (score < 0)
+            score = 0;
     }
 
     void store_killer(const chess::Board &position, const chess::Move &killer, int ply)
     {
-        if (is_slient_move(position, killer))
+        if (is_quiet(position, killer))
         {
             if (m_killers[ply][0] != killer)
             {
@@ -286,7 +288,7 @@ struct move_ordering
 
     void incr_counter(const chess::Board &position, const chess::Move &prev_move, const chess::Move &move)
     {
-        if (is_slient_move(position, move))
+        if (is_quiet(position, move))
             m_counter[position.sideToMove()][prev_move.from().index()][prev_move.to().index()] = move;
     }
 };
@@ -522,6 +524,11 @@ struct engine
 
         int32_t best_score = std::numeric_limits<int32_t>::min();
         chess::Move best_move = chess::Move::NULL_MOVE;
+
+        // track quiet moves for malus
+        chess::Move quiet_moves[64]{};
+        size_t quiet_count = 0;
+
         for (int i = 0; i < moves.size(); ++i)
         {
             m_move_ordering.sort_moves(moves, i);
@@ -588,12 +595,22 @@ struct engine
                 tt_flag = param::BETA_FLAG;
                 m_move_ordering.incr_counter(m_position, prev_move, move);
                 m_move_ordering.store_killer(m_position, move, ply);
-                m_move_ordering.incr_history(m_position, move, depth);
+
+                if (m_move_ordering.is_quiet(m_position, move))
+                {
+                    m_move_ordering.incr_history(m_position, move, depth);
+
+                    // malus apply
+                    for (int j = 0; j < quiet_count; ++j)
+                        m_move_ordering.decr_history(m_position, quiet_moves[j], depth);
+                }
+
                 break;
-            } else
-            {
-                m_move_ordering.decr_history(m_position, move);
             }
+
+            // malus save
+            if (m_move_ordering.is_quiet(m_position, move) && quiet_count < 64)
+                quiet_moves[quiet_count++] = move;
 
             if (score > alpha)
             {
@@ -740,7 +757,6 @@ struct engine
             result.pv_line.clear();
             for (int i = 0; i < m_line.pv_length[0]; ++i)
                 result.pv_line.push_back(m_line.pv_table[0][i]);
-
             result.depth = depth;
 
 
