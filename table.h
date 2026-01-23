@@ -46,11 +46,11 @@ public:
                     should_use = true;
                 } else if (m_flag == param::ALPHA_FLAG && score <= alpha)
                 {
-                    adj_score = alpha;
+                    adj_score = score;
                     should_use = true;
                 } else if (m_flag == param::BETA_FLAG && score >= beta)
                 {
-                    adj_score = beta;
+                    adj_score = score;
                     should_use = true;
                 }
             }

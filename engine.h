@@ -8,6 +8,7 @@
 #include "evaluation.h"
 #include "timer.h"
 #include "table.h"
+#include "see.h"
 #include "lib/Fathom/src/tbprobe.h"
 
 
@@ -365,7 +366,8 @@ struct engine
             m_move_ordering.sort_moves(moves, i);
 
             const chess::Move &move = moves[i];
-            // TODO: see
+            if (see::test(m_position, move) < 0)
+                continue;
 
             m_position.makeMove(move);
             int32_t score = -qsearch(-beta, -alpha, base_ply, ply + 1, child_pv_line);
@@ -419,11 +421,6 @@ struct engine
         if (in_check)
             depth += 1;
 
-        if (depth <= 0)
-        {
-            m_stats.nodes_searched -= 1;
-            return qsearch(alpha, beta, ply, 0, pv_line);
-        }
 
         // check draw
         if (!is_root && (m_position.isInsufficientMaterial() || m_position.isRepetition(1)))
@@ -451,7 +448,14 @@ struct engine
         if (m_endgame != nullptr && !is_root && m_endgame->is_stored(m_position))
         {
             int32_t score = m_endgame->probe_wdl(m_position, ply);
+            entry.set(m_position.hash(), score, chess::Move::NULL_MOVE, ply, param::TB_DEPTH, param::EXACT_FLAG);
             return score;
+        }
+
+        if (depth <= 0)
+        {
+            m_stats.nodes_searched -= 1;
+            return qsearch(alpha, beta, ply, 0, pv_line);
         }
 
         // [static null move pruning]
@@ -466,8 +470,7 @@ struct engine
         std::vector<chess::Move> child_pv_line;
 
         // [null move pruning]
-        if (do_null && !in_check && !is_pv_node && depth >= m_param.nmp_depth_limit && m_position.
-            hasNonPawnMaterial(chess::Color::WHITE) && m_position.hasNonPawnMaterial(chess::Color::BLACK))
+        if (do_null && !in_check && !is_pv_node && depth >= m_param.nmp_depth_limit && m_position.occ().count() >= 7)
         {
             m_position.makeNullMove();
             int16_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
