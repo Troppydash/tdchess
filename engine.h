@@ -253,7 +253,7 @@ struct move_ordering
 
     bool is_slient_move(const chess::Board &position, const chess::Move &move) const
     {
-        return position.isCapture(move);
+        return !position.isCapture(move);
     }
 
     void incr_history(const chess::Board &position, const chess::Move &move, int16_t depth)
@@ -291,6 +291,30 @@ struct move_ordering
     }
 };
 
+struct pv_line
+{
+    chess::Move pv_table[param::MAX_DEPTH][param::MAX_DEPTH];
+    int pv_length[param::MAX_DEPTH];
+
+    explicit pv_line()
+    {
+    }
+
+    void ply_init(int16_t ply)
+    {
+        pv_length[ply] = ply;
+    }
+
+    void update(int16_t ply, const chess::Move &move)
+    {
+        pv_table[ply][ply] = move;
+        for (int i = ply + 1; i < pv_length[ply + 1]; i++)
+            pv_table[ply][i] = pv_table[ply + 1][i];
+
+        pv_length[ply] = pv_length[ply + 1];
+    }
+};
+
 
 struct engine
 {
@@ -301,6 +325,7 @@ struct engine
 
     table m_table;
     move_ordering m_move_ordering;
+    pv_line m_line;
 
     endgame_table *m_endgame = nullptr;
 
@@ -389,11 +414,12 @@ struct engine
     int32_t negamax(
         int32_t alpha, int32_t beta,
         int16_t depth, int16_t ply,
-        std::vector<chess::Move> &pv_line,
         const chess::Move &prev_move,
         bool do_null
     )
     {
+        m_line.ply_init(ply);
+
         m_stats.nodes_searched += 1;
         if (m_stats.nodes_searched % 2048 == 0)
             m_timer.check();
@@ -459,18 +485,14 @@ struct engine
                 return static_score - margin;
         }
 
-        std::vector<chess::Move> child_pv_line;
 
         // [null move pruning]
         if (do_null && !in_check && !is_pv_node && depth >= m_param.nmp_depth_limit && m_position.occ().count() >= 7)
         {
             m_position.makeNullMove();
             int16_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
-            int32_t score = -negamax(-beta, -beta + 1, depth - 1 - reduction, ply + 1, child_pv_line,
-                                     chess::Move::NULL_MOVE, false);
-
+            int32_t score = -negamax(-beta, -beta + 1, depth - 1 - reduction, ply + 1, chess::Move::NULL_MOVE, false);
             m_position.unmakeNullMove();
-            child_pv_line.clear();
 
             if (m_timer.is_stopped())
                 return 0;
@@ -527,7 +549,7 @@ struct engine
             int32_t score;
             if (explored_moves == 0)
             {
-                score = -negamax(-beta, -alpha, depth - 1, ply + 1, child_pv_line, move, true);
+                score = -negamax(-beta, -alpha, depth - 1, ply + 1, move, true);
             } else
             {
                 // [late move reduction]
@@ -536,20 +558,17 @@ struct engine
                     reduction = m_param.lmr[depth][explored_moves];
 
                 // [pv search]
-                score = -negamax(-(alpha + 1), -alpha, depth - 1 - reduction, ply + 1, child_pv_line, move, true);
+                score = -negamax(-(alpha + 1), -alpha, depth - 1 - reduction, ply + 1, move, true);
                 if (alpha < score && reduction > 0)
                 {
-                    child_pv_line.clear();
-                    score = -negamax(-(alpha + 1), -alpha, depth - 1, ply + 1, child_pv_line, move, true);
+                    score = -negamax(-(alpha + 1), -alpha, depth - 1, ply + 1, move, true);
                     if (alpha < score)
                     {
-                        child_pv_line.clear();
-                        score = -negamax(-beta, -alpha, depth - 1, ply + 1, child_pv_line, move, true);
+                        score = -negamax(-beta, -alpha, depth - 1, ply + 1, move, true);
                     }
                 } else if (alpha < score && score < beta)
                 {
-                    child_pv_line.clear();
-                    score = -negamax(-beta, -alpha, depth - 1, ply + 1, child_pv_line, move, true);
+                    score = -negamax(-beta, -alpha, depth - 1, ply + 1, move, true);
                 }
             }
 
@@ -580,15 +599,11 @@ struct engine
             {
                 tt_flag = param::EXACT_FLAG;
                 alpha = score;
-                pv_line.clear();
-                pv_line.push_back(move);
-                for (auto &m: child_pv_line)
-                    pv_line.push_back(m);
+                m_line.update(ply, move);
 
                 m_move_ordering.incr_history(m_position, move, depth);
             }
 
-            child_pv_line.clear();
             explored_moves += 1;
 
             if (lazy_move_gen && explored_moves == 1)
@@ -668,7 +683,6 @@ struct engine
         auto reference_time = timer::now();
         m_stats = engine_stats{0, 0, 0, timer::now() - reference_time};
 
-        std::vector<chess::Move> pv_line{};
         int32_t alpha = -param::INF, beta = param::INF;
         int16_t depth = 1;
 
@@ -698,11 +712,12 @@ struct engine
         while (depth <= max_depth)
         {
             chess::Move null = chess::Move::NULL_MOVE;
-            int32_t score = negamax(alpha, beta, depth, 0, pv_line, null, true);
+            int32_t score = negamax(alpha, beta, depth, 0, null, true);
             if (m_timer.is_stopped())
             {
-                if (!pv_line.empty() && pv_line[0].typeOf() != chess::Move::NULL_MOVE)
-                    result.pv_line = pv_line;
+                result.pv_line.clear();
+                for (int i = 0; i < m_line.pv_length[0]; ++i)
+                    result.pv_line.push_back(m_line.pv_table[0][i]);
 
                 break;
             }
@@ -712,7 +727,6 @@ struct engine
             {
                 alpha = -param::INF;
                 beta = param::INF;
-                pv_line.clear();
                 continue;
             }
 
@@ -723,7 +737,10 @@ struct engine
             }
 
             result.score = score;
-            result.pv_line = std::vector<chess::Move>(pv_line.begin(), pv_line.end());
+            result.pv_line.clear();
+            for (int i = 0; i < m_line.pv_length[0]; ++i)
+                result.pv_line.push_back(m_line.pv_table[0][i]);
+
             result.depth = depth;
 
 
@@ -741,7 +758,6 @@ struct engine
 
 
             depth += 1;
-            pv_line.clear();
         }
 
         return result;
