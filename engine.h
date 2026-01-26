@@ -534,9 +534,6 @@ struct engine
             m_move_ordering.sort_moves(moves, i);
             const chess::Move &move = moves[i];
 
-            // ignore pv move
-            if (lazy_move_gen && explored_moves > 0 && move == tt_result.move) continue;
-
             m_position.makeMove(move);
 
             // [late move pruning]
@@ -627,6 +624,7 @@ struct engine
             {
                 chess::movegen::legalmoves(moves, m_position);
                 m_move_ordering.score_moves(m_position, moves, tt_result.move, prev_move, ply);
+                m_move_ordering.sort_moves(moves, 0);
                 legal_moves = moves.size();
             }
         }
