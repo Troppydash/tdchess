@@ -130,6 +130,9 @@ struct engine_param
     int16_t second_killer = -20;
     int16_t counter_bonus = 5;
 
+    // evaluation
+    int16_t tempo = 15;
+
     explicit engine_param()
     {
         lmp_margins = {0, 8, 12, 16, 20, 24};
@@ -295,12 +298,13 @@ struct move_ordering
 
 struct pv_line
 {
-    chess::Move pv_table[param::MAX_DEPTH][param::MAX_DEPTH];
-    int pv_length[param::MAX_DEPTH];
+    // pv_table[ply][i] is the ith pv move at ply
+    chess::Move pv_table[param::MAX_DEPTH][param::MAX_DEPTH]{};
 
-    explicit pv_line()
-    {
-    }
+    // pv_length[ply] is the number of moves at ply
+    int pv_length[param::MAX_DEPTH]{};
+
+    explicit pv_line() = default;
 
     void ply_init(int16_t ply)
     {
@@ -348,8 +352,7 @@ struct engine
 
     [[nodiscard]] int32_t evaluate(int16_t ply) const
     {
-        int32_t tempo = 15;
-        return pesto::evaluate(m_position) + tempo;
+        return pesto::evaluate(m_position) + m_param.tempo;
     }
 
     int32_t qsearch(int32_t alpha, int32_t beta, int16_t base_ply, int16_t ply)
@@ -527,7 +530,7 @@ struct engine
 
         // track quiet moves for malus
         chess::Move quiet_moves[64]{};
-        size_t quiet_count = 0;
+        int quiet_count = 0;
 
         for (int i = 0; i < moves.size(); ++i)
         {
