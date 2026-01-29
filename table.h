@@ -12,7 +12,7 @@ struct table_entry_result
 
 class table_entry
 {
-public:
+  public:
     uint64_t m_hash = 0;
     int32_t m_score = 0;
     chess::Move m_best_move = chess::Move::NULL_MOVE;
@@ -44,11 +44,13 @@ public:
                 {
                     adj_score = score;
                     should_use = true;
-                } else if (m_flag == param::ALPHA_FLAG && score <= alpha)
+                }
+                else if (m_flag == param::ALPHA_FLAG && score <= alpha)
                 {
                     adj_score = score;
                     should_use = true;
-                } else if (m_flag == param::BETA_FLAG && score >= beta)
+                }
+                else if (m_flag == param::BETA_FLAG && score >= beta)
                 {
                     adj_score = score;
                     should_use = true;
@@ -78,7 +80,7 @@ public:
 
 class table
 {
-public:
+  public:
     std::vector<table_entry> m_entries;
     size_t m_size;
 
@@ -120,7 +122,7 @@ public:
     int16_t occupied() const
     {
         size_t count = 0;
-        for (const auto &entry: m_entries)
+        for (const auto &entry : m_entries)
         {
             if (entry.m_hash > 0)
                 count++;

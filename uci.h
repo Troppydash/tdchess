@@ -1,15 +1,11 @@
 #pragma once
 #include <c++/12/thread>
 
-
 std::vector<std::string> string_split(std::string const &input)
 {
     std::stringstream ss(input);
 
-    std::vector<std::string> words(
-        (std::istream_iterator<std::string>(ss)),
-        std::istream_iterator<std::string>()
-    );
+    std::vector<std::string> words((std::istream_iterator<std::string>(ss)), std::istream_iterator<std::string>());
 
     return words;
 }
@@ -22,8 +18,7 @@ struct uci_handler
     std::unique_ptr<engine> m_engine;
     std::thread m_engine_thread;
 
-    explicit uci_handler()
-        : m_table{nullptr}, m_engine(std::make_unique<engine>(engine{}))
+    explicit uci_handler() : m_table{nullptr}, m_engine(std::make_unique<engine>(engine{128}))
     {
     }
 
@@ -37,25 +32,22 @@ struct uci_handler
     {
         stop_search();
 
-        m_engine_thread = std::thread{
-            [&]()
+        m_engine_thread = std::thread{[&]() {
+            if (m_table == nullptr)
+                m_engine = std::make_unique<engine>(engine{128});
+            else
+                m_engine = std::make_unique<engine>(engine{m_table, 128});
+
+            auto result = m_engine->search(m_position, depth, ms, true, true);
+
+            // display results
+            std::cout << "bestmove " << chess::uci::moveToUci(result.pv_line[0]);
+            if (result.pv_line.size() >= 2)
             {
-                if (m_table == nullptr)
-                    m_engine = std::make_unique<engine>(engine{});
-                else
-                    m_engine = std::make_unique<engine>(engine{m_table});
-
-                auto result = m_engine->search(m_position, depth, ms, true, true);
-
-                // display results
-                std::cout << "bestmove " << chess::uci::moveToUci(result.pv_line[0]);
-                if (result.pv_line.size() >= 2)
-                {
-                    std::cout << " ponder " << chess::uci::moveToUci(result.pv_line[1]);
-                }
-                std::cout << std::endl;
+                std::cout << " ponder " << chess::uci::moveToUci(result.pv_line[1]);
             }
-        };
+            std::cout << std::endl;
+        }};
     }
 
     void stop_search()
@@ -85,13 +77,15 @@ struct uci_handler
             if (lead == "quit")
             {
                 break;
-            } else if (lead == "uci")
+            }
+            else if (lead == "uci")
             {
                 std::cout << "id name Tdchess 1.0.1\n";
                 std::cout << "id author troppydash\n";
                 std::cout << "option name SyzygyPath type string default <empty>\n";
                 std::cout << "uciok\n";
-            } else if (lead == "setoption")
+            }
+            else if (lead == "setoption")
             {
                 if (parts[2] == "SyzygyPath")
                 {
@@ -99,16 +93,18 @@ struct uci_handler
                         delete m_table;
                     m_table = new endgame_table{parts[4]};
                 }
-            } else if (lead == "position")
+            }
+            else if (lead == "position")
             {
                 size_t moves = 2;
                 if (parts[1] == "fen")
                 {
-                    std::string fen = std::format("{} {} {} {} {} {}", parts[2], parts[3], parts[4], parts[5], parts[6],
-                                                  parts[7]);
+                    std::string fen =
+                        std::format("{} {} {} {} {} {}", parts[2], parts[3], parts[4], parts[5], parts[6], parts[7]);
                     m_position = chess::Board::fromFen(fen);
                     moves = 8;
-                } else if (parts[1] == "startpos")
+                }
+                else if (parts[1] == "startpos")
                 {
                     m_position = chess::Board{};
                 }
@@ -121,13 +117,16 @@ struct uci_handler
                         m_position.makeMove(m);
                     }
                 }
-            } else if (lead == "ucinewgame")
+            }
+            else if (lead == "ucinewgame")
             {
                 // ignore
-            } else if (lead == "isready")
+            }
+            else if (lead == "isready")
             {
                 std::cout << "readyok\n";
-            } else if (lead == "go")
+            }
+            else if (lead == "go")
             {
                 uint8_t max_depth = param::MAX_DEPTH;
                 int ms = 1000000;
@@ -143,21 +142,25 @@ struct uci_handler
                     {
                         max_depth = std::atoi(parts[i + 1].c_str());
                         i += 1;
-                    } else if (parts[i] == "movetime")
+                    }
+                    else if (parts[i] == "movetime")
                     {
                         ms = std::atoi(parts[i + 1].c_str());
                         i += 1;
-                    } else
+                    }
+                    else
                     {
                         // ignore
                     }
                 }
 
                 start_search(max_depth, ms);
-            } else if (lead == "stop")
+            }
+            else if (lead == "stop")
             {
                 stop_search();
-            } else if (lead == "ponderhit")
+            }
+            else if (lead == "ponderhit")
             {
                 // ignore
             }

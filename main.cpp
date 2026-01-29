@@ -5,13 +5,13 @@
 #include "chess.h"
 
 #include "engine.h"
-#include "uci.h"
 #include "nnue.h"
 #include "trainer.h"
+#include "uci.h"
 
 void perft()
 {
-    engine engine;
+    engine engine{128};
     chess::Board board{};
     engine.perft(board, 7);
 }

@@ -4,13 +4,13 @@
 
 #include "chess.h"
 #include "endgame.h"
-#include "param.h"
 #include "evaluation.h"
-#include "timer.h"
-#include "table.h"
-#include "see.h"
+#include "helper.h"
 #include "lib/Fathom/src/tbprobe.h"
-
+#include "param.h"
+#include "see.h"
+#include "table.h"
+#include "timer.h"
 
 struct search_result
 {
@@ -70,17 +70,10 @@ struct engine_stats
         uint32_t depth_nps = (nodes_searched - old.nodes_searched) * 1000 / std::max(1L, delta);
         uint32_t nps = nodes_searched * 1000 / std::max(1L, total_time.count());
 
-        printf(
-            "info depth %2d, nodes %10d, score %10s (%7d), nps %10d/%10d, moves",
-            result.depth,
-            nodes_searched,
-            result.get_score().c_str(),
-            result.score,
-            depth_nps,
-            nps
-        );
+        printf("info depth %2d, nodes %10d, score %10s (%7d), nps %10d/%10d, moves", result.depth, nodes_searched,
+               result.get_score().c_str(), result.score, depth_nps, nps);
 
-        for (auto &m: result.pv_line)
+        for (auto &m : result.pv_line)
         {
             std::cout << " " << chess::uci::moveToUci(m);
         }
@@ -91,17 +84,11 @@ struct engine_stats
     {
         long nps = static_cast<long>(nodes_searched) * 1000 / std::max(1L, total_time.count());
 
-        std::cout << "info depth " << result.depth
-                << " seldepth " << sel_depth
-                << " multipv 1"
-                << " score " << result.get_score_uci()
-                << " nodes " << nodes_searched
-                << " nps " << nps
-                << " time " << total_time.count()
-                << " hashfull " << tt_occupancy
-                << " pv";
+        std::cout << "info depth " << result.depth << " seldepth " << sel_depth << " multipv 1"
+                  << " score " << result.get_score_uci() << " nodes " << nodes_searched << " nps " << nps << " time "
+                  << total_time.count() << " hashfull " << tt_occupancy << " pv";
 
-        for (auto &m: result.pv_line)
+        for (auto &m : result.pv_line)
         {
             std::cout << " " << chess::uci::moveToUci(m);
         }
@@ -119,12 +106,14 @@ struct engine_param
     int window_size = 35;
     int32_t static_null_base_margin = 85;
     int16_t nmp_depth_limit = 2;
+    int16_t nmp_piece_count = 7;
     int16_t nmp_depth_base = 3;
     int16_t nmp_depth_multiplier = 6;
 
     // move ordering
     std::array<std::array<int16_t, 6>, 7> mvv_lva;
     int16_t mvv_offset = std::numeric_limits<int16_t>::max() - 256;
+    int16_t max_history = mvv_offset - 100;
     int16_t pv_score = 65;
     int16_t first_killer = -10;
     int16_t second_killer = -20;
@@ -141,17 +130,17 @@ struct engine_param
         for (int depth = 0; depth < param::MAX_DEPTH; ++depth)
             for (int move = 0; move < 100; ++move)
                 lmr[depth][move] =
-                        std::max(2, depth / std::max(1, lmr_depth_ration)) + move / std::max(1, lmr_move_ratio);
+                    std::max(2, depth / std::max(1, lmr_depth_ration)) + move / std::max(1, lmr_move_ratio);
 
         // set mvv_lva
         mvv_lva = {
             std::array<int16_t, 6>{15, 14, 13, 12, 11, 10}, // victim Pawn
-            {25, 24, 23, 22, 21, 20}, // victim Knight
-            {35, 34, 33, 32, 31, 30}, // victim Bishop
-            {45, 44, 43, 42, 41, 40}, // victim Rook
-            {55, 54, 53, 52, 51, 50}, // victim Queen
-            {0, 0, 0, 0, 0, 0}, // victim King
-            {0, 0, 0, 0, 0, 0}, // No piece
+            {25, 24, 23, 22, 21, 20},                       // victim Knight
+            {35, 34, 33, 32, 31, 30},                       // victim Bishop
+            {45, 44, 43, 42, 41, 40},                       // victim Rook
+            {55, 54, 53, 52, 51, 50},                       // victim Queen
+            {0, 0, 0, 0, 0, 0},                             // victim King
+            {0, 0, 0, 0, 0, 0},                             // No piece
         };
     }
 };
@@ -163,36 +152,29 @@ struct move_ordering
     int16_t m_history[2][64][64];
     const engine_param m_param;
 
-    explicit move_ordering(const engine_param &param)
-        : m_param(param)
+    explicit move_ordering(const engine_param &param) : m_param(param)
     {
         // init killer/counter/history
-        for (auto &i: m_history)
-            for (auto &j: i)
-                for (int16_t &k: j)
+        for (auto &i : m_history)
+            for (auto &j : i)
+                for (int16_t &k : j)
                     k = 0;
 
-        for (auto &m: m_killers)
+        for (auto &m : m_killers)
         {
             m[0] = m[1] = chess::Move::NULL_MOVE;
         }
 
-        for (auto &i: m_counter)
-            for (auto &j: i)
-                for (auto &k: j)
+        for (auto &i : m_counter)
+            for (auto &j : i)
+                for (auto &k : j)
                     k = chess::Move::NULL_MOVE;
     }
 
-
-    void score_moves(
-        const chess::Board &position,
-        chess::Movelist &movelist,
-        const chess::Move &pv_move,
-        const chess::Move &prev_move,
-        int16_t ply
-    )
+    void score_moves(const chess::Board &position, chess::Movelist &movelist, const chess::Move &pv_move,
+                     const chess::Move &prev_move, int16_t ply)
     {
-        for (auto &move: movelist)
+        for (auto &move : movelist)
         {
             int16_t score = 0;
             auto captured = position.at(move.to()).type();
@@ -203,19 +185,19 @@ struct move_ordering
             {
                 auto moved = position.at(move.from()).type();
                 score += m_param.mvv_offset + m_param.mvv_lva[captured][moved];
-            } else if (move == m_killers[ply][0])
+            }
+            else if (move == m_killers[ply][0])
                 score += m_param.mvv_offset + m_param.first_killer;
             else if (move == m_killers[ply][1])
                 score += m_param.mvv_offset + m_param.second_killer;
             else
             {
-                const auto &counter = m_counter[position.sideToMove()]
-                        [prev_move.from().index()][prev_move.to().index()];
+                const auto &counter =
+                    m_counter[position.sideToMove()][prev_move.from().index()][prev_move.to().index()];
                 if (move == counter)
                     score += m_param.counter_bonus;
 
-                int16_t history_score = m_history[position.sideToMove()]
-                        [move.from().index()][move.to().index()];
+                int16_t history_score = m_history[position.sideToMove()][move.from().index()][move.to().index()];
                 score += history_score;
             }
 
@@ -223,9 +205,7 @@ struct move_ordering
         }
     }
 
-    void sort_moves(
-        chess::Movelist &movelist, int i
-    )
+    void sort_moves(chess::Movelist &movelist, int i)
     {
         int highest_score = movelist[i].score();
         int highest_index = i;
@@ -242,11 +222,11 @@ struct move_ordering
 
     void age_history()
     {
-        for (auto &i: m_history)
+        for (auto &i : m_history)
         {
-            for (auto &j: i)
+            for (auto &j : i)
             {
-                for (int16_t &k: j)
+                for (int16_t &k : j)
                 {
                     k /= 2;
                 }
@@ -259,23 +239,35 @@ struct move_ordering
         return !position.isCapture(move);
     }
 
-    void incr_history(const chess::Board &position, const chess::Move &move, int16_t depth)
+    void update_history(const chess::Board &position, const chess::Move &move, int16_t bonus)
     {
-        auto &score = m_history[position.sideToMove()][move.from().index()][move.to().index()];
-        score += depth * depth;
-
-        if (score >= m_param.mvv_offset - 30)
-            age_history();
+        const int16_t MAX_HISTORY = m_param.max_history;
+        int16_t clamped_bonus = helper::clamp(bonus, -MAX_HISTORY, MAX_HISTORY);
+        auto &hist = m_history[position.sideToMove()][move.from().index()][move.to().index()];
+        hist += clamped_bonus - hist * std::abs(clamped_bonus) / MAX_HISTORY;
     }
 
-    void decr_history(const chess::Board &position, const chess::Move &move, int16_t depth)
-    {
-        auto &score = m_history[position.sideToMove()][move.from().index()][move.to().index()];
-
-        score -= depth * depth;
-        if (score < 0)
-            score = 0;
-    }
+    // void incr_history(const chess::Board &position, const chess::Move &move,
+    // int16_t depth)
+    // {
+    //     auto &score =
+    //     m_history[position.sideToMove()][move.from().index()][move.to().index()];
+    //     score += depth * depth;
+    //
+    //     if (score >= m_param.mvv_offset - 30)
+    //         age_history();
+    // }
+    //
+    // void decr_history(const chess::Board &position, const chess::Move &move,
+    // int16_t depth)
+    // {
+    //     auto &score =
+    //     m_history[position.sideToMove()][move.from().index()][move.to().index()];
+    //
+    //     score -= depth * depth;
+    //     if (score < 0)
+    //         score = 0;
+    // }
 
     void store_killer(const chess::Board &position, const chess::Move &killer, int ply)
     {
@@ -331,7 +323,6 @@ struct pv_line
     }
 };
 
-
 struct engine
 {
     chess::Board m_position;
@@ -346,14 +337,13 @@ struct engine
     endgame_table *m_endgame = nullptr;
 
     // must be set via methods
-    explicit engine(const int table_size_in_mb = 64)
-        : engine(nullptr, table_size_in_mb)
+    explicit engine(const int table_size_in_mb) : engine(nullptr, table_size_in_mb)
     {
         // init tables
         pesto::init();
     };
 
-    explicit engine(endgame_table *endgame, const int table_size_in_mb = 64)
+    explicit engine(endgame_table *endgame, const int table_size_in_mb)
         : m_stats(), m_table(table_size_in_mb), m_move_ordering(m_param), m_endgame(endgame)
     {
         // init tables
@@ -377,7 +367,6 @@ struct engine
 
         if (base_ply + ply >= param::MAX_DEPTH)
             return evaluate(base_ply + ply);
-
 
         int32_t best_score = evaluate(base_ply + ply);
         bool in_check = ply <= 2 && m_position.inCheck();
@@ -425,13 +414,7 @@ struct engine
         return best_score;
     }
 
-
-    int32_t negamax(
-        int32_t alpha, int32_t beta,
-        int16_t depth, int16_t ply,
-        const chess::Move &prev_move,
-        bool do_null
-    )
+    int32_t negamax(int32_t alpha, int32_t beta, int16_t depth, int16_t ply, const chess::Move &prev_move, bool do_null)
     {
         m_line.ply_init(ply);
 
@@ -452,7 +435,6 @@ struct engine
         // [check extension]
         if (in_check && ply < depth * 2)
             depth += 1;
-
 
         // check draw
         if (!is_root && (m_position.isInsufficientMaterial() || m_position.isRepetition(1)))
@@ -495,14 +477,14 @@ struct engine
         if (!in_check && !is_pv_node && std::abs(beta) < param::CHECKMATE)
         {
             int32_t static_score = evaluate(ply);
-            int32_t margin = m_param.static_null_base_margin + depth;
+            int32_t margin = m_param.static_null_base_margin * depth;
             if (static_score - margin >= beta)
                 return static_score - margin;
         }
 
-
         // [null move pruning]
-        if (do_null && !in_check && !is_pv_node && depth >= m_param.nmp_depth_limit && m_position.occ().count() >= 7)
+        if (do_null && !in_check && !is_pv_node && depth >= m_param.nmp_depth_limit &&
+            m_position.occ().count() >= m_param.nmp_piece_count)
         {
             m_position.makeNullMove();
             int16_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
@@ -528,7 +510,8 @@ struct engine
             tt_result.move.setScore(0);
             moves.add(tt_result.move);
             legal_moves = 1;
-        } else
+        }
+        else
         {
             chess::movegen::legalmoves(moves, m_position);
             m_move_ordering.score_moves(m_position, moves, tt_result.move, prev_move, ply);
@@ -550,10 +533,8 @@ struct engine
             m_position.makeMove(move);
 
             // [late move pruning]
-            if (
-                depth < static_cast<int16_t>(m_param.lmp_margins.size())
-                && !is_pv_node
-                && explored_moves > m_param.lmp_margins[depth])
+            if (depth < static_cast<int16_t>(m_param.lmp_margins.size()) && !is_pv_node &&
+                explored_moves > m_param.lmp_margins[depth])
             {
                 bool tactical = m_position.inCheck() || move.typeOf() == chess::Move::PROMOTION;
                 if (!tactical)
@@ -567,7 +548,8 @@ struct engine
             if (explored_moves == 0)
             {
                 score = -negamax(-beta, -alpha, depth - 1, ply + 1, move, true);
-            } else
+            }
+            else
             {
                 // [late move reduction]
                 int16_t reduction = 0;
@@ -583,7 +565,8 @@ struct engine
                     {
                         score = -negamax(-beta, -alpha, depth - 1, ply + 1, move, true);
                     }
-                } else if (alpha < score && score < beta)
+                }
+                else if (alpha < score && score < beta)
                 {
                     score = -negamax(-beta, -alpha, depth - 1, ply + 1, move, true);
                 }
@@ -608,11 +591,12 @@ struct engine
 
                 if (m_move_ordering.is_quiet(m_position, move))
                 {
-                    m_move_ordering.incr_history(m_position, move, depth);
+                    const int16_t bonus = 300 * depth - 250;
+                    m_move_ordering.update_history(m_position, move, bonus);
 
                     // malus apply
                     for (int j = 0; j < quiet_count; ++j)
-                        m_move_ordering.decr_history(m_position, quiet_moves[j], depth);
+                        m_move_ordering.update_history(m_position, move, -bonus);
                 }
 
                 break;
@@ -627,8 +611,6 @@ struct engine
                 tt_flag = param::EXACT_FLAG;
                 alpha = score;
                 m_line.update(ply, move);
-
-                m_move_ordering.incr_history(m_position, move, depth);
             }
 
             explored_moves += 1;
@@ -672,7 +654,7 @@ struct engine
         }
 
         uint64_t total = 0;
-        for (const auto &move: moves)
+        for (const auto &move : moves)
         {
             m_position.makeMove(move);
             total += perft(depth - 1);
@@ -701,7 +683,6 @@ struct engine
         cout << "nps: " << nodes * 1000 / ms << endl;
         std::cout.imbue(original);
     }
-
 
     search_result search(const chess::Board &reference, int16_t max_depth, int ms, bool verbose = false,
                          bool uci = false)
@@ -770,7 +751,6 @@ struct engine
             result.pv_line = m_line.get_moves();
             result.depth = depth;
 
-
             // display info
             if (verbose)
             {
@@ -782,7 +762,6 @@ struct engine
                     m_stats.display_delta(last_stats, result);
                 last_stats = m_stats;
             }
-
 
             depth += 1;
         }

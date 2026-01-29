@@ -4,12 +4,12 @@
 
 class timer
 {
-private:
+  private:
     std::chrono::milliseconds m_target;
     bool m_is_stopped = false;
     bool m_forced_stopped = false;
 
-public:
+  public:
     void stop()
     {
         m_forced_stopped = true;
