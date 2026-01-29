@@ -15,6 +15,7 @@ struct uci_handler
     chess::Board m_position;
     endgame_table *m_table;
     nnue *m_nnue;
+    int tt_size = 256;
 
     std::unique_ptr<engine> m_engine;
     std::thread m_engine_thread;
@@ -34,7 +35,7 @@ struct uci_handler
         stop_search();
 
         m_engine_thread = std::thread{[&]() {
-            m_engine = std::make_unique<engine>(engine{m_table, m_nnue, 256});
+            m_engine = std::make_unique<engine>(engine{m_table, m_nnue, tt_size});
 
             auto result = m_engine->search(m_position, depth, ms, true, true);
 
@@ -61,7 +62,7 @@ struct uci_handler
         stop_search();
 
         m_engine_thread = std::thread{[&]() {
-            m_engine = std::make_unique<engine>(engine{m_table, m_nnue, 256});
+            m_engine = std::make_unique<engine>(engine{m_table, m_nnue, tt_size});
             m_engine->perft(m_position, depth);
         }};
     }
@@ -71,8 +72,8 @@ struct uci_handler
         stop_search();
 
         m_engine_thread = std::thread{[&]() {
-            m_engine = std::make_unique<engine>(engine{m_table, m_nnue, 256});
-            m_engine->search(m_position, depth, 5000, true, true);
+            m_engine = std::make_unique<engine>(engine{m_table, m_nnue, tt_size});
+            m_engine->search(m_position, depth, std::numeric_limits<int>::max(), true, true);
 
             std::cout << "info finalnps " << m_engine->m_stats.get_nps() << std::endl;
         }};
@@ -104,6 +105,7 @@ struct uci_handler
                 std::cout << "id author troppydash\n";
                 std::cout << "option name SyzygyPath type string default <empty>\n";
                 std::cout << "option name NNUEPath type string default <empty>\n";
+                std::cout << "option name TTSizeMB type spin default 256 min 8 max 4096\n";
                 std::cout << "uciok\n";
             }
             else if (lead == "setoption")
@@ -125,6 +127,12 @@ struct uci_handler
                     {
                         delete m_nnue;
                     }
+                } else if (parts[2] == "TTSizeMB")
+                {
+                    tt_size = atoi(parts[4].c_str());
+                } else
+                {
+                    std::cout << "warning unknown option\n";
                 }
             }
             else if (lead == "position")
@@ -140,6 +148,10 @@ struct uci_handler
                 else if (parts[1] == "startpos")
                 {
                     m_position = chess::Board{};
+                }
+                else
+                {
+                    std::cout << "warning unknown position type\n";
                 }
 
                 if (moves < parts.size() && parts[moves] == "moves")
@@ -233,6 +245,9 @@ struct uci_handler
                 }
 
                 start_bench(max_depth);
+            } else
+            {
+                std::cout << "warning unknown command\n";
             }
         }
 

@@ -3,6 +3,8 @@
 #include "chess.h"
 #include "param.h"
 
+#include <cmath>
+
 struct table_entry_result
 {
     int32_t score;
@@ -83,33 +85,23 @@ class table
   public:
     std::vector<table_entry> m_entries;
     size_t m_size;
+    int m_power;
+    uint64_t m_mask;
 
     explicit table(size_t size_in_mb)
     {
-        // TODO: should prob make this a power of 2
-        m_size = size_in_mb * 1024 * 1024 / sizeof(table_entry);
+        const size_t max_size = size_in_mb * 1024 * 1024 / sizeof(table_entry);
+        m_power = std::floor(std::log2(max_size));
+        m_size = 1ull << m_power;
+        m_mask = m_size - 1;
+
         m_entries.resize(m_size);
     }
 
-    table_entry &probe(uint64_t hash)
+    table_entry &probe(const uint64_t hash)
     {
-        return m_entries[hash % m_size];
+        return m_entries[hash & m_mask];
     }
-
-    // table_entry &store(uint64_t hash, int16_t depth)
-    // {
-    //     uint64_t index = hash % m_size;
-    //     if (index + 1 == m_size)
-    //         return m_entries[index];
-    //
-    //     auto &first = m_entries[index];
-    //     if (first.m_depth <= depth)
-    //     {
-    //         return first;
-    //     }
-    //
-    //     return m_entries[index + 1];
-    // }
 
     int16_t occupied() const
     {

@@ -92,54 +92,52 @@ class nnue
             chess::Piece piece = position.at(square);
             add_piece(piece, square);
         }
-
-        // std::cout << "info " << evaluate(0) << std::endl;
     }
 
     [[nodiscard]] int32_t evaluate(int side2move) const
     {
         int32_t output = 0;
 
-        for (size_t i = 0; i < HIDDEN_SIZE; ++i) {
-            auto &us = m_sides[side2move][m_ply];
-            auto &them = m_sides[side2move ^ 1][m_ply];
-            output += screlu(us.vals[i]) * m_network.output_weights[i];
-            output += screlu(them.vals[i]) * m_network.output_weights[HIDDEN_SIZE + i];
-        }
+        // for (size_t i = 0; i < HIDDEN_SIZE; ++i) {
+        //     auto &us = m_sides[side2move][m_ply];
+        //     auto &them = m_sides[side2move ^ 1][m_ply];
+        //     output += screlu(us.vals[i]) * m_network.output_weights[i];
+        //     output += screlu(them.vals[i]) * m_network.output_weights[HIDDEN_SIZE + i];
+        // }
 
         // SIMD VECTORIZATION
-        // const __m256i vec_zero = _mm256_setzero_si256();
-        // const __m256i vec_qa = _mm256_set1_epi16(QA);
-        // __m256i sum = vec_zero;
-        //
-        // const int16_t *__restrict us_ptr = m_sides[side2move][m_ply].vals;
-        // const int16_t *__restrict them_ptr = m_sides[side2move ^ 1][m_ply].vals;
-        // const int16_t *__restrict weight_ptr = m_network.output_weights;
-        // const int16_t *__restrict weight_ptr2 = m_network.output_weights + HIDDEN_SIZE;
-        //
-        // for (size_t i = 0; i < HIDDEN_SIZE; i += 16)
-        // {
-        //     const __m256i us_ = _mm256_load_si256((__m256i *)(us_ptr + i));
-        //     const __m256i them_ = _mm256_load_si256((__m256i *)(them_ptr + i));
-        //     const __m256i us_weights = _mm256_load_si256((__m256i *)(weight_ptr + i));
-        //     const __m256i them_weights = _mm256_load_si256((__m256i *)(weight_ptr2 + i));
-        //
-        //     const __m256i us_clamped = _mm256_min_epi16(_mm256_max_epi16(us_, vec_zero), vec_qa);
-        //     const __m256i them_clamped = _mm256_min_epi16(_mm256_max_epi16(them_, vec_zero), vec_qa);
-        //
-        //     // do (clamp*weight)*clamp
-        //     const __m256i us_results = _mm256_madd_epi16(_mm256_mullo_epi16(us_weights, us_clamped), us_clamped);
-        //     const __m256i them_results =
-        //         _mm256_madd_epi16(_mm256_mullo_epi16(them_weights, them_clamped), them_clamped);
-        //
-        //     sum = _mm256_add_epi32(sum, us_results);
-        //     sum = _mm256_add_epi32(sum, them_results);
-        // }
-        //
-        // __m128i x128 = _mm_add_epi32(_mm256_extracti128_si256(sum, 1), _mm256_castsi256_si128(sum));
-        // __m128i x64 = _mm_add_epi32(x128, _mm_shuffle_epi32(x128, _MM_SHUFFLE(1, 0, 3, 2)));
-        // __m128i x32 = _mm_add_epi32(x64, _mm_shuffle_epi32(x64, _MM_SHUFFLE(1, 1, 1, 1)));
-        // output += _mm_cvtsi128_si32(x32);
+        const __m256i vec_zero = _mm256_setzero_si256();
+        const __m256i vec_qa = _mm256_set1_epi16(QA);
+        __m256i sum = vec_zero;
+
+        const int16_t *__restrict us_ptr = m_sides[side2move][m_ply].vals;
+        const int16_t *__restrict them_ptr = m_sides[side2move ^ 1][m_ply].vals;
+        const int16_t *__restrict weight_ptr = m_network.output_weights;
+        const int16_t *__restrict weight_ptr2 = m_network.output_weights + HIDDEN_SIZE;
+
+        for (size_t i = 0; i < HIDDEN_SIZE; i += 16)
+        {
+            const __m256i us_ = _mm256_load_si256((__m256i *)(us_ptr + i));
+            const __m256i them_ = _mm256_load_si256((__m256i *)(them_ptr + i));
+            const __m256i us_weights = _mm256_load_si256((__m256i *)(weight_ptr + i));
+            const __m256i them_weights = _mm256_load_si256((__m256i *)(weight_ptr2 + i));
+
+            const __m256i us_clamped = _mm256_min_epi16(_mm256_max_epi16(us_, vec_zero), vec_qa);
+            const __m256i them_clamped = _mm256_min_epi16(_mm256_max_epi16(them_, vec_zero), vec_qa);
+
+            // do (clamp*weight)*clamp
+            const __m256i us_results = _mm256_madd_epi16(_mm256_mullo_epi16(us_weights, us_clamped), us_clamped);
+            const __m256i them_results =
+                _mm256_madd_epi16(_mm256_mullo_epi16(them_weights, them_clamped), them_clamped);
+
+            sum = _mm256_add_epi32(sum, us_results);
+            sum = _mm256_add_epi32(sum, them_results);
+        }
+
+        __m128i x128 = _mm_add_epi32(_mm256_extracti128_si256(sum, 1), _mm256_castsi256_si128(sum));
+        __m128i x64 = _mm_add_epi32(x128, _mm_shuffle_epi32(x128, _MM_SHUFFLE(1, 0, 3, 2)));
+        __m128i x32 = _mm_add_epi32(x64, _mm_shuffle_epi32(x64, _MM_SHUFFLE(1, 1, 1, 1)));
+        output += _mm_cvtsi128_si32(x32);
 
         // output in QA * QB
         output /= static_cast<int32_t>(QA);
@@ -243,6 +241,9 @@ class nnue
         int black_feature_idx = translate(chess::Color::BLACK, piece, square);
         remove_feature(static_cast<int>(chess::Color::WHITE), white_feature_idx);
         remove_feature(static_cast<int>(chess::Color::BLACK), black_feature_idx);
+
+        // hand roll simd
+
     }
 
     void move_piece(const chess::Piece &piece, const chess::Square &start, const chess::Square &end)
