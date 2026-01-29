@@ -14,11 +14,12 @@ struct uci_handler
 {
     chess::Board m_position;
     endgame_table *m_table;
+    nnue *m_nnue;
 
     std::unique_ptr<engine> m_engine;
     std::thread m_engine_thread;
 
-    explicit uci_handler() : m_table{nullptr}, m_engine(std::make_unique<engine>(engine{128}))
+    explicit uci_handler() : m_table{nullptr}, m_nnue{nullptr}, m_engine(std::make_unique<engine>(engine{128}))
     {
     }
 
@@ -28,15 +29,12 @@ struct uci_handler
             delete m_table;
     }
 
-    void start_search(uint8_t depth, int ms)
+    void start_search(int16_t depth, int ms)
     {
         stop_search();
 
         m_engine_thread = std::thread{[&]() {
-            if (m_table == nullptr)
-                m_engine = std::make_unique<engine>(engine{128});
-            else
-                m_engine = std::make_unique<engine>(engine{m_table, 128});
+            m_engine = std::make_unique<engine>(engine{m_table, m_nnue, 256});
 
             auto result = m_engine->search(m_position, depth, ms, true, true);
 
@@ -56,6 +54,28 @@ struct uci_handler
         m_engine->m_timer.stop();
         if (m_engine_thread.joinable())
             m_engine_thread.join();
+    }
+
+    void start_perft(int16_t depth)
+    {
+        stop_search();
+
+        m_engine_thread = std::thread{[&]() {
+            m_engine = std::make_unique<engine>(engine{m_table, m_nnue, 256});
+            m_engine->perft(m_position, depth);
+        }};
+    }
+
+    void start_bench(int16_t depth)
+    {
+        stop_search();
+
+        m_engine_thread = std::thread{[&]() {
+            m_engine = std::make_unique<engine>(engine{m_table, m_nnue, 256});
+            m_engine->search(m_position, depth, 5000, true, true);
+
+            std::cout << "info finalnps " << m_engine->m_stats.get_nps() << std::endl;
+        }};
     }
 
     void loop()
@@ -83,15 +103,28 @@ struct uci_handler
                 std::cout << "id name Tdchess 1.0.1\n";
                 std::cout << "id author troppydash\n";
                 std::cout << "option name SyzygyPath type string default <empty>\n";
+                std::cout << "option name NNUEPath type string default <empty>\n";
                 std::cout << "uciok\n";
             }
             else if (lead == "setoption")
             {
                 if (parts[2] == "SyzygyPath")
                 {
-                    if (m_table != nullptr)
+                    delete m_table;
+                    m_table = new endgame_table{};
+                    if (!m_table->load_file(parts[4]))
+                    {
                         delete m_table;
-                    m_table = new endgame_table{parts[4]};
+                    }
+                }
+                else if (parts[2] == "NNUEPath")
+                {
+                    delete m_nnue;
+                    m_nnue = new nnue{};
+                    if (!m_nnue->load_network(parts[4]))
+                    {
+                        delete m_nnue;
+                    }
                 }
             }
             else if (lead == "position")
@@ -163,6 +196,43 @@ struct uci_handler
             else if (lead == "ponderhit")
             {
                 // ignore
+            }
+            else if (lead == "perft")
+            {
+                // depth x
+                int16_t max_depth = 4;
+
+                for (size_t i = 1; i < parts.size(); i++)
+                {
+                    if (i >= parts.size())
+                        break;
+
+                    if (parts[i] == "depth")
+                    {
+                        max_depth = std::atoi(parts[i + 1].c_str());
+                        i += 1;
+                    }
+                }
+
+                start_perft(max_depth);
+            }
+            else if (lead == "bench")
+            {
+                // depth x
+                int16_t max_depth = 18;
+                for (size_t i = 1; i < parts.size(); i++)
+                {
+                    if (i >= parts.size())
+                        break;
+
+                    if (parts[i] == "depth")
+                    {
+                        max_depth = std::atoi(parts[i + 1].c_str());
+                        i += 1;
+                    }
+                }
+
+                start_bench(max_depth);
             }
         }
 

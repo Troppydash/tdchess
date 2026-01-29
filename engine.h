@@ -7,6 +7,7 @@
 #include "evaluation.h"
 #include "helper.h"
 #include "lib/Fathom/src/tbprobe.h"
+#include "nnue.h"
 #include "param.h"
 #include "see.h"
 #include "table.h"
@@ -80,12 +81,15 @@ struct engine_stats
         std::cout << std::endl;
     }
 
+    long get_nps() const
+    {
+        return static_cast<long>(nodes_searched) * 1000 / std::max(1L, total_time.count());
+    }
+
     void display_uci(const search_result &result) const
     {
-        long nps = static_cast<long>(nodes_searched) * 1000 / std::max(1L, total_time.count());
-
         std::cout << "info depth " << result.depth << " seldepth " << sel_depth << " multipv 1"
-                  << " score " << result.get_score_uci() << " nodes " << nodes_searched << " nps " << nps << " time "
+                  << " score " << result.get_score_uci() << " nodes " << nodes_searched << " nps " << get_nps() << " time "
                   << total_time.count() << " hashfull " << tt_occupancy << " pv";
 
         for (auto &m : result.pv_line)
@@ -335,24 +339,57 @@ struct engine
     pv_line m_line;
 
     endgame_table *m_endgame = nullptr;
+    nnue *m_nnue = nullptr;
 
     // must be set via methods
-    explicit engine(const int table_size_in_mb) : engine(nullptr, table_size_in_mb)
+    explicit engine(const int table_size_in_mb) : engine(nullptr, nullptr, table_size_in_mb)
     {
-        // init tables
-        pesto::init();
-    };
+    }
 
-    explicit engine(endgame_table *endgame, const int table_size_in_mb)
-        : m_stats(), m_table(table_size_in_mb), m_move_ordering(m_param), m_endgame(endgame)
+    explicit engine(endgame_table *endgame, nnue *nnue, const int table_size_in_mb)
+        : m_stats(), m_table(table_size_in_mb), m_move_ordering(m_param), m_endgame(endgame), m_nnue(nnue)
     {
         // init tables
-        pesto::init();
+        if (m_nnue == nullptr)
+            pesto::init();
     };
 
     [[nodiscard]] int32_t evaluate(int16_t ply) const
     {
+        if (m_nnue != nullptr)
+        {
+            return m_nnue->evaluate(m_position.sideToMove()) + m_param.tempo;
+        }
+
         return pesto::evaluate(m_position) + m_param.tempo;
+    }
+
+    void make_move(const chess::Move &move)
+    {
+        if (move.typeOf() == chess::Move::NULL_MOVE)
+        {
+            m_position.makeMove(move);
+        }
+        else
+        {
+            if (m_nnue != nullptr)
+                m_nnue->make_move(m_position, move);
+            m_position.makeMove(move);
+        }
+    }
+
+    void unmake_move(const chess::Move &move)
+    {
+        if (move.typeOf() == chess::Move::NULL_MOVE)
+        {
+            m_position.unmakeMove(move);
+        }
+        else
+        {
+            m_position.unmakeMove(move);
+            if (m_nnue != nullptr)
+                m_nnue->unmake_move();
+        }
     }
 
     int32_t qsearch(int32_t alpha, int32_t beta, int16_t base_ply, int16_t ply)
@@ -395,9 +432,9 @@ struct engine
             if (see::test(m_position, move) < 0)
                 continue;
 
-            m_position.makeMove(move);
+            make_move(move);
             int32_t score = -qsearch(-beta, -alpha, base_ply, ply + 1);
-            m_position.unmakeMove(move);
+            unmake_move(move);
 
             if (score > best_score)
                 best_score = score;
@@ -529,7 +566,7 @@ struct engine
             m_move_ordering.sort_moves(moves, i);
             const chess::Move &move = moves[i];
 
-            m_position.makeMove(move);
+            make_move(move);
 
             // [late move pruning]
             if (depth < static_cast<int16_t>(m_param.lmp_margins.size()) && !is_pv_node &&
@@ -538,7 +575,7 @@ struct engine
                 bool tactical = m_position.inCheck() || move.typeOf() == chess::Move::PROMOTION;
                 if (!tactical)
                 {
-                    m_position.unmakeMove(move);
+                    unmake_move(move);
                     continue;
                 }
             }
@@ -571,7 +608,7 @@ struct engine
                 }
             }
 
-            m_position.unmakeMove(move);
+            unmake_move(move);
 
             if (m_timer.is_stopped())
                 return 0;
@@ -678,17 +715,22 @@ struct engine
         auto original = std::cout.getloc();
         std::cout.imbue(std::locale("en_US.UTF-8"));
         cout << "nodes: " << nodes << ", took " << ms << "ms" << endl;
-        cout << "nps: " << nodes * 1000 / ms << endl;
+        cout << "nps: " << nodes * 1000 / std::max(1L, ms) << endl;
         std::cout.imbue(original);
     }
 
     search_result search(const chess::Board &reference, int16_t max_depth, int ms, bool verbose = false,
                          bool uci = false)
     {
-        m_position = reference;
         m_timer.start(ms);
+        m_position = reference;
         auto reference_time = timer::now();
         m_stats = engine_stats{0, 0, 0, timer::now() - reference_time};
+
+        if (m_nnue != nullptr)
+        {
+            m_nnue->initialize(m_position);
+        }
 
         int32_t alpha = -param::INF, beta = param::INF;
         int16_t depth = 1;

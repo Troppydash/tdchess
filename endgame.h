@@ -6,13 +6,17 @@
 
 struct endgame_table
 {
-    explicit endgame_table(const std::string &path)
+    explicit endgame_table() {}
+
+    bool load_file(const std::string &path)
     {
         bool success = tb_init(path.c_str());
         if (!success)
         {
-            std::cout << "info failed database\n";
+            std::cout << "info failed to load database\n";
         }
+
+        return success;
     }
 
     bool is_stored(const chess::Board &position)

@@ -16,6 +16,7 @@ void perft()
     engine.perft(board, 7);
 }
 
+#ifdef TDCHESS_UCI
 int main()
 {
     uci_handler handler{};
@@ -23,3 +24,22 @@ int main()
 
     return 0;
 }
+#else
+
+int main()
+{
+    nnue nnue{};
+    nnue.load_network("/media/terry/Games/projects/2026/cppprojects/tdchess-nnue/simple-checkpoints/simple-40/quantised.bin");
+
+    chess::Board start;
+    nnue.initialize(start);
+    // std::cout << nnue.evaluate(0) << std::endl;
+    // std::cout << nnue.evaluate(1) << std::endl;
+    //
+    // exit(0);
+    engine engine{nullptr, &nnue, 1024};
+    engine.search(start, 1000, 50000, true, true);
+
+    return 0;
+}
+#endif
