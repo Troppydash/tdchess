@@ -6,7 +6,8 @@
 
 #include "engine.h"
 #include "uci.h"
-
+#include "nnue.h"
+#include "trainer.h"
 
 void perft()
 {

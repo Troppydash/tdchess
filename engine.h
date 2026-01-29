@@ -319,6 +319,16 @@ struct pv_line
 
         pv_length[ply] = pv_length[ply + 1];
     }
+
+    std::vector<chess::Move> get_moves()
+    {
+        std::vector<chess::Move> result(pv_length[0]);
+        for (int i = 0; i < pv_length[0]; ++i)
+        {
+            result[i] = pv_table[0][i];
+        }
+        return result;
+    }
 };
 
 
@@ -336,14 +346,14 @@ struct engine
     endgame_table *m_endgame = nullptr;
 
     // must be set via methods
-    explicit engine(const int table_size_in_mb = 1024)
+    explicit engine(const int table_size_in_mb = 64)
         : engine(nullptr, table_size_in_mb)
     {
         // init tables
         pesto::init();
     };
 
-    explicit engine(endgame_table *endgame, const int table_size_in_mb = 1024)
+    explicit engine(endgame_table *endgame, const int table_size_in_mb = 64)
         : m_stats(), m_table(table_size_in_mb), m_move_ordering(m_param), m_endgame(endgame)
     {
         // init tables
@@ -733,9 +743,10 @@ struct engine
             int32_t score = negamax(alpha, beta, depth, 0, null, true);
             if (m_timer.is_stopped())
             {
-                result.pv_line.clear();
-                for (int i = 0; i < m_line.pv_length[0]; ++i)
-                    result.pv_line.push_back(m_line.pv_table[0][i]);
+                if (!m_line.get_moves().empty())
+                {
+                    result.pv_line = m_line.get_moves();
+                }
 
                 break;
             }
@@ -756,8 +767,7 @@ struct engine
 
             result.score = score;
             result.pv_line.clear();
-            for (int i = 0; i < m_line.pv_length[0]; ++i)
-                result.pv_line.push_back(m_line.pv_table[0][i]);
+            result.pv_line = m_line.get_moves();
             result.depth = depth;
 
 

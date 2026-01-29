@@ -86,9 +86,7 @@ public:
     {
         // TODO: should prob make this a power of 2
         m_size = size_in_mb * 1024 * 1024 / sizeof(table_entry);
-
-        for (size_t i = 0; i < m_size; ++i)
-            m_entries.push_back(table_entry{});
+        m_entries.resize(m_size);
     }
 
     table_entry &probe(uint64_t hash)

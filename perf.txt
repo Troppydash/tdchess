@@ -23,3 +23,17 @@ readyok
 ucinewgame
 position startpos
 go depth 2
+
+
+[nnue]
+layer 1, 2 x 64 x 6
+    board + flipped board
+    relu
+layer 2, 32
+    relu
+layer 3, 16
+    relu
+layer 4, 16
+    relu
+layer 5, 1
+
