@@ -93,31 +93,23 @@ class table
 
     table_entry &probe(uint64_t hash)
     {
-        uint64_t index = hash % m_size;
-        if (index + 1 == m_size)
-            return m_entries[index];
-
-        auto &first = m_entries[index];
-        if (first.m_hash == hash)
-            return m_entries[index];
-
-        return m_entries[index + 1];
+        return m_entries[hash % m_size];
     }
 
-    table_entry &store(uint64_t hash, int16_t depth)
-    {
-        uint64_t index = hash % m_size;
-        if (index + 1 == m_size)
-            return m_entries[index];
-
-        auto &first = m_entries[index];
-        if (first.m_depth <= depth)
-        {
-            return first;
-        }
-
-        return m_entries[index + 1];
-    }
+    // table_entry &store(uint64_t hash, int16_t depth)
+    // {
+    //     uint64_t index = hash % m_size;
+    //     if (index + 1 == m_size)
+    //         return m_entries[index];
+    //
+    //     auto &first = m_entries[index];
+    //     if (first.m_depth <= depth)
+    //     {
+    //         return first;
+    //     }
+    //
+    //     return m_entries[index + 1];
+    // }
 
     int16_t occupied() const
     {

@@ -453,7 +453,7 @@ struct engine
         // [tt lookup]
         auto &entry = m_table.probe(m_position.hash());
         auto tt_result = entry.get(m_position.hash(), ply, depth, alpha, beta);
-        if (tt_result.hit && !is_root)
+        if (tt_result.hit && !is_root && !is_pv_node)
         {
             return tt_result.score;
         }
@@ -462,7 +462,6 @@ struct engine
         if (m_endgame != nullptr && !is_root && m_endgame->is_stored(m_position))
         {
             int32_t score = m_endgame->probe_wdl(m_position, ply);
-            entry = m_table.store(m_position.hash(), param::TB_DEPTH);
             entry.set(m_position.hash(), score, chess::Move::NULL_MOVE, ply, param::TB_DEPTH, param::EXACT_FLAG);
             return score;
         }
@@ -636,7 +635,6 @@ struct engine
 
         if (depth >= entry.m_depth && !m_timer.is_stopped())
         {
-            entry = m_table.store(m_position.hash(), depth);
             entry.set(m_position.hash(), best_score, best_move, ply, depth, tt_flag);
         }
 
