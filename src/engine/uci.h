@@ -2,6 +2,7 @@
 
 #include <thread>
 #include "../helper.h"
+#include "../version.h"
 
 inline void pin_thread_to_processor(int logical_processor)
 {
@@ -59,8 +60,9 @@ public:
             {
                 // get threads
                 int total_threads = std::thread::hardware_concurrency();
+                std::string version{version_txt, version_txt + version_txt_len};
 
-                std::cout << "id name TDchess 1.0.3\n";
+                std::cout << "id name TDchess " << version << "\n";
                 std::cout << "id author troppydash\n";
                 std::cout << "option name SyzygyPath type string default <empty>\n";
                 std::cout << "option name NNUEPath type string default <empty>\n";

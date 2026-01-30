@@ -6,6 +6,9 @@ then
   exit 1
 fi
 
+echo "moving version.h"
+xxd -i version.txt > src/version.h
+
 echo "building version $version"
 cmake --build ./cmake-build-release --target tdchess_uci -j 10
 
