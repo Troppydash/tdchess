@@ -1,5 +1,5 @@
 #pragma once
-#include <c++/12/thread>
+#include <thread>
 
 std::vector<std::string> string_split(std::string const &input)
 {

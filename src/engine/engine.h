@@ -6,7 +6,7 @@
 #include "endgame.h"
 #include "evaluation.h"
 #include "helper.h"
-#include "lib/Fathom/src/tbprobe.h"
+#include "../../lib/Fathom/src/tbprobe.h"
 #include "nnue.h"
 #include "param.h"
 #include "see.h"

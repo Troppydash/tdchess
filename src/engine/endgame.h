@@ -1,7 +1,7 @@
 #pragma once
 
 #include "chess.h"
-#include "lib/Fathom/src/tbprobe.h"
+#include "../../lib/Fathom/src/tbprobe.h"
 #include "param.h"
 
 struct endgame_table

@@ -2,12 +2,10 @@
 
 // use pext extension for performance, this include must be first
 #define CHESS_USE_PEXT
-#include "chess.h"
+#include "engine/chess.h"
 
-#include "engine.h"
-#include "nnue.h"
-#include "trainer.h"
-#include "uci.h"
+#include "engine/engine.h"
+#include "engine/uci.h"
 
 void perft()
 {
@@ -25,6 +23,8 @@ int main()
     return 0;
 }
 #else
+
+#include "engine/nnue.h"
 
 int main()
 {

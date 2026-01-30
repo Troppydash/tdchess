@@ -16,10 +16,10 @@ add_library(fathom SHARED ${FATHOM_SRC})
 target_include_directories(fathom PUBLIC lib/Fathom/src)
 set_target_properties(fathom PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-add_executable(tdchess_uci main.cpp)
+add_executable(tdchess_uci src/main.cpp)
 target_link_libraries(tdchess_uci PRIVATE fathom)
 target_compile_definitions(tdchess_uci PRIVATE TDCHESS_UCI)
 
-add_executable(tdchess_test main.cpp)
+add_executable(tdchess_test src/main.cpp)
 target_link_libraries(tdchess_test PRIVATE fathom)
 
