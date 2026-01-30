@@ -29,11 +29,11 @@ int main()
 
 int main()
 {
-    // agent ag{"../builds/1.0.1/tdchess", "../builds/1.0.1/nnue.bin", "../syzygy", 128};
-    // ag.initialize(true);
-    //
-    // auto result = ag.search({}, 10000, 18, true);
-    // std::cout << chess::uci::moveToUci(result) << std::endl;
+    agent ag{"../builds/1.0.2/tdchess", "../builds/1.0.2/nnue.bin", "../syzygy", 128};
+    ag.initialize(true);
+
+    auto result = ag.search({}, 10000, 18, 2, true);
+    std::cout << chess::uci::moveToUci(result) << std::endl;
 
     // ag.search(0, 0, 0, true);
 

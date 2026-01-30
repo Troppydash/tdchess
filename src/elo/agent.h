@@ -75,11 +75,15 @@ public:
 
     chess::Move search(
         const std::vector<chess::Move> &moves,
-        int16_t ms,
-        int16_t max_depth,
-        bool verbose
+        const int16_t ms,
+        const int16_t max_depth,
+        const int core = -1,
+        const bool verbose = false
     )
     {
+        // set core
+        m_in << "setoption name CoreAff value " << core << std::endl;
+
         // load position
         chess::Board board;
         m_in << "position startpos moves";

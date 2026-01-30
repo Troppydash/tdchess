@@ -14,4 +14,7 @@ mkdir ./builds/${version}
 cp ./cmake-build-release/tdchess_uci ./builds/${version}/tdchess
 cp ./nets/${version}.bin ./builds/${version}/nnue.bin
 
+echo "zipping into ./builds/${version}_linux.zip"
+zip -r ./builds/${version}_linux.zip ./builds/${version}
+
 echo "done with version $version"
