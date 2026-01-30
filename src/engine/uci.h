@@ -60,7 +60,7 @@ public:
                 // get threads
                 int total_threads = std::thread::hardware_concurrency();
 
-                std::cout << "id name TDchess 1.0.2\n";
+                std::cout << "id name TDchess 1.0.3\n";
                 std::cout << "id author troppydash\n";
                 std::cout << "option name SyzygyPath type string default <empty>\n";
                 std::cout << "option name NNUEPath type string default <empty>\n";

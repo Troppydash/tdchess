@@ -110,6 +110,8 @@ public:
                 return chess::uci::uciToMove(board, helper::string_split(line)[1]);
             }
         }
+
+        return chess::Move::NO_MOVE;
     }
 
 private:
