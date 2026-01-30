@@ -9,15 +9,19 @@ namespace bp = boost::process;
 
 struct agent_settings
 {
+    std::string m_alias;
     std::string m_file;
     std::string m_nnue_file;
     std::string m_endgame_file;
     int m_tt_mb;
     bool m_verbose;
 
-    explicit agent_settings(std::string m_file, std::string m_nnue_file, std::string m_endgame_file,
-                            const int tt_mb, bool verbose = false)
-        : m_file(std::move(m_file)),
+    explicit agent_settings(
+        std::string alias,
+        std::string m_file, std::string m_nnue_file, std::string m_endgame_file,
+        const int tt_mb, bool verbose = false)
+        : m_alias(std::move(alias)),
+          m_file(std::move(m_file)),
           m_nnue_file(std::move(m_nnue_file)),
           m_endgame_file(std::move(m_endgame_file)),
           m_tt_mb(tt_mb),

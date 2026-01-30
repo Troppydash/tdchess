@@ -50,10 +50,17 @@ struct thread_safe_queue
     }
 };
 
-struct pentanomial
+class pentanomial
 {
+private:
     std::array<int, 5> result;
 
+    explicit pentanomial(std::array<int, 5> result)
+        : result(result)
+    {
+    }
+
+public:
     static pentanomial from_scores(std::pair<double, double> scores)
     {
         int index = 0;
@@ -72,13 +79,46 @@ struct pentanomial
 
         std::array<int, 5> result{0, 0, 0, 0, 0};
         result[index] += 1;
-        return {result};
+        return pentanomial{result};
     }
 
     [[nodiscard]] std::string display() const
     {
         return std::format("[{}, {}, {}, {}, {}]", result[0], result[1], result[2], result[3], result[4]);
     }
+
+    [[nodiscard]] std::pair<double, double> to_score() const
+    {
+        if (result[0])
+            return {2.0, 0.0};
+
+        if (result[1])
+            return {1.5, 0.5};
+
+        if (result[2])
+            return {1, 1};
+
+        if (result[3])
+            return {0.5, 1.5};
+
+        if (result[4])
+            return {0.0, 2.0};
+
+        throw std::runtime_error{"impossible scores"};
+    }
+};
+
+class elo
+{
+private:
+    std::vector<agent_settings> m_agents;
+    std::map<std::pair<std::string, std::string>, double> m_results;
+
+
+public:
+    // TODO: write elo algorithm
+
+
 };
 
 class arena
@@ -89,13 +129,12 @@ private:
     std::vector<agent_settings> m_agents;
     std::vector<int> m_logical;
 
-    // std::map<int, double> m_wins;
     std::map<std::pair<std::string, std::string>, double> m_results;
 
     struct match_input
     {
-        int agent0_index;
-        int agent1_index;
+        agent_settings agent0;
+        agent_settings agent1;
         int core;
     };
 
@@ -122,7 +161,7 @@ public:
         thread_safe_queue<match_input> matches;
         for (size_t i = 0; i < m_agents.size(); ++i)
             for (size_t j = i + 1; j < m_agents.size(); ++j)
-                matches.push(match_input{static_cast<int>(i), static_cast<int>(j), -1});
+                matches.push(match_input{m_agents[i], m_agents[j], -1});
 
         int jobs = matches.size();
 
@@ -149,8 +188,15 @@ public:
         for (int i = 0; i < jobs; ++i)
         {
             auto output = outputs.pop();
+
+            auto agent0_alias = output.input.agent0.m_alias;
+            auto agent1_alias = output.input.agent1.m_alias;
+            auto score = output.result.to_score();
+            m_results[{agent0_alias, agent1_alias}] += score.first;
+            m_results[{agent1_alias, agent0_alias}] += score.second;
+
             // use result
-            std::cout << output.result.display() << std::endl;
+            std::cout << agent0_alias << " vs " << agent1_alias << ": " << output.result.display() << std::endl;
         }
 
         // wait for thread to finish
@@ -183,9 +229,9 @@ private:
         agent agent0{agent0_settings};
         agent agent1{agent1_settings};
 
-        int16_t ms = 1000;
+        int16_t ms = 300;
 
-        for (int i = 0; i < 200; ++i)
+        for (int i = 0; i < 300; ++i)
         {
             auto [_, result] = position.isGameOver();
             chess::Color side2move = position.sideToMove();
@@ -197,10 +243,9 @@ private:
                 return (side2move == initial_side2move) ? 1 : 0;
             }
 
+            // std::cout << position << std::endl;
 
-            std::cout << position << std::endl;
-
-            chess::Move move;
+            chess::Move move = chess::Move::NO_MOVE;
             if (side2move == initial_side2move)
             {
                 move = agent0.search(moves, ms, param::MAX_DEPTH, core);
@@ -229,7 +274,7 @@ private:
 
         std::pair<double, double> scores{0, 0};
 
-        int forward = match(m_agents[input.agent0_index], m_agents[input.agent1_index], moves, position, input.core);
+        int forward = match(input.agent0, input.agent1, moves, position, input.core);
         if (forward == 0)
             scores.first += 1;
         else if (forward == 1)
@@ -240,7 +285,7 @@ private:
             scores.second += 0.5;
         }
 
-        int backwards = match(m_agents[input.agent1_index], m_agents[input.agent0_index], moves, position, input.core);
+        int backwards = match(input.agent1, input.agent0, moves, position, input.core);
         if (backwards == 0)
             scores.second += 1;
         else if (backwards == 1)
