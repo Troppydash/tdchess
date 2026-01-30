@@ -23,6 +23,20 @@ int main()
 
     return 0;
 }
+#elif TDCHESS_ELO
+#include "elo/elo.h"
+
+int main()
+{
+    openbook book{"../book/Book.bin"};
+    const agent_settings v102{"../builds/1.0.2/tdchess", "../builds/1.0.2/nnue.bin", "../syzygy", 256, true};
+    std::vector<agent_settings> agents{v102, v102};
+    arena arena{"basic", book, agents, {0, 2, 4}};
+    arena.full_round();
+
+    return 0;
+}
+
 #else
 
 #include "engine/nnue.h"

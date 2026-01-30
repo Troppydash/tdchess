@@ -7,16 +7,33 @@
 #include <utility>
 namespace bp = boost::process;
 
+struct agent_settings
+{
+    std::string m_file;
+    std::string m_nnue_file;
+    std::string m_endgame_file;
+    int m_tt_mb;
+    bool m_verbose;
+
+    explicit agent_settings(std::string m_file, std::string m_nnue_file, std::string m_endgame_file,
+                            const int tt_mb, bool verbose = false)
+        : m_file(std::move(m_file)),
+          m_nnue_file(std::move(m_nnue_file)),
+          m_endgame_file(std::move(m_endgame_file)),
+          m_tt_mb(tt_mb),
+          m_verbose(verbose)
+    {
+    }
+};
+
 /**
  * UCI agent wrapper
  */
 class agent
 {
 private:
-    std::string m_file;
-    std::string m_nnue_file;
-    std::string m_endgame_file;
-    int m_tt_mb;
+    agent_settings m_settings;
+    bool m_verbose;
 
     std::string m_name;
 
@@ -26,18 +43,10 @@ private:
     bp::child m_process;
 
 public:
-    explicit agent(std::string m_file, std::string m_nnue_file, std::string m_endgame_file,
-                   const int tt_mb)
-        : m_file(std::move(m_file)),
-          m_nnue_file(std::move(m_nnue_file)),
-          m_endgame_file(std::move(m_endgame_file)),
-          m_tt_mb(tt_mb)
+    explicit agent(const agent_settings &settings)
+        : m_settings(settings), m_verbose(settings.m_verbose)
     {
-    }
-
-    void initialize(bool verbose)
-    {
-        m_process = bp::child{m_file, bp::std_out > m_out, bp::std_in < m_in};
+        m_process = bp::child{settings.m_file, bp::std_out > m_out, bp::std_in < m_in};
 
         // read uci
         m_in << "uci" << std::endl;
@@ -50,7 +59,7 @@ public:
 
             index++;
 
-            if (verbose)
+            if (m_verbose)
                 std::cout << prefix() << line << std::endl;
 
 
@@ -59,9 +68,9 @@ public:
         }
 
         // set options
-        m_in << "setoption name TTSizeMB value " << m_tt_mb << std::endl;
-        m_in << "setoption name NNUEPath value " << m_nnue_file << std::endl;
-        m_in << "setoption name SyzygyPath value " << m_endgame_file << std::endl;
+        m_in << "setoption name TTSizeMB value " << settings.m_tt_mb << std::endl;
+        m_in << "setoption name NNUEPath value " << settings.m_nnue_file << std::endl;
+        m_in << "setoption name SyzygyPath value " << settings.m_endgame_file << std::endl;
     }
 
     ~agent()
@@ -69,16 +78,24 @@ public:
         m_in << "quit" << std::endl;
         m_in.close();
         m_process.wait();
-        int result = m_process.exit_code();
-        std::cout << prefix() << "exited with " << result << std::endl;
+
+        if (m_verbose)
+        {
+            int result = m_process.exit_code();
+            std::cout << prefix() << "exited with " << result << std::endl;
+        }
+    }
+
+    [[nodiscard]] std::string get_name() const
+    {
+        return m_name;
     }
 
     chess::Move search(
         const std::vector<chess::Move> &moves,
         const int16_t ms,
         const int16_t max_depth,
-        const int core = -1,
-        const bool verbose = false
+        const int core = -1
     )
     {
         // set core
@@ -101,7 +118,7 @@ public:
         std::string line{};
         while (std::getline(m_out, line))
         {
-            if (verbose)
+            if (m_verbose)
                 std::cout << prefix() << line << std::endl;
 
             if (line.starts_with("bestmove"))

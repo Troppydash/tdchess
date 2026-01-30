@@ -31,4 +31,5 @@ target_link_libraries(tdchess_test PRIVATE fathom)
 
 add_executable(tdchess_elo src/main.cpp)
 target_link_libraries(tdchess_elo PRIVATE fathom)
+target_compile_definitions(tdchess_elo PRIVATE TDCHESS_ELO)
 target_include_directories(tdchess_elo PRIVATE ${Boost_INCLUDE_DIRS})
