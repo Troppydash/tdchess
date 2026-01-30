@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 
-#include "chess.h"
+#include "../hpplib/chess.h"
 
 // from http://www.tckerrigan.com/Chess/TSCP/Community/
 namespace pesto

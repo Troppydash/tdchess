@@ -2,7 +2,7 @@
 #include <chrono>
 #include <utility>
 
-#include "chess.h"
+#include "../hpplib/chess.h"
 #include "endgame.h"
 #include "evaluation.h"
 #include "helper.h"

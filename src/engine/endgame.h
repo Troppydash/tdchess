@@ -1,6 +1,6 @@
 #pragma once
 
-#include "chess.h"
+#include "../hpplib/chess.h"
 #include "../../lib/Fathom/src/tbprobe.h"
 #include "param.h"
 

@@ -2,7 +2,7 @@
 
 // use pext extension for performance, this include must be first
 #define CHESS_USE_PEXT
-#include "engine/chess.h"
+#include "hpplib/chess.h"
 
 #include "engine/engine.h"
 #include "engine/uci.h"
