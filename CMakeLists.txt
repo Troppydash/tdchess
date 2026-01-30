@@ -10,6 +10,12 @@ if (COMPILER_SUPPORTS_MARCH_NATIVE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -Wall")
 endif ()
 
+if (POLICY CMP0167)
+    cmake_policy(SET CMP0167 NEW)
+endif ()
+find_package(Boost REQUIRED)
+
+
 # static link with fathom
 set(FATHOM_SRC lib/Fathom/src/tbprobe.c)
 add_library(fathom SHARED ${FATHOM_SRC})
@@ -23,3 +29,6 @@ target_compile_definitions(tdchess_uci PRIVATE TDCHESS_UCI)
 add_executable(tdchess_test src/main.cpp)
 target_link_libraries(tdchess_test PRIVATE fathom)
 
+add_executable(tdchess_elo src/main.cpp)
+target_link_libraries(tdchess_elo PRIVATE fathom)
+target_include_directories(tdchess_elo PRIVATE ${Boost_INCLUDE_DIRS})

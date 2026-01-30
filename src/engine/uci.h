@@ -1,6 +1,7 @@
 #pragma once
 
 #include <thread>
+#include "../helper.h"
 
 inline void pin_thread_to_processor(int logical_processor)
 {
@@ -11,14 +12,6 @@ inline void pin_thread_to_processor(int logical_processor)
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
 }
 
-inline std::vector<std::string> string_split(std::string const &input)
-{
-    std::stringstream ss(input);
-
-    std::vector<std::string> words((std::istream_iterator<std::string>(ss)), std::istream_iterator<std::string>());
-
-    return words;
-}
 
 class uci_handler
 {
@@ -50,7 +43,7 @@ public:
         {
             std::getline(std::cin, buffer);
 
-            auto parts = string_split(buffer);
+            auto parts = helper::string_split(buffer);
             if (parts.empty())
             {
                 std::cout << "empty input, continuing\n";

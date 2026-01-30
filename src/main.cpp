@@ -2,6 +2,7 @@
 
 // use pext extension for performance, this include must be first
 #define CHESS_USE_PEXT
+#include "elo/agent.h"
 #include "hpplib/chess.h"
 
 #include "engine/engine.h"
@@ -28,11 +29,19 @@ int main()
 
 int main()
 {
-    nnue nnue{};
-    nnue.load_network("../nets/1.0.1.bin");
-    chess::Board start{"rnbq1rk1/2p1bppp/1p2pn2/p1Pp4/1P1P4/2NB1P2/P3N1PP/R1BQK2R w KQ - 0 10"};
-    nnue.initialize(start);
-    std::cout << nnue.evaluate(start.sideToMove()) << std::endl;
+    // agent ag{"../builds/1.0.1/tdchess", "../builds/1.0.1/nnue.bin", "../syzygy", 128};
+    // ag.initialize(true);
+    //
+    // auto result = ag.search({}, 10000, 18, true);
+    // std::cout << chess::uci::moveToUci(result) << std::endl;
+
+    // ag.search(0, 0, 0, true);
+
+    // nnue nnue{};
+    // nnue.load_network("../nets/1.0.1.bin");
+    // chess::Board start{"rnbq1rk1/2p1bppp/1p2pn2/p1Pp4/1P1P4/2NB1P2/P3N1PP/R1BQK2R w KQ - 0 10"};
+    // nnue.initialize(start);
+    // std::cout << nnue.evaluate(start.sideToMove()) << std::endl;
     // std::cout << nnue.evaluate(1) << std::endl;
     //
     // exit(0);
