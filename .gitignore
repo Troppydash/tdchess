@@ -6,3 +6,5 @@ syzygy/
 
 lib/**/*.so
 lib/**/*.o
+
+builds/
