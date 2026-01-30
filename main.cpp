@@ -29,16 +29,15 @@ int main()
 int main()
 {
     nnue nnue{};
-    nnue.load_network("/media/terry/Games/projects/2026/cppprojects/tdchess-nnue/simple-checkpoints/simple-40/quantised.bin");
-
-    chess::Board start;
+    nnue.load_network("../nets/1.0.1.bin");
+    chess::Board start{"rnbq1rk1/2p1bppp/1p2pn2/p1Pp4/1P1P4/2NB1P2/P3N1PP/R1BQK2R w KQ - 0 10"};
     nnue.initialize(start);
-    // std::cout << nnue.evaluate(0) << std::endl;
+    std::cout << nnue.evaluate(start.sideToMove()) << std::endl;
     // std::cout << nnue.evaluate(1) << std::endl;
     //
     // exit(0);
-    engine engine{nullptr, &nnue, 1024};
-    engine.search(start, 1000, 50000, true, true);
+    // engine engine{nullptr, &nnue, 1024};
+    // engine.search(start, 1000, 50000, true, true);
 
     return 0;
 }
