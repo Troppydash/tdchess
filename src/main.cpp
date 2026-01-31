@@ -3,6 +3,7 @@
 // use pext extension for performance, this include must be first
 #define CHESS_USE_PEXT
 #include "elo/agent.h"
+#include "elo/elo.h"
 #include "hpplib/chess.h"
 
 #include "engine/engine.h"
@@ -27,14 +28,23 @@ int main()
 
 #include "elo/arena.h"
 #include "elo/book.h"
+#include "elo/stats.h"
 
 int main()
 {
-    openbook book{"../book/Book.bin"};
-    const agent_settings v102{"1.0.2", "../builds/1.0.2/tdchess", "../builds/1.0.2/nnue.bin", "../syzygy", 256, false};
-    std::vector<agent_settings> agents{v102, v102};
-    arena arena{"basic", book, agents, {0, 2, 4}};
-    arena.full_round();
+    sprt s{};
+    // s.set_state(pentanomial{{10, 20, 50, 10, 1}});
+    s.set_state(pentanomial{{1, 20, 10, 20, 5}});
+    s.analytics();
+
+    // chisq sq{{}};
+    // sq.save("../test.bin");
+    // sq.load("../test.bin");
+
+    // openbook book{"../book/Book.bin"};
+    // const agent_settings v102{"1.0.2", "../builds/1.0.2/tdchess", "../builds/1.0.2/nnue.bin", "../syzygy", 256,
+    // false}; std::vector<agent_settings> agents{v102, v102}; arena arena{"basic", book, agents, {0, 2, 4}};
+    // arena.full_round();
 
     return 0;
 }

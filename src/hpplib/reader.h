@@ -137,7 +137,7 @@ namespace Reader {
                 return;
             } else {
                 std::fseek(file, 0, SEEK_END);
-                long position = std::ftell(file);
+                unsigned long position = std::ftell(file);
 
                 if (position < sizeof(EntryStruct)) {
                     std::cerr << "<Error> No entries found" << std::endl;
@@ -149,7 +149,7 @@ namespace Reader {
                 entries = (EntryStruct*)std::malloc(num_entries * sizeof(EntryStruct));
                 std::rewind(file);
 
-                size_t returnValue = std::fread(entries, sizeof(EntryStruct), num_entries, file);
+                std::fread(entries, sizeof(EntryStruct), num_entries, file);
 
                 std::fclose(file);
             }
