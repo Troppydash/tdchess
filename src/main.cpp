@@ -39,7 +39,7 @@ void improvement_test(const std::string &baseline, const std::string &latest)
                               false};
     const agent_settings late{latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 256, false};
     std::vector<agent_settings> agents{late, base};
-    arena_settings settings{latest + "_against_" + baseline, 500, 11};
+    arena_settings settings{latest + "_against_" + baseline, 2000, 11};
     arena arena{settings, book, agents, {0, 2, 4, 6, 8, 10}};
     arena.loop(6, 100);
 }

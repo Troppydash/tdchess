@@ -54,8 +54,8 @@ class gsprt_results
         std::cout << "pentanomial " << m_results.display() << std::endl;
         std::cout << "iter " << m_results.total() << std::endl;
 
-        sprt s{};
+        sprt s{"logistic", 0.05, 0.05, 0, 20};
         s.set_state(m_results);
-        s.analytics();
+        s.analytics(0.05);
     }
 };
