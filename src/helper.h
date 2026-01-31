@@ -2,6 +2,7 @@
 
 #include <condition_variable>
 #include <cstdint>
+#include <iterator>
 #include <mutex>
 #include <queue>
 #include <string>

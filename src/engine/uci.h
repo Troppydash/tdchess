@@ -1,8 +1,8 @@
 #pragma once
 
-#include <thread>
 #include "../helper.h"
 #include "../version.h"
+#include <thread>
 
 inline void pin_thread_to_processor(int logical_processor)
 {
@@ -16,7 +16,7 @@ inline void pin_thread_to_processor(int logical_processor)
 
 class uci_handler
 {
-private:
+  private:
     chess::Board m_position;
     endgame_table *m_endgame_table = nullptr;
     nnue *m_nnue = nullptr;
@@ -26,9 +26,8 @@ private:
     engine *m_engine = nullptr;
     std::thread m_engine_thread;
 
-public:
-    explicit uci_handler()
-    = default;
+  public:
+    explicit uci_handler() = default;
 
     ~uci_handler()
     {
@@ -56,7 +55,8 @@ public:
             if (lead == "quit")
             {
                 break;
-            } else if (lead == "uci")
+            }
+            else if (lead == "uci")
             {
                 // get threads
                 int total_threads = std::thread::hardware_concurrency();
@@ -69,7 +69,8 @@ public:
                 std::cout << "option name TTSizeMB type spin default 256 min 8 max 4096\n";
                 std::cout << "option name CoreAff type spin default -1 min -1 max " << total_threads - 1 << "\n";
                 std::cout << "uciok\n";
-            } else if (lead == "setoption")
+            }
+            else if (lead == "setoption")
             {
                 if (parts[2] == "SyzygyPath")
                 {
@@ -79,7 +80,8 @@ public:
                     {
                         delete m_endgame_table;
                     }
-                } else if (parts[2] == "NNUEPath")
+                }
+                else if (parts[2] == "NNUEPath")
                 {
                     delete m_nnue;
                     m_nnue = new nnue{};
@@ -87,30 +89,35 @@ public:
                     {
                         delete m_nnue;
                     }
-                } else if (parts[2] == "TTSizeMB")
+                }
+                else if (parts[2] == "TTSizeMB")
                 {
                     m_tt_size = atoi(parts[4].c_str());
-                } else if (parts[2] == "CoreAff")
+                }
+                else if (parts[2] == "CoreAff")
                 {
                     m_thread_aff = atoi(parts[4].c_str());
-                } else
+                }
+                else
                 {
                     std::cout << "warning unknown option\n";
                 }
-            } else if (lead == "position")
+            }
+            else if (lead == "position")
             {
                 size_t moves = 2;
                 if (parts[1] == "fen")
                 {
                     std::string fen =
-                            std::format("{} {} {} {} {} {}", parts[2], parts[3], parts[4], parts[5], parts[6],
-                                        parts[7]);
+                        std::format("{} {} {} {} {} {}", parts[2], parts[3], parts[4], parts[5], parts[6], parts[7]);
                     m_position = chess::Board::fromFen(fen);
                     moves = 8;
-                } else if (parts[1] == "startpos")
+                }
+                else if (parts[1] == "startpos")
                 {
                     m_position = chess::Board{};
-                } else
+                }
+                else
                 {
                     std::cout << "warning unknown position type\n";
                 }
@@ -123,16 +130,18 @@ public:
                         m_position.makeMove(m);
                     }
                 }
-            } else if (lead == "ucinewgame")
+            }
+            else if (lead == "ucinewgame")
             {
                 // ignore
-            } else if (lead == "isready")
+            }
+            else if (lead == "isready")
             {
                 std::cout << "readyok\n";
-            } else if (lead == "go")
+            }
+            else if (lead == "go")
             {
-                uint8_t max_depth = param::MAX_DEPTH;
-                int ms = 1000000;
+                search_param param{};
 
                 for (size_t i = 1; i < parts.size(); i++)
                 {
@@ -143,26 +152,47 @@ public:
                         continue;
                     else if (parts[i] == "depth")
                     {
-                        max_depth = std::atoi(parts[i + 1].c_str());
+                        param.depth = std::atoi(parts[i + 1].c_str());
                         i += 1;
-                    } else if (parts[i] == "movetime")
+                    }
+                    else if (parts[i] == "movetime")
                     {
-                        ms = std::atoi(parts[i + 1].c_str());
+                        param.movetime = std::atoi(parts[i + 1].c_str());
                         i += 1;
-                    } else
+                    }
+                    else if (parts[i] == "wtime")
                     {
-                        // ignore
+                        param.wtime = std::atoi(parts[i + 1].c_str());
+                        i += 1;
+                    }
+                    else if (parts[i] == "btime")
+                    {
+                        param.btime = std::atoi(parts[i + 1].c_str());
+                        i += 1;
+                    }
+                    else if (parts[i] == "winc")
+                    {
+                        param.winc = std::atoi(parts[i + 1].c_str());
+                        i += 1;
+                    }
+                    else if (parts[i] == "binc")
+                    {
+                        param.binc = std::atoi(parts[i + 1].c_str());
+                        i += 1;
                     }
                 }
 
-                start_search(max_depth, ms);
-            } else if (lead == "stop")
+                start_search(param);
+            }
+            else if (lead == "stop")
             {
                 stop_task();
-            } else if (lead == "ponderhit")
+            }
+            else if (lead == "ponderhit")
             {
                 // ignore
-            } else if (lead == "perft")
+            }
+            else if (lead == "perft")
             {
                 // depth x
                 int16_t max_depth = 4;
@@ -180,10 +210,11 @@ public:
                 }
 
                 start_perft(max_depth);
-            } else if (lead == "bench")
+            }
+            else if (lead == "bench")
             {
                 // depth x
-                int16_t max_depth = 18;
+                search_param param{};
                 for (size_t i = 1; i < parts.size(); i++)
                 {
                     if (i >= parts.size())
@@ -191,13 +222,14 @@ public:
 
                     if (parts[i] == "depth")
                     {
-                        max_depth = std::atoi(parts[i + 1].c_str());
+                        param.depth = std::atoi(parts[i + 1].c_str());
                         i += 1;
                     }
                 }
 
-                start_bench(max_depth);
-            } else
+                start_bench(param);
+            }
+            else
             {
                 std::cout << "warning unknown command\n";
             }
@@ -206,21 +238,18 @@ public:
         stop_task();
     }
 
-private:
+  private:
     void start_task(const std::function<void()> &task)
     {
         stop_task();
-        m_engine_thread = std::thread{
-            [=, this]()
+        m_engine_thread = std::thread{[=, this]() {
+            if (m_thread_aff != -1)
             {
-                if (m_thread_aff != -1)
-                {
-                    pin_thread_to_processor(m_thread_aff);
-                }
-
-                task();
+                pin_thread_to_processor(m_thread_aff);
             }
-        };
+
+            task();
+        }};
     }
 
     void stop_task()
@@ -233,14 +262,13 @@ private:
             m_engine_thread.join();
     }
 
-    void start_search(const int16_t depth, const int ms)
+    void start_search(search_param param)
     {
-        start_task([&]()
-        {
+        start_task([&]() {
             delete m_engine;
             m_engine = new engine{m_endgame_table, m_nnue, m_tt_size};
 
-            auto result = m_engine->search(m_position, depth, ms, true, true);
+            auto result = m_engine->search(m_position, param, true, true);
 
             // display results
             std::cout << "bestmove " << chess::uci::moveToUci(result.pv_line[0]);
@@ -254,21 +282,19 @@ private:
 
     void start_perft(const int16_t depth)
     {
-        start_task([&]()
-        {
+        start_task([&]() {
             delete m_engine;
             m_engine = new engine{m_endgame_table, m_nnue, m_tt_size};
             m_engine->perft(m_position, depth);
         });
     }
 
-    void start_bench(const int16_t depth)
+    void start_bench(search_param param)
     {
-        start_task([&]()
-        {
+        start_task([&]() {
             delete m_engine;
             m_engine = new engine{m_endgame_table, m_nnue, m_tt_size};
-            m_engine->search(m_position, depth, std::numeric_limits<int>::max(), true, true);
+            m_engine->search(m_position, param, true, true);
 
             std::cout << "info finalnps " << m_engine->m_stats.get_nps() << std::endl;
         });

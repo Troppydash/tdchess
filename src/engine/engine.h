@@ -2,15 +2,16 @@
 #include <chrono>
 #include <utility>
 
+#include "../../lib/Fathom/src/tbprobe.h"
+#include "../helper.h"
 #include "../hpplib/chess.h"
 #include "endgame.h"
 #include "evaluation.h"
-#include "../helper.h"
-#include "../../lib/Fathom/src/tbprobe.h"
 #include "nnue.h"
 #include "param.h"
 #include "see.h"
 #include "table.h"
+#include "time_control.h"
 #include "timer.h"
 
 struct search_result
@@ -701,10 +702,12 @@ struct engine
         std::cout.imbue(original);
     }
 
-    search_result search(const chess::Board &reference, int16_t max_depth, int ms, bool verbose = false,
+    search_result search(const chess::Board &reference, search_param param, bool verbose = false,
                          bool uci = false)
     {
-        m_timer.start(ms);
+        auto control = param.time_control(reference.sideToMove());
+
+        m_timer.start(control.time);
         m_position = reference;
         auto reference_time = timer::now();
         m_stats = engine_stats{0, 0, 0, timer::now() - reference_time};
@@ -740,7 +743,7 @@ struct engine
             return result;
         }
 
-        while (depth <= max_depth)
+        while (depth <= control.depth)
         {
             chess::Move null = chess::Move::NULL_MOVE;
             int32_t score = negamax(alpha, beta, depth, 0, null, true);
