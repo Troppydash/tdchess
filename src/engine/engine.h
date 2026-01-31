@@ -553,16 +553,16 @@ struct engine
             make_move(move);
 
             // [late move pruning]
-            if (depth < static_cast<int16_t>(m_param.lmp_margins.size()) && !is_pv_node &&
-                explored_moves > m_param.lmp_margins[depth])
-            {
-                bool tactical = m_position.inCheck() || move.typeOf() == chess::Move::PROMOTION;
-                if (!tactical)
-                {
-                    unmake_move(move);
-                    continue;
-                }
-            }
+            // if (depth < static_cast<int16_t>(m_param.lmp_margins.size()) && !is_pv_node &&
+            //     explored_moves > m_param.lmp_margins[depth])
+            // {
+            //     bool tactical = m_position.inCheck() || move.typeOf() == chess::Move::PROMOTION;
+            //     if (!tactical)
+            //     {
+            //         unmake_move(move);
+            //         continue;
+            //     }
+            // }
 
             int32_t score;
             if (explored_moves == 0)

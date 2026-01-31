@@ -8,21 +8,27 @@
 #include "book.h"
 #include "pentanomial.h"
 
-class arena
+struct arena_settings
+{
+    std::string name;
+    int16_t movetime;
+    int book_depth;
+};
+
+template <typename Result = gsprt_results> class arena
 {
   private:
-    std::string m_name;
+    arena_settings m_settings;
     openbook &m_book;
     std::vector<agent_settings> m_agents;
     std::vector<int> m_logical;
-
-    std::map<std::pair<std::string, std::string>, double> m_results;
+    Result m_results;
 
     struct match_input
     {
         agent_settings agent0;
         agent_settings agent1;
-        int core;
+        int core = -1;
     };
 
     struct match_output
@@ -32,18 +38,19 @@ class arena
     };
 
   public:
-    explicit arena(std::string name, openbook &book, std::vector<agent_settings> agents,
+    explicit arena(arena_settings settings, openbook &book, const std::vector<agent_settings> &agents,
                    const std::vector<int> &logical)
-        : m_name(std::move(name)), m_book(book), m_agents(std::move(agents)), m_logical(logical)
+        : m_settings(std::move(settings)), m_book(book), m_agents(agents), m_logical(logical), m_results(agents)
     {
     }
 
-    void full_round()
+    int full_round(int repeats)
     {
         helper::thread_safe_queue<match_input> matches;
         for (size_t i = 0; i < m_agents.size(); ++i)
             for (size_t j = i + 1; j < m_agents.size(); ++j)
-                matches.push(match_input{m_agents[i], m_agents[j], -1});
+                for (int k = 0; k < repeats; ++k)
+                    matches.push(match_input{m_agents[i], m_agents[j], -1});
 
         int jobs = matches.size();
 
@@ -70,17 +77,31 @@ class arena
 
             auto agent0_alias = output.input.agent0.m_alias;
             auto agent1_alias = output.input.agent1.m_alias;
-            auto score = output.result.to_score();
-            m_results[{agent0_alias, agent1_alias}] += score.first;
-            m_results[{agent1_alias, agent0_alias}] += score.second;
+            m_results.append(agent0_alias, agent1_alias, output.result);
 
             // use result
-            std::cout << agent0_alias << " vs " << agent1_alias << ": " << output.result.display() << std::endl;
+            std::cout << "[job " << i << "] " << agent0_alias << " vs " << agent1_alias << ": "
+                      << output.result.display() << std::endl;
         }
+
+        m_results.display();
+        m_results.save(m_settings.name + "_elo.txt");
 
         // wait for thread to finish
         for (auto &t : threads)
             t.join();
+
+        return jobs;
+    }
+
+    void loop(int repeats, int iterations)
+    {
+        int total = 0;
+        for (size_t i = 0; total < iterations; i++)
+        {
+            std::cout << "[round " << i << "]" << std::endl;
+            total += full_round(repeats);
+        }
     }
 
   private:
@@ -103,7 +124,7 @@ class arena
         agent agent0{agent0_settings};
         agent agent1{agent1_settings};
 
-        int16_t ms = 300;
+        int16_t ms = m_settings.movetime;
 
         for (int i = 0; i < 300; ++i)
         {
@@ -116,8 +137,6 @@ class arena
 
                 return (side2move == initial_side2move) ? 1 : 0;
             }
-
-            // std::cout << position << std::endl;
 
             chess::Move move = chess::Move::NO_MOVE;
             if (side2move == initial_side2move)
@@ -143,7 +162,7 @@ class arena
      */
     match_output matchup(const match_input &input)
     {
-        auto [moves, position] = m_book.generate_game(13);
+        auto [moves, position] = m_book.generate_game(m_settings.book_depth);
 
         std::pair<double, double> scores{0, 0};
 

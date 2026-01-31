@@ -385,12 +385,12 @@ struct sprt
 
     void analytics(double p = 0.05)
     {
-        std::cout << "clamped " << clamped << "\n"
-                  << "a " << a << "\n"
-                  << "b " << b << "\n"
+        std::cout << "clamped      " << clamped << "\n"
+                  << "a            " << a << "\n"
+                  << "b            " << b << "\n"
                   << "expected elo " << lower_cb(0.5) << "\n"
-                  << "elo CI-" << (1 - p) << " " << lower_cb(p / 2.0) << ", " << lower_cb(1.0 - p / 2.0) << "\n"
-                  << "P(elo=0) LOS " << outcome_prob(0.0) << "\n"
-                  << "LLR " << llr << "\n";
+                  << "elo       CI-" << (1 - p) << " " << lower_cb(p / 2.0) << ", " << lower_cb(1.0 - p / 2.0) << "\n"
+                  << "P(elo>0) LOS " << outcome_prob(0.0) << "\n"
+                  << "LLR          " << llr << "\n";
     }
 };

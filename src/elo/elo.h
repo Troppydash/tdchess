@@ -5,6 +5,7 @@
 
 #include "agent.h"
 #include "pentanomial.h"
+#include "stats.h"
 
 #include <fstream>
 
@@ -17,8 +18,6 @@ class elo_results
   public:
     // TODO: write elo algorithm
 };
-
-
 
 class gsprt_results
 {
@@ -43,28 +42,20 @@ class gsprt_results
         ifs >> m_results;
     }
 
-    void append(const std::string &p0, const std::string &p1, pentanomial result)
+    void append(const std::string &p0, const std::string &p1, const pentanomial &result)
     {
-        if (p0 != m_agents[0].m_alias || p1 != m_agents[1].m_alias)
-        {
-            std::cerr << "warning, incorrect chisq format" << std::endl;
-            return;
-        }
-
         m_results = m_results + result;
-    }
-
-    double gsqrt_test(double elo0, double elo1) const
-    {
-        double llr = 0;
-        // for (size_t i = 0; i)
     }
 
     void display() const
     {
-        std::cout << m_agents[0].m_alias << " vs " << m_agents[1].m_alias << std::endl;
-        std::cout << m_results.display() << std::endl;
+        std::cout << "[gsprt]" << std::endl;
+        std::cout << "baseline " << m_agents[1].m_alias << " against latest " << m_agents[0].m_alias << std::endl;
+        std::cout << "pentanomial " << m_results.display() << std::endl;
+        std::cout << "iter " << m_results.total() << std::endl;
 
-        // compute pentanomial results
+        sprt s{};
+        s.set_state(m_results);
+        s.analytics();
     }
 };

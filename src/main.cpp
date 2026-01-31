@@ -30,21 +30,32 @@ int main()
 #include "elo/book.h"
 #include "elo/stats.h"
 
+void improvement_test(const std::string &baseline, const std::string &latest)
+{
+    openbook book{"../book/Book.bin"};
+    std::string baseline_prefix = "../builds/" + baseline;
+    std::string latest_prefix = "../builds/" + latest;
+    const agent_settings base{baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 256,
+                              false};
+    const agent_settings late{latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 256, false};
+    std::vector<agent_settings> agents{late, base};
+    arena_settings settings{latest + "_against_" + baseline, 500, 11};
+    arena arena{settings, book, agents, {0, 2, 4, 6, 8, 10}};
+    arena.loop(6, 100);
+}
+
 int main()
 {
-    sprt s{};
-    // s.set_state(pentanomial{{10, 20, 50, 10, 1}});
-    s.set_state(pentanomial{{1, 20, 10, 20, 5}});
-    s.analytics();
+    // sprt s{};
+    // // s.set_state(pentanomial{{10, 20, 50, 10, 1}});
+    // s.set_state(pentanomial{{1, 20, 10, 20, 5}});
+    // s.analytics();
 
     // chisq sq{{}};
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    // openbook book{"../book/Book.bin"};
-    // const agent_settings v102{"1.0.2", "../builds/1.0.2/tdchess", "../builds/1.0.2/nnue.bin", "../syzygy", 256,
-    // false}; std::vector<agent_settings> agents{v102, v102}; arena arena{"basic", book, agents, {0, 2, 4}};
-    // arena.full_round();
+    improvement_test("1.0.2", "1.0.3");
 
     return 0;
 }

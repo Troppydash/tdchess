@@ -18,6 +18,11 @@ class pentanomial
     {
     }
 
+    int total() const
+    {
+        return result[0] + result[1] + result[2] + result[3] + result[4];
+    }
+
     pentanomial operator+(const pentanomial &other) const
     {
         std::array<int, 5> total = result;
