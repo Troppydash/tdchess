@@ -30,16 +30,26 @@ int main()
 #include "elo/book.h"
 #include "elo/stats.h"
 
-void improvement_test(const std::string &baseline, const std::string &latest)
+void improvement_test(const std::string &baseline, const std::string &latest, bool is_short)
 {
     openbook book{"../book/Book.bin"};
     std::string baseline_prefix = "../builds/" + baseline;
     std::string latest_prefix = "../builds/" + latest;
-    const agent_settings base{baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 256,
-                              false};
-    const agent_settings late{latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 256, false};
+    const agent_settings base{
+        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 256,
+        false};
+    const agent_settings late{
+        latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 256, false};
     std::vector<agent_settings> agents{late, base};
-    arena_settings settings{latest + "_against_" + baseline, 2000, 11};
+
+    arena_settings settings;
+    if (is_short)
+        settings = arena_settings{latest + "_against_" + baseline, 11, 10 * 1000,
+                                  static_cast<int>(0.1 * 1000)};
+    else
+        settings = arena_settings{latest + "_against_" + baseline, 11, 60 * 1000,
+                                  static_cast<int>(0.6 * 1000)};
+
     arena arena{settings, book, agents, {0, 2, 4, 6, 8, 10}};
     arena.loop(6, 100);
 }
@@ -55,7 +65,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.2", "1.0.3");
+    improvement_test("1.0.4", "1.0.4", true);
 
     return 0;
 }

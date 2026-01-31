@@ -18,7 +18,7 @@ struct search_param
     struct result
     {
         int16_t depth;
-        int16_t time;
+        int time;
     };
 
     [[nodiscard]] result time_control(int side2move) const
@@ -36,7 +36,7 @@ struct search_param
         }
 
         int target_time = std::floor(time / 20.0 + inc / 2.0);
-
-        return {static_cast<int16_t>(depth), static_cast<int16_t>(std::min(target_time, movetime))};
+        return {static_cast<int16_t>(depth),
+                static_cast<int>(std::min(std::min(target_time, movetime), time))};
     }
 };

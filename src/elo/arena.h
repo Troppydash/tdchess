@@ -11,8 +11,56 @@
 struct arena_settings
 {
     std::string name;
-    int16_t movetime;
     int book_depth;
+
+    int basetime;
+    int increment;
+};
+
+class arena_clock
+{
+
+  private:
+    int m_time;
+    int m_incr;
+    std::chrono::microseconds m_ref;
+
+  public:
+    explicit arena_clock(int time, int incr) : m_time(time), m_incr(incr)
+    {
+    }
+
+    void start()
+    {
+        m_ref = now();
+    }
+
+    bool stop()
+    {
+        int diff = std::chrono::duration_cast<std::chrono::milliseconds>(now() - m_ref).count();
+        m_time -= diff;
+        if (m_time < 0)
+            return true;
+
+        m_time += m_incr;
+        return false;
+    }
+
+    int get_time() const
+    {
+        return m_time;
+    }
+
+    int get_incr() const
+    {
+        return m_incr;
+    }
+
+    static std::chrono::microseconds now()
+    {
+        return std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now().time_since_epoch());
+    }
 };
 
 template <typename Result = gsprt_results> class arena
@@ -105,6 +153,10 @@ template <typename Result = gsprt_results> class arena
     }
 
   private:
+    const int AGENT0 = 0;
+    const int AGENT1 = 1;
+    const int DRAW = 2;
+
     /**
      * Play a single match between two agents, return the result
      * @param agent0_settings
@@ -119,12 +171,13 @@ template <typename Result = gsprt_results> class arena
     {
         std::vector<chess::Move> moves = initial_moves;
         chess::Board position = initial_position;
-        chess::Color initial_side2move = position.sideToMove();
+        chess::Color agent0_side2move = position.sideToMove();
 
         agent agent0{agent0_settings};
         agent agent1{agent1_settings};
 
-        int16_t ms = m_settings.movetime;
+        arena_clock agent0_clock{m_settings.basetime, m_settings.increment};
+        arena_clock agent1_clock{m_settings.basetime, m_settings.increment};
 
         for (int i = 0; i < 300; ++i)
         {
@@ -133,19 +186,43 @@ template <typename Result = gsprt_results> class arena
             if (result != chess::GameResult::NONE)
             {
                 if (result == chess::GameResult::DRAW)
-                    return 2;
+                    return DRAW;
 
-                return (side2move == initial_side2move) ? 1 : 0;
+                return (side2move == agent0_side2move) ? AGENT1 : AGENT0;
             }
 
-            chess::Move move = chess::Move::NO_MOVE;
-            if (side2move == initial_side2move)
+            search_param param;
+            if (agent0_side2move == chess::Color::WHITE)
             {
-                move = agent0.search(moves, ms, param::MAX_DEPTH, core);
+                param = search_param{agent0_clock.get_time(), agent1_clock.get_time(), agent0_clock.get_incr(),
+                                     agent1_clock.get_incr()};
             }
             else
             {
-                move = agent1.search(moves, ms, param::MAX_DEPTH, core);
+                param = search_param{agent1_clock.get_time(), agent0_clock.get_time(), agent1_clock.get_incr(),
+                                     agent0_clock.get_incr()};
+            }
+
+            chess::Move move = chess::Move::NO_MOVE;
+            if (side2move == agent0_side2move)
+            {
+                agent0_clock.start();
+                move = agent0.search(moves, param, core);
+                bool timeout = agent0_clock.stop();
+                if (timeout)
+                {
+                    return AGENT1;
+                }
+            }
+            else
+            {
+                agent1_clock.start();
+                move = agent1.search(moves, param, core);
+                bool timeout = agent1_clock.stop();
+                if (timeout)
+                {
+                    return AGENT0;
+                }
             }
 
             moves.push_back(move);
