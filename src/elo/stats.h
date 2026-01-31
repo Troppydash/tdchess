@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+// copied from https://github.com/official-stockfish/fishtest/blob/master/server/fishtest/stats/sprt.py
+
 namespace brownian
 {
 inline double Phi(double x)
@@ -387,7 +389,7 @@ struct sprt
                   << "a " << a << "\n"
                   << "b " << b << "\n"
                   << "expected elo " << lower_cb(0.5) << "\n"
-                  << "elo ci-" << (1-p) << " " << lower_cb(p / 2.0) << ", " << lower_cb(1.0 - p / 2.0) << "\n"
+                  << "elo CI-" << (1 - p) << " " << lower_cb(p / 2.0) << ", " << lower_cb(1.0 - p / 2.0) << "\n"
                   << "P(elo=0) LOS " << outcome_prob(0.0) << "\n"
                   << "LLR " << llr << "\n";
     }
