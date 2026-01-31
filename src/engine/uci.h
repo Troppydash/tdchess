@@ -242,7 +242,7 @@ class uci_handler
     void start_task(const std::function<void()> &task)
     {
         stop_task();
-        m_engine_thread = std::thread{[=, this]() {
+        m_engine_thread = std::thread{[this, task]() {
             if (m_thread_aff != -1)
             {
                 pin_thread_to_processor(m_thread_aff);
@@ -264,7 +264,7 @@ class uci_handler
 
     void start_search(search_param param)
     {
-        start_task([&]() {
+        start_task([&, param]() {
             delete m_engine;
             m_engine = new engine{m_endgame_table, m_nnue, m_tt_size};
 
@@ -282,7 +282,7 @@ class uci_handler
 
     void start_perft(const int16_t depth)
     {
-        start_task([&]() {
+        start_task([&, depth]() {
             delete m_engine;
             m_engine = new engine{m_endgame_table, m_nnue, m_tt_size};
             m_engine->perft(m_position, depth);
@@ -291,7 +291,7 @@ class uci_handler
 
     void start_bench(search_param param)
     {
-        start_task([&]() {
+        start_task([&, param]() {
             delete m_engine;
             m_engine = new engine{m_endgame_table, m_nnue, m_tt_size};
             m_engine->search(m_position, param, true, true);

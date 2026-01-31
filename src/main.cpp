@@ -1,20 +1,13 @@
 #include <iostream>
 
 // use pext extension for performance, this include must be first
+#if defined(__BMI2__)
 #define CHESS_USE_PEXT
-#include "elo/agent.h"
-#include "elo/elo.h"
+#endif
 #include "hpplib/chess.h"
 
 #include "engine/engine.h"
 #include "engine/uci.h"
-
-void perft()
-{
-    engine engine{128};
-    chess::Board board{};
-    engine.perft(board, 7);
-}
 
 #ifdef TDCHESS_UCI
 int main()
@@ -65,28 +58,58 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.4", "1.0.4", true);
+    improvement_test("1.0.4", "1.0.5", true);
+
+    return 0;
+}
+
+#elif TDCHESS_PGO
+
+int main()
+{
+    std::vector<std::string> positions = {chess::constants::STARTPOS};
+    for (auto &position : positions)
+    {
+        nnue nnue{};
+        nnue.load_network("../nets/1.0.5.bin");
+        chess::Board start{position};
+        endgame_table table{};
+        table.load_file("../syzygy");
+        engine engine{&table, &nnue, 256};
+        search_param param;
+        param.movetime = 10000;
+        engine.search(start, param, true, true);
+        std::cout << "done\n";
+    }
 
     return 0;
 }
 
 #else
-
 #include "engine/nnue.h"
 
 int main()
 {
-    agent ag{"../builds/1.0.2/tdchess", "../builds/1.0.2/nnue.bin", "../syzygy", 128};
-    ag.initialize(true);
+    // agent ag{"../builds/1.0.2/tdchess", "../builds/1.0.2/nnue.bin", "../syzygy", 128};
+    // ag.initialize(true);
 
-    auto result = ag.search({}, 10000, 18, 2, true);
-    std::cout << chess::uci::moveToUci(result) << std::endl;
+    // auto result = ag.search({}, 10000, 18, 2, true);
+    // std::cout << chess::uci::moveToUci(result) << std::endl;
 
     // ag.search(0, 0, 0, true);
 
-    // nnue nnue{};
-    // nnue.load_network("../nets/1.0.1.bin");
-    // chess::Board start{"rnbq1rk1/2p1bppp/1p2pn2/p1Pp4/1P1P4/2NB1P2/P3N1PP/R1BQK2R w KQ - 0 10"};
+    nnue nnue{};
+    nnue.load_network("../nets/1.0.5.bin");
+    chess::Board start{};
+    // nnue.initialize(start);
+    // std::cout << nnue.evaluate(0, 7) << std::endl;
+    // return 0;
+    engine engine{nullptr, &nnue, 256};
+    search_param param;
+    param.movetime = 5000;
+    engine.search(start, param, true, true);
+
+    std::cout << "done\n";
     // nnue.initialize(start);
     // std::cout << nnue.evaluate(start.sideToMove()) << std::endl;
     // std::cout << nnue.evaluate(1) << std::endl;
