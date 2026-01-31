@@ -24,7 +24,9 @@ int main()
     return 0;
 }
 #elif TDCHESS_ELO
-#include "elo/elo.h"
+
+#include "elo/arena.h"
+#include "elo/book.h"
 
 int main()
 {
