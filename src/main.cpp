@@ -29,10 +29,10 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
     std::string baseline_prefix = "../builds/" + baseline;
     std::string latest_prefix = "../builds/" + latest;
     const agent_settings base{
-        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 128,
+        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", is_short ? 128 : 256,
         false};
     const agent_settings late{
-        latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 128, false};
+        latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", is_short ? 128 : 256, false};
     std::vector<agent_settings> agents{late, base};
 
     arena_settings settings;
@@ -45,6 +45,9 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
 
     arena arena{settings, book, agents, {0, 2, 4, 6, 8, 10}};
     arena.loop(6, 50);
+
+    // arena arena{settings, book, agents, {0}};
+    // arena.loop(1, 50);
 }
 
 int main()
@@ -58,7 +61,8 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.5", "1.0.6", true);
+    improvement_test("1.0.6", "1.0.6-alpha", true);
+    improvement_test("1.0.6", "1.0.6-alpha", false);
 
     return 0;
 }
@@ -108,10 +112,10 @@ int main()
 
     nnue nnue{};
     nnue.load_network("../nets/1.0.6.bin");
-    chess::Board start{"r2q1rk1/bpp2pp1/2npbn1p/pB2p3/P3P3/2PP1N1P/1P1N1PP1/R1BQR1K1 b - - 4 11"};
+    chess::Board start{"4qr1k/1pp3bp/3p2p1/2P5/1P2N3/4PnP1/r4PBP/1RBR2K1 w - - 3 21"};
     engine engine{nullptr, &nnue, 256};
     search_param param;
-    param.movetime = 5000;
+    param.movetime = 10000;
     engine.search(start, param, true, true);
     //
     // std::cout << "done\n";

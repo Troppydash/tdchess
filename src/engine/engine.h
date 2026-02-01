@@ -458,7 +458,7 @@ struct engine
         if (m_timer.is_stopped())
             return 0;
 
-        if (ply >= param::MAX_DEPTH)
+        if (ply >= param::MAX_DEPTH - 1)
             return evaluate();
 
         constexpr bool pv_node = nodetype != NonPV;
@@ -475,8 +475,7 @@ struct engine
         depth = std::min(depth, param::MAX_DEPTH - 1);
 
         // check draw by rep
-        if (!root_node && (m_position.isInsufficientMaterial()) &&
-            alpha < param::VALUE_DRAW)
+        if (!root_node && (m_position.isInsufficientMaterial()) && alpha < param::VALUE_DRAW)
         {
             alpha = 0;
             if (alpha >= beta)
@@ -502,9 +501,6 @@ struct engine
                     return param::VALUE_DRAW;
                 }
 
-                // if (!ss->in_check)
-                //     return evaluate();
-
                 return param::VALUE_DRAW;
             }
 
@@ -520,8 +516,8 @@ struct engine
         auto tt_result = entry.get(m_position.hash(), ply, depth, alpha, beta);
         ss->tt_hit = tt_result.hit;
         // ss->tt_pv = pv_node; // todo: store is pv
-        // bool tt_capture =
-        // tt_result.move != chess::Move::NULL_MOVE && m_position.isCapture(tt_result.move);
+        bool tt_capture =
+            tt_result.move != chess::Move::NULL_MOVE && m_position.isCapture(tt_result.move);
         if (tt_result.hit && !root_node)
         {
             return tt_result.score;
@@ -546,7 +542,7 @@ struct engine
         ss->static_eval = evaluate();
 
         // [static null move pruning]
-        if (!pv_node && std::abs(beta) < param::CHECKMATE)
+        if (cutnode && std::abs(beta) < param::CHECKMATE)
         {
             int32_t static_score = ss->static_eval;
             int32_t margin = m_param.static_null_base_margin * depth;
@@ -557,7 +553,7 @@ struct engine
         // [futility pruning]
 
         // [null move pruning]
-        if (cutnode && has_non_pawn && depth <= 3 && beta > -param::CHECKMATE)
+        if (cutnode && has_non_pawn && depth <= m_param.nmp_depth_limit && beta > -param::CHECKMATE)
         {
             int16_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
             m_position.makeNullMove();
@@ -613,82 +609,58 @@ struct engine
 
             int32_t score = best_score;
             int new_depth = depth - 1;
-            // int reduction = m_param.lmr[depth][move_count] * 1024;
+
+            // TODO: fix this -1
+            int reduction = (m_param.lmr[depth][move_count] - 1) * 1024;
 
             // reductions
-            // if (ss->tt_pv)
-            //     reduction += 1000;
-
-            // if (cutnode)
-            //     reduction += 2000;
+            if (cutnode)
+                reduction += 1000;
             //
             // if (tt_capture)
-            //     reduction += 1000;
+            //     reduction += 500;
             //
-            // if (move == tt_result.move)
-            //     reduction -= 2000;
-            //
-            // if (all_node)
-            //     reduction += reduction / (depth + 1);
+            if (move == tt_result.move)
+                reduction -= 700;
 
-            if (move_count == 1)
+            if (all_node)
+                reduction += reduction / (depth + 1);
+
+            // [late move reduction]
+            if (depth >= 2 && move_count > 1)
+            {
+                int d = std::max(1, std::min(new_depth - reduction / 1024, new_depth + 2)) +
+                        static_cast<int>(pv_node);
+
+                ss->reduction = new_depth - d;
+                score = -negamax<NonPV>(-(alpha + 1), -alpha, d, ss + 1, true);
+                ss->reduction = 0;
+
+                if (score > alpha)
+                {
+                    // if (d < new_depth && score > best_score + 50)
+                    // new_depth += 1;
+
+                    // if (score < best_score + 10)
+                    //     new_depth -= 1;
+
+                    if (new_depth > d)
+                        score = -negamax<NonPV>(-(alpha + 1), -alpha, new_depth, ss + 1, !cutnode);
+                }
+            }
+            // [full depth search if no lmr]
+            else if (!pv_node || move_count > 1)
+            {
+                // if (tt_result.move == chess::Move::NULL_MOVE)
+                //     reduction += 1000;
+
+                // int d = new_depth - (reduction > 4000) - (reduction > 6000 && new_depth > 2);
+                score = -negamax<NonPV>(-(alpha + 1), -alpha, new_depth, ss + 1, !cutnode);
+            }
+
+            if (pv_node && (move_count == 1 || score > alpha))
             {
                 score = -negamax<PV>(-beta, -alpha, new_depth, ss + 1, false);
-            }
-            else
-            {
-                // [late move reduction]
-                int16_t reduction = 0;
-                if (!pv_node && move_count >= 4 && depth >= 3)
-                    reduction = m_param.lmr[depth][move_count];
-
-                // [pv search]
-                score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1 - reduction, ss + 1, true);
-                if (alpha < score && reduction > 0)
-                {
-                    score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1, true);
-                    if (alpha < score)
-                    {
-                        score = -negamax<NonPV>(-beta, -alpha, depth - 1, ss + 1, false);
-                    }
-                }
-                else if (alpha < score && score < beta)
-                {
-                    score = -negamax<NonPV>(-beta, -alpha, depth - 1, ss + 1, false);
-                }
-
-                //
-                // // [late move reduction]
-                // if (depth >= 2 && move_count > 1)
-                // {
-                //     int d = std::max(1, std::min(new_depth - reduction / 1024, new_depth + 2)) +
-                //             static_cast<int>(pv_node);
-                //
-                //     ss->reduction = new_depth - d;
-                //     score = -negamax<NonPV>(-(alpha + 1), -alpha, d, ss + 1, true);
-                //     ss->reduction = 0;
-                //
-                //     if (score > alpha)
-                //     {
-                //         // if (d < new_depth && score > best_score + 50)
-                //         //     new_depth += 1;
-                //         //
-                //         // if (score < best_score)
-                //         //     new_depth -= 1;
-                //
-                //         // if (new_depth > d)
-                //         score = -negamax<NonPV>(-beta, -alpha, new_depth, ss + 1, !cutnode);
-                //     }
-                // }
-                // // [full depth search if no lmr]
-                // else if (!pv_node || move_count > 1)
-                // {
-                //     if (tt_result.move == chess::Move::NULL_MOVE)
-                //         reduction += 1000;
-                //
-                //     int d = new_depth - (reduction > 4000) - (reduction > 5000 && new_depth > 2);
-                //     score = -negamax<NonPV>(-(alpha + 1), -alpha, d, ss + 1, !cutnode);
-                // }
             }
 
             unmake_move(move);

@@ -252,6 +252,9 @@ template <typename Result = gsprt_results> class arena
     {
         auto [moves, position] = m_book.generate_game(m_settings.book_depth);
 
+        std::cout << "[matchup] core " << input.core << " " << input.agent0.m_alias << " vs "
+                  << input.agent1.m_alias << " fen " << position.getFen() << std::endl;
+
         std::pair<double, double> scores{0, 0};
 
         int forward = match(input.agent0, input.agent1, moves, position, input.core);
