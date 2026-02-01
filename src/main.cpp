@@ -58,7 +58,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.4", "1.0.5", false);
+    improvement_test("1.0.5", "1.0.6", true);
 
     return 0;
 }
@@ -107,15 +107,12 @@ int main()
     // ag.search(0, 0, 0, true);
 
     nnue nnue{};
-    nnue.load_network("../nets/1.0.5.bin");
-    chess::Board start{"8/8/Q7/2N2k1r/1P2q3/1KP5/5p2/8 b - - 12 14"};
-    nnue.initialize(start);
-    std::cout << nnue.evaluate(start.sideToMove(), evaluate_bucket(start)) << std::endl;
-    // return 0;
-    // engine engine{nullptr, &nnue, 256};
-    // search_param param;
-    // param.movetime = 5000;
-    // engine.search(start, param, true, true);
+    nnue.load_network("../nets/1.0.6.bin");
+    chess::Board start{"r2q1rk1/bpp2pp1/2npbn1p/pB2p3/P3P3/2PP1N1P/1P1N1PP1/R1BQR1K1 b - - 4 11"};
+    engine engine{nullptr, &nnue, 256};
+    search_param param;
+    param.movetime = 5000;
+    engine.search(start, param, true, true);
     //
     // std::cout << "done\n";
     // nnue.initialize(start);
