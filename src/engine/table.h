@@ -5,89 +5,107 @@
 
 #include <cmath>
 
+enum Bound : uint8_t
+{
+    BOUND_NONE ,
+    BOUND_UPPER,
+    BOUND_LOWER,
+    BOUND_EXACT = BOUND_UPPER | BOUND_LOWER
+};
+
+constexpr int DEPTH_UNSEARCHED = -1;
+
 struct table_entry_result
 {
+    // the minimax score
     int32_t score;
-    bool hit;
+    // the static evaluation
+    int32_t eval;
     chess::Move move;
+    bool is_pv;
+    int depth;
+    Bound bound;
 };
 
 class table_entry
 {
   public:
     uint64_t m_hash = 0;
-    int32_t m_score = 0;
-    chess::Move m_best_move = chess::Move::NULL_MOVE;
-    int m_depth = 0;
-    uint8_t m_flag = 0;
+    // the minimax score
+    int32_t m_score = param::VALUE_NONE;
+    // the static evaluation
+    int32_t m_eval = param::VALUE_NONE;
+    chess::Move m_move = chess::Move::NO_MOVE;
+    bool m_is_pv = false;
+    int m_depth = DEPTH_UNSEARCHED;
+    Bound m_bound = BOUND_NONE;
 
-    [[nodiscard]] table_entry_result get(uint64_t hash, int ply, int depth, int32_t alpha, int32_t beta) const
+    [[nodiscard]] std::pair<bool, table_entry_result> get(uint64_t hash, int ply) const
     {
-        int32_t adj_score = 0;
-        bool should_use = false;
-        chess::Move best_move = chess::Move::NULL_MOVE;
+        table_entry_result adjusted{.score = param::VALUE_NONE,
+                                    .eval = m_eval,
+                                    .move = chess::Move::NO_MOVE,
+                                    .is_pv = m_is_pv,
+                                    .depth = m_depth,
+                                    .bound = m_bound};
 
+        bool tt_hit = false;
         if (m_hash == hash)
         {
-            best_move = m_best_move;
-            adj_score = m_score;
+            adjusted.move = m_move;
+            adjusted.score = m_score;
 
-            if (m_depth >= depth)
-            {
-                int32_t score = m_score;
-
-                // normalize for depth
-                if (score > param::CHECKMATE)
-                    score -= ply;
-                if (score < -param::CHECKMATE)
-                    score += ply;
-
-                if (m_flag == param::EXACT_FLAG)
-                {
-                    adj_score = score;
-                    should_use = true;
-                }
-                else if (m_flag == param::ALPHA_FLAG && score <= alpha)
-                {
-                    adj_score = score;
-                    should_use = true;
-                }
-                else if (m_flag == param::BETA_FLAG && score >= beta)
-                {
-                    adj_score = score;
-                    should_use = true;
-                }
-            }
+            tt_hit = true;
         }
 
-        return {adj_score, should_use, best_move};
+        // correct mate scores
+        if (tt_hit && adjusted.score != param::VALUE_NONE)
+        {
+            // normalize for depth
+            if (adjusted.score > param::CHECKMATE)
+                adjusted.score -= ply;
+            if (adjusted.score < -param::CHECKMATE)
+                adjusted.score += ply;
+        }
+
+        return {tt_hit, adjusted};
     }
 
-    void set(uint64_t hash, int32_t score, const chess::Move &best_move, int ply, int depth, uint8_t flag)
+    void write(uint64_t hash, int32_t score, int32_t eval, chess::Move move, bool is_pv, int depth,
+               Bound bound, int ply)
     {
-        m_hash = hash;
-        m_depth = depth;
-        m_best_move = best_move;
-        m_flag = flag;
+        if (depth >= m_depth)
+        {
+            m_hash = hash;
+            m_eval = eval;
+            m_move = move;
+            m_is_pv = is_pv;
+            m_depth = depth;
+            m_bound = bound;
 
-        // to absolute depth
-        if (score > param::CHECKMATE)
-            score += ply;
-        if (score < -param::CHECKMATE)
-            score -= ply;
-
-        m_score = score;
+            if (score != param::VALUE_NONE)
+            {
+                if (score > param::CHECKMATE)
+                    score += ply;
+                if (score < -param::CHECKMATE)
+                    score -= ply;
+                m_score = score;
+            }
+            else
+                m_score = score;
+        }
     }
 };
 
 class table
 {
-  public:
+  private:
     std::vector<table_entry> m_entries;
     size_t m_size;
     int m_power;
     uint64_t m_mask;
 
+  public:
     explicit table(size_t size_in_mb)
     {
         const size_t max_size = size_in_mb * 1024 * 1024 / sizeof(table_entry);

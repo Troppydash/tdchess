@@ -61,8 +61,8 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.6", "1.0.6-alpha", true);
-    improvement_test("1.0.6", "1.0.6-alpha", false);
+    improvement_test("1.0.6-alpha", "1.0.6-beta", false);
+    // improvement_test("1.0.6", "1.0.6-alpha", false);
 
     return 0;
 }
@@ -111,8 +111,8 @@ int main()
     // ag.search(0, 0, 0, true);
 
     nnue nnue{};
-    nnue.load_network("../nets/1.0.6.bin");
-    chess::Board start{"4qr1k/1pp3bp/3p2p1/2P5/1P2N3/4PnP1/r4PBP/1RBR2K1 w - - 3 21"};
+    nnue.load_network("../nets/1.0.6-alpha.bin");
+    chess::Board start{};
     engine engine{nullptr, &nnue, 256};
     search_param param;
     param.movetime = 10000;

@@ -16,7 +16,7 @@ struct see
 
         // gain[depth] is the perspective value of the static exchange at depth
         int32_t gain[32]{};
-        int16_t depth = 0;
+        int depth = 0;
         int side = position.sideToMove() ^ 1;
 
         chess::Bitboard seenBB = 0;
