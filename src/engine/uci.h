@@ -20,7 +20,7 @@ class uci_handler
     chess::Board m_position;
     endgame_table *m_endgame_table = nullptr;
     nnue *m_nnue = nullptr;
-    int m_tt_size = 128;
+    int m_tt_size = 256;
     int m_thread_aff = -1;
 
     engine *m_engine = nullptr;
