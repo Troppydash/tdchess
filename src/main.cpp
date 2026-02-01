@@ -29,10 +29,10 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
     std::string baseline_prefix = "../builds/" + baseline;
     std::string latest_prefix = "../builds/" + latest;
     const agent_settings base{
-        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 256,
+        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 128,
         false};
     const agent_settings late{
-        latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 256, false};
+        latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 128, false};
     std::vector<agent_settings> agents{late, base};
 
     arena_settings settings;
@@ -44,7 +44,7 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
                                   static_cast<int>(0.6 * 1000)};
 
     arena arena{settings, book, agents, {0, 2, 4, 6, 8, 10}};
-    arena.loop(6, 100);
+    arena.loop(6, 50);
 }
 
 int main()
@@ -58,7 +58,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.4", "1.0.5", true);
+    improvement_test("1.0.4", "1.0.5", false);
 
     return 0;
 }
@@ -88,6 +88,14 @@ int main()
 #else
 #include "engine/nnue.h"
 
+
+
+int evaluate_bucket(const chess::Board &position)
+{
+    constexpr int n = 8;
+    constexpr int divisor = 32 / n;
+    return (position.occ().count() - 2) / divisor;
+}
 int main()
 {
     // agent ag{"../builds/1.0.2/tdchess", "../builds/1.0.2/nnue.bin", "../syzygy", 128};
@@ -100,16 +108,16 @@ int main()
 
     nnue nnue{};
     nnue.load_network("../nets/1.0.5.bin");
-    chess::Board start{};
-    // nnue.initialize(start);
-    // std::cout << nnue.evaluate(0, 7) << std::endl;
+    chess::Board start{"8/8/Q7/2N2k1r/1P2q3/1KP5/5p2/8 b - - 12 14"};
+    nnue.initialize(start);
+    std::cout << nnue.evaluate(start.sideToMove(), evaluate_bucket(start)) << std::endl;
     // return 0;
-    engine engine{nullptr, &nnue, 256};
-    search_param param;
-    param.movetime = 5000;
-    engine.search(start, param, true, true);
-
-    std::cout << "done\n";
+    // engine engine{nullptr, &nnue, 256};
+    // search_param param;
+    // param.movetime = 5000;
+    // engine.search(start, param, true, true);
+    //
+    // std::cout << "done\n";
     // nnue.initialize(start);
     // std::cout << nnue.evaluate(start.sideToMove()) << std::endl;
     // std::cout << nnue.evaluate(1) << std::endl;

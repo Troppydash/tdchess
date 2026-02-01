@@ -7,6 +7,7 @@ then
 fi
 
 echo "moving version.h"
+echo $version > version.txt
 xxd -i version.txt > src/version.h
 
 echo "building version $version"

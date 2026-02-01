@@ -341,11 +341,11 @@ struct engine
     [[nodiscard]] int evaluate_bucket() const
     {
         constexpr int n = 8;
-        constexpr int divisor = (32) / n;
+        constexpr int divisor = 32 / n;
         return (m_position.occ().count() - 2) / divisor;
     }
 
-    [[nodiscard]] int32_t evaluate(int16_t ply)
+    [[nodiscard]] int32_t evaluate() const
     {
         if (m_nnue != nullptr)
         {
@@ -380,9 +380,9 @@ struct engine
             return 0;
 
         if (base_ply + ply >= param::MAX_DEPTH)
-            return evaluate(base_ply + ply);
+            return evaluate();
 
-        int32_t best_score = evaluate(base_ply + ply);
+        int32_t best_score = evaluate();
         bool in_check = ply <= 2 && m_position.inCheck();
 
         if (!in_check && best_score >= beta)
@@ -442,7 +442,7 @@ struct engine
             return 0;
 
         if (ply >= param::MAX_DEPTH)
-            return evaluate(ply);
+            return evaluate();
 
         const bool is_root = ply == 0;
         const bool is_pv_node = (beta - alpha) != 1;
@@ -492,7 +492,7 @@ struct engine
         // [static null move pruning]
         if (!in_check && !is_pv_node && std::abs(beta) < param::CHECKMATE)
         {
-            int32_t static_score = evaluate(ply);
+            int32_t static_score = evaluate();
             int32_t margin = m_param.static_null_base_margin * depth;
             if (static_score - margin >= beta)
                 return static_score - margin;
@@ -613,7 +613,7 @@ struct engine
 
                     // malus apply
                     for (int j = 0; j < quiet_count; ++j)
-                        m_move_ordering.update_history(m_position, move, -bonus);
+                        m_move_ordering.update_history(m_position, quiet_moves[j], -bonus);
                 }
 
                 break;
@@ -747,11 +747,6 @@ struct engine
             int32_t score = negamax(alpha, beta, depth, 0, null, true);
             if (m_timer.is_stopped())
             {
-                if (!m_line.get_moves().empty())
-                {
-                    result.pv_line = m_line.get_moves();
-                }
-
                 break;
             }
 

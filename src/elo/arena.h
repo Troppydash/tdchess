@@ -6,6 +6,7 @@
 #include "../hpplib/reader.h"
 #include "agent.h"
 #include "book.h"
+#include "elo.h"
 #include "pentanomial.h"
 
 struct arena_settings
@@ -15,6 +16,8 @@ struct arena_settings
 
     int basetime;
     int increment;
+
+    bool verbose = false;
 };
 
 class arena_clock
@@ -86,9 +89,10 @@ template <typename Result = gsprt_results> class arena
     };
 
   public:
-    explicit arena(arena_settings settings, openbook &book, const std::vector<agent_settings> &agents,
-                   const std::vector<int> &logical)
-        : m_settings(std::move(settings)), m_book(book), m_agents(agents), m_logical(logical), m_results(agents)
+    explicit arena(arena_settings settings, openbook &book,
+                   const std::vector<agent_settings> &agents, const std::vector<int> &logical)
+        : m_settings(std::move(settings)), m_book(book), m_agents(agents), m_logical(logical),
+          m_results(agents)
     {
     }
 
@@ -167,7 +171,8 @@ template <typename Result = gsprt_results> class arena
      * @return
      */
     int match(const agent_settings &agent0_settings, const agent_settings &agent1_settings,
-              const std::vector<chess::Move> &initial_moves, const chess::Board &initial_position, int core)
+              const std::vector<chess::Move> &initial_moves, const chess::Board &initial_position,
+              int core)
     {
         std::vector<chess::Move> moves = initial_moves;
         chess::Board position = initial_position;
@@ -191,16 +196,22 @@ template <typename Result = gsprt_results> class arena
                 return (side2move == agent0_side2move) ? AGENT1 : AGENT0;
             }
 
+            if (m_settings.verbose)
+            {
+                std::cout << position << std::endl;
+                std::cout << position.getFen() << std::endl;
+            }
+
             search_param param;
             if (agent0_side2move == chess::Color::WHITE)
             {
-                param = search_param{agent0_clock.get_time(), agent1_clock.get_time(), agent0_clock.get_incr(),
-                                     agent1_clock.get_incr()};
+                param = search_param{agent0_clock.get_time(), agent1_clock.get_time(),
+                                     agent0_clock.get_incr(), agent1_clock.get_incr()};
             }
             else
             {
-                param = search_param{agent1_clock.get_time(), agent0_clock.get_time(), agent1_clock.get_incr(),
-                                     agent0_clock.get_incr()};
+                param = search_param{agent1_clock.get_time(), agent0_clock.get_time(),
+                                     agent1_clock.get_incr(), agent0_clock.get_incr()};
             }
 
             chess::Move move = chess::Move::NO_MOVE;

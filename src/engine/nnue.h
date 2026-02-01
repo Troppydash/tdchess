@@ -8,10 +8,11 @@
 #define TDCHESS_NNUE_SIMD
 #endif
 
-constexpr size_t HIDDEN_SIZE = 1536;
+constexpr size_t HIDDEN_SIZE = 1024;
 constexpr int16_t QA = 255;
 constexpr int16_t QB = 64;
 constexpr int32_t SCALE = 400;
+constexpr size_t BUCKET_SIZE = 8;
 
 struct alignas(64) accumulator
 {
@@ -23,12 +24,12 @@ struct alignas(64) network
     // QA quant, 64*3 -> hidden_size
     accumulator feature_weights[768];
     // QA quant, hidden_size -> hidden_size
-    int16_t feature_bias[HIDDEN_SIZE];
+    accumulator feature_bias;
 
     // QB quant, 2*hidden_size -> 1
-    int16_t output_weights[8][2 * HIDDEN_SIZE];
+    alignas(64) int16_t output_weights[BUCKET_SIZE][2 * HIDDEN_SIZE];
     // QA * QB quant, 1 -> 1
-    int16_t output_bias[8];
+    int16_t output_bias[BUCKET_SIZE];
 };
 
 inline int32_t screlu(int16_t x)
@@ -89,7 +90,7 @@ class nnue
 
         // clear all entries
         for (size_t i = 0; i < HIDDEN_SIZE; ++i)
-            m_sides[0][0].vals[i] = m_sides[1][0].vals[i] = m_network.feature_bias[i];
+            m_sides[0][0].vals[i] = m_sides[1][0].vals[i] = m_network.feature_bias.vals[i];
 
         chess::Bitboard occ = position.occ();
         while (!occ.empty())
