@@ -413,8 +413,8 @@ struct engine
             chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves, m_position);
         }
 
-        m_move_ordering.score_moves(m_position, moves, chess::Move::NO_MOVE,
-                                    chess::Move::NO_MOVE, base_ply);
+        m_move_ordering.score_moves(m_position, moves, chess::Move::NO_MOVE, chess::Move::NO_MOVE,
+                                    base_ply);
 
         for (int i = 0; i < moves.size(); ++i)
         {
@@ -542,14 +542,13 @@ struct engine
             unadjusted_static_eval = evaluate();
             ss->static_eval = adjusted_eval = unadjusted_static_eval;
 
-            entry.write(pos_hash, param::VALUE_NONE, unadjusted_static_eval,
-                        chess::Move::NO_MOVE, ss->tt_pv, DEPTH_UNSEARCHED, BOUND_NONE, ply);
+            entry.write(pos_hash, param::VALUE_NONE, unadjusted_static_eval, chess::Move::NO_MOVE,
+                        ss->tt_pv, DEPTH_UNSEARCHED, BOUND_NONE, ply);
         }
 
         // [tt cutoff]
-        if (!pv_node &&  // elo penalty
-            tt_data.depth > depth - (tt_data.score <= beta) &&
-            tt_data.score != param::VALUE_NONE &&
+        if (!pv_node && // elo penalty
+            tt_data.depth > depth - (tt_data.score <= beta) && tt_data.score != param::VALUE_NONE &&
             tt_data.bound & (tt_data.score >= beta ? BOUND_LOWER : BOUND_UPPER) &&
             (cutnode == (tt_data.score >= beta) || depth >= 2))
         {
@@ -557,11 +556,40 @@ struct engine
         }
 
         // check syzygy
+        int32_t best_score = -param::VALUE_INF;
+        int32_t max_score = param::VALUE_INF;
         if (m_endgame != nullptr && !root_node && m_endgame->is_stored(m_position))
         {
-            int32_t score = m_endgame->probe_wdl(m_position, ply);
-            entry.write(pos_hash, score, unadjusted_static_eval, chess::Move::NO_MOVE, ss->tt_pv, param::TB_DEPTH, BOUND_EXACT, ply);
-            return score;
+            int32_t wdl = m_endgame->probe_wdl(m_position);
+            int32_t draw_score = 1;
+            int32_t tb_value = param::SYZYGY - ply;
+            int32_t score = wdl < -draw_score  ? -tb_value
+                            : wdl > draw_score ? tb_value
+                                               : param::VALUE_DRAW + 2 * wdl * draw_score;
+            Bound b = wdl < -draw_score  ? BOUND_UPPER
+                      : wdl > draw_score ? BOUND_LOWER
+                                         : BOUND_EXACT;
+
+            if (b == BOUND_EXACT || (b == BOUND_LOWER ? score >= beta : score <= alpha))
+            {
+                entry.write(pos_hash, score, param::VALUE_NONE, chess::Move::NO_MOVE, ss->tt_pv,
+                            std::min(param::MAX_DEPTH - 1, depth + 6), b, ply);
+
+                return score;
+            }
+
+            if (pv_node)
+            {
+                if (b == BOUND_LOWER)
+                {
+                    best_score = score;
+                    alpha = std::max(alpha, best_score);
+                }
+                else
+                {
+                    max_score = score;
+                }
+            }
         }
 
         const bool has_non_pawn = (m_position.occ().count() -
@@ -617,7 +645,6 @@ struct engine
             m_move_ordering.score_moves(m_position, moves, tt_data.move, prev_move, ply);
         }
 
-        int32_t best_score = std::numeric_limits<int32_t>::min();
         chess::Move best_move = chess::Move::NO_MOVE;
 
         // track quiet moves for malus
@@ -695,10 +722,12 @@ struct engine
             if (m_timer.is_stopped())
                 return 0;
 
-            if (score > best_score)
+            // int32_t inc = (score == best_score && std::abs(score) <= param::CHECKMATE);
+            int32_t inc = 0;
+            if (score + inc > best_score)
             {
                 best_score = score;
-                if (score > alpha)
+                if (score + inc > alpha)
                 {
                     best_move = move;
                     if (score >= beta)
@@ -720,6 +749,11 @@ struct engine
                 m_move_ordering.score_moves(m_position, moves, tt_data.move, prev_move, ply);
                 m_move_ordering.sort_moves(moves, 0);
             }
+        }
+
+        if (root_node && m_line.pv_length[0] == 0)
+        {
+            m_line.update(0, moves[0]);
         }
 
         // checkmate or draw
@@ -747,9 +781,9 @@ struct engine
             }
         }
 
-        // TODO: tablebase correct
-        // if (pv_node)
-        // best_score = std::min
+        // tablebase correct
+        if (pv_node)
+            best_score = std::min(best_score, max_score);
 
         if (best_score <= alpha)
             ss->tt_pv = ss->tt_pv || (ss - 1)->tt_pv;

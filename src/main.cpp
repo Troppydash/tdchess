@@ -38,7 +38,7 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
     arena_settings settings;
     if (is_short)
         settings = arena_settings{latest + "_against_" + baseline, 11, 10 * 1000,
-                                  static_cast<int>(0.1 * 1000)};
+                                  static_cast<int>(0.1 * 1000), false};
     else
         settings = arena_settings{latest + "_against_" + baseline, 11, 60 * 1000,
                                   static_cast<int>(0.6 * 1000)};
@@ -61,7 +61,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.6-alpha", "1.0.6-beta", false);
+    improvement_test("1.0.6-alpha", "1.0.6-charlie", true);
     // improvement_test("1.0.6", "1.0.6-alpha", false);
 
     return 0;
@@ -111,9 +111,11 @@ int main()
     // ag.search(0, 0, 0, true);
 
     nnue nnue{};
-    nnue.load_network("../nets/1.0.6-alpha.bin");
-    chess::Board start{};
-    engine engine{nullptr, &nnue, 256};
+    nnue.load_network("../nets/1.0.6-charlie.bin");
+    chess::Board start{"3Q4/5p1k/7p/6R1/p7/8/1P5K/8 b - - 0 63"};
+    endgame_table table{};
+    table.load_file("../syzygy");
+    engine engine{&table, &nnue, 256};
     search_param param;
     param.movetime = 10000;
     engine.search(start, param, true, true);

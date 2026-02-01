@@ -271,6 +271,12 @@ class uci_handler
             auto result = m_engine->search(m_position, param, true, true);
 
             // display results
+            if (result.pv_line.empty())
+            {
+                std::cout << "info " << " empty line?\n";
+                std::cout << m_position << std::endl;
+                throw std::runtime_error{"empty line"};
+            }
             std::cout << "bestmove " << chess::uci::moveToUci(result.pv_line[0]);
             if (result.pv_line.size() >= 2)
             {
