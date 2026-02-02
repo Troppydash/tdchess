@@ -17,7 +17,7 @@ class table_entry
   public:
     uint64_t m_hash = 0;
     int32_t m_score = 0;
-    chess::Move m_best_move = chess::Move::NULL_MOVE;
+    chess::Move m_best_move = chess::Move::NO_MOVE;
     int32_t m_depth = 0;
     uint8_t m_flag = 0;
 
@@ -25,7 +25,7 @@ class table_entry
     {
         int32_t adj_score = 0;
         bool should_use = false;
-        chess::Move best_move = chess::Move::NULL_MOVE;
+        chess::Move best_move = chess::Move::NO_MOVE;
 
         if (m_hash == hash)
         {

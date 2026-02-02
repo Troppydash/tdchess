@@ -62,7 +62,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.7-alpha", "1.0.7-beta", true);
+    improvement_test("1.0.7-beta", "1.0.7-charlie", true);
 
     return 0;
 }

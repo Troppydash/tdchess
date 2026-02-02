@@ -113,7 +113,7 @@ struct engine_param
     int32_t static_null_base_margin = 85;
     int16_t nmp_depth_limit = 2;
     int16_t nmp_piece_count = 7;
-    int16_t nmp_depth_base = 3;
+    int16_t nmp_depth_base = 4;
     int16_t nmp_depth_multiplier = 6;
 
     // move ordering
@@ -168,13 +168,13 @@ struct move_ordering
 
         for (auto &m : m_killers)
         {
-            m[0] = m[1] = chess::Move::NULL_MOVE;
+            m[0] = m[1] = chess::Move::NO_MOVE;
         }
 
         for (auto &i : m_counter)
             for (auto &j : i)
                 for (auto &k : j)
-                    k = chess::Move::NULL_MOVE;
+                    k = chess::Move::NO_MOVE;
     }
 
     void score_moves(const chess::Board &position, chess::Movelist &movelist,
@@ -312,20 +312,44 @@ struct pv_line
 
 struct search_stack
 {
+    int32_t ply;
+    chess::Move move;
+    bool in_check;
+    int32_t static_eval;
+    int32_t tt_pv;
+    bool tt_hit;
+    bool is_null;
+};
+
+enum search_node_type
+{
+    NonPV,
+    PV,
+    Root
 };
 
 struct engine
 {
+    // current position
     chess::Board m_position;
+    // global timer
     timer m_timer;
+    // debug stats
     engine_stats m_stats;
+    // constants
     const engine_param m_param;
-
+    // tt
     table m_table;
+    // move ordering
     move_ordering m_move_ordering;
+    // pv-line
     pv_line m_line;
-
+    // search stack
+    constexpr static int SEARCH_STACK_PREFIX = 2;
+    std::array<search_stack, param::MAX_DEPTH + SEARCH_STACK_PREFIX> m_stack;
+    // endgame table ref
     endgame_table *m_endgame = nullptr;
+    // nnue ref
     nnue *m_nnue = nullptr;
 
     // must be set via methods
@@ -403,8 +427,8 @@ struct engine
             chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves, m_position);
         }
 
-        m_move_ordering.score_moves(m_position, moves, chess::Move::NULL_MOVE,
-                                    chess::Move::NULL_MOVE, base_ply);
+        m_move_ordering.score_moves(m_position, moves, chess::Move::NO_MOVE, chess::Move::NO_MOVE,
+                                    base_ply);
 
         for (int i = 0; i < moves.size(); ++i)
         {
@@ -433,9 +457,12 @@ struct engine
         return best_score;
     }
 
-    int32_t negamax(int32_t alpha, int32_t beta, int32_t depth, int32_t ply,
-                    const chess::Move &prev_move, bool do_null)
+    template <search_node_type node_type>
+    int32_t negamax(int32_t alpha, int32_t beta, int32_t depth, search_stack *ss, bool cut_node)
     {
+        // constants
+        int32_t ply = ss->ply;
+        chess::Move &prev_move = (ss - 1)->move;
         m_line.ply_init(ply);
 
         m_stats.nodes_searched += 1;
@@ -448,12 +475,13 @@ struct engine
         if (ply >= param::MAX_DEPTH)
             return evaluate();
 
-        const bool is_root = ply == 0;
-        const bool is_pv_node = (beta - alpha) != 1;
-        const bool in_check = m_position.inCheck();
+        const bool is_root = node_type == Root;
+        const bool is_pv_node = (node_type == PV || node_type == Root);
+        const bool is_all_node = !(is_pv_node || cut_node);
+        ss->in_check = m_position.inCheck();
 
         // [check extension]
-        if (in_check && ply < depth * 2)
+        if (ss->in_check && ply < depth * 2)
             depth += 1;
 
         // check draw
@@ -473,16 +501,19 @@ struct engine
         // [tt lookup]
         auto &entry = m_table.probe(m_position.hash());
         auto tt_result = entry.get(m_position.hash(), ply, depth, alpha, beta);
+        ss->tt_hit = tt_result.hit;
         if (tt_result.hit && !is_root)
         {
             return tt_result.score;
         }
 
+        ss->static_eval = evaluate();
+
         // check syzygy
         if (m_endgame != nullptr && !is_root && m_endgame->is_stored(m_position))
         {
             int32_t score = m_endgame->probe_wdl(m_position, ply);
-            entry.set(m_position.hash(), score, chess::Move::NULL_MOVE, ply, param::TB_DEPTH,
+            entry.set(m_position.hash(), score, chess::Move::NO_MOVE, ply, param::TB_DEPTH,
                       param::EXACT_FLAG);
             return score;
         }
@@ -494,29 +525,34 @@ struct engine
         }
 
         // [static null move pruning]
-        if (!in_check && !is_pv_node && std::abs(beta) < param::CHECKMATE)
+        if (!ss->in_check && !is_pv_node && std::abs(beta) < param::CHECKMATE)
         {
-            int32_t static_score = evaluate();
+            int32_t static_score = ss->static_eval;
             int32_t margin = m_param.static_null_base_margin * depth;
             if (static_score - margin >= beta)
                 return static_score - margin;
         }
 
         // [null move pruning]
-        if (do_null && !in_check && !is_pv_node && depth >= m_param.nmp_depth_limit &&
-            m_position.occ().count() >= m_param.nmp_piece_count)
+        bool only_pawns =
+            m_position.occ().count() == (2 + m_position.pieces(chess::PieceType::PAWN).count());
+        if (cut_node && !ss->in_check && !ss->is_null && !only_pawns && beta < param::CHECKMATE)
         {
-            m_position.makeNullMove();
             int32_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
-            int32_t score = -negamax(-beta, -beta + 1, depth - 1 - reduction, ply + 1,
-                                     chess::Move::NULL_MOVE, false);
+
+            (ss + 1)->is_null = true;
+            m_position.makeNullMove();
+            int32_t null_score = -negamax<NonPV>(-beta, -beta + 1, depth - reduction, ss + 1, true);
             m_position.unmakeNullMove();
+            (ss + 1)->is_null = false;
 
             if (m_timer.is_stopped())
                 return 0;
 
-            if (score >= beta && std::abs(score) < param::CHECKMATE)
+            if (null_score >= beta && null_score < param::CHECKMATE)
+            {
                 return beta;
+            }
         }
 
         uint8_t tt_flag = param::ALPHA_FLAG;
@@ -525,7 +561,7 @@ struct engine
 
         // [tt-move generation]
         chess::Movelist moves{};
-        bool lazy_move_gen = tt_result.move != chess::Move::NULL_MOVE;
+        bool lazy_move_gen = tt_result.move != chess::Move::NO_MOVE;
         if (lazy_move_gen)
         {
             tt_result.move.setScore(0);
@@ -540,7 +576,7 @@ struct engine
         }
 
         int32_t best_score = std::numeric_limits<int32_t>::min();
-        chess::Move best_move = chess::Move::NULL_MOVE;
+        chess::Move best_move = chess::Move::NO_MOVE;
 
         // track quiet moves for malus
         chess::Move quiet_moves[64]{};
@@ -551,45 +587,76 @@ struct engine
             m_move_ordering.sort_moves(moves, i);
             const chess::Move &move = moves[i];
 
+            ss->move = move;
             make_move(move);
 
-            // [late move pruning]
-            // if (depth < static_cast<int16_t>(m_param.lmp_margins.size()) && !is_pv_node &&
-            //     explored_moves > m_param.lmp_margins[depth])
-            // {
-            //     bool tactical = m_position.inCheck() || move.typeOf() == chess::Move::PROMOTION;
-            //     if (!tactical)
-            //     {
-            //         unmake_move(move);
-            //         continue;
-            //     }
-            // }
-
             int32_t score;
-            if (explored_moves == 0)
+            if (is_pv_node)
             {
-                score = -negamax(-beta, -alpha, depth - 1, ply + 1, move, true);
+                // PV-NODE, goal is to full search to get exact score
+                if (explored_moves == 0)
+                {
+                    score = -negamax<PV>(-beta, -alpha, depth - 1, ss + 1, false);
+                }
+                else
+                {
+                    // [pv search]
+                    score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1, true);
+                    if (alpha < score && score < beta)
+                    {
+                        score = -negamax<PV>(-beta, -alpha, depth - 1, ss + 1, false);
+                    }
+                }
+            }
+            else if (cut_node)
+            {
+                // CUT-NODE, goal is to find one move that fails high
+                if (explored_moves == 0)
+                {
+                    // FIRST SEARCH WITH ALL_NODE
+                    score = -negamax<NonPV>(-beta, -alpha, depth - 1, ss + 1, false);
+                }
+                else
+                {
+                    // LATER SEARCH WITH CUT_NODE
+
+                    // [late move reduction]
+                    int32_t reduction = 0;
+                    if (explored_moves >= 4 && depth >= 3)
+                        reduction = m_param.lmr[depth][explored_moves];
+
+                    // [pv search]
+                    score =
+                        -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1 - reduction, ss + 1, true);
+
+                    // score < beta &&
+                    if (score > alpha &&  reduction > 0)
+                        score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1, true);
+                }
             }
             else
             {
-                // [late move reduction]
-                int32_t reduction = 0;
-                if (!is_pv_node && explored_moves >= 4 && depth >= 3)
-                    reduction = m_param.lmr[depth][explored_moves];
-
-                // [pv search]
-                score = -negamax(-(alpha + 1), -alpha, depth - 1 - reduction, ply + 1, move, true);
-                if (alpha < score && reduction > 0)
+                // ALL-NODE, goal is to prove that all moves fail-low
+                if (explored_moves == 0)
                 {
-                    score = -negamax(-(alpha + 1), -alpha, depth - 1, ply + 1, move, true);
-                    if (alpha < score)
-                    {
-                        score = -negamax(-beta, -alpha, depth - 1, ply + 1, move, true);
-                    }
+                    // CUT_NODE
+                    score = -negamax<NonPV>(-beta, -alpha, depth - 1, ss + 1, true);
                 }
-                else if (alpha < score && score < beta)
+                else
                 {
-                    score = -negamax(-beta, -alpha, depth - 1, ply + 1, move, true);
+                    // CUT_NODE
+
+                    // [late move reduction]
+                    int32_t reduction = 0;
+                    if (explored_moves >= 4 && depth >= 3)
+                        reduction = m_param.lmr[depth][explored_moves];
+
+                    // [pv search]
+                    score =
+                        -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1 - reduction, ss + 1, true);
+
+                    if (score > alpha && reduction > 0)
+                        score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1, true);
                 }
             }
 
@@ -745,10 +812,32 @@ struct engine
             return result;
         }
 
+        // make search stack
+        for (int i = SEARCH_STACK_PREFIX; i >= 0; --i)
+        {
+            m_stack[i] = {.ply = 0,
+                          .move = chess::Move::NO_MOVE,
+                          .in_check = false,
+                          .static_eval = 0,
+                          .tt_pv = false,
+                          .tt_hit = false,
+                          .is_null = false};
+        }
+
+        for (int i = 0; i < param::MAX_DEPTH; ++i)
+        {
+            m_stack[i + SEARCH_STACK_PREFIX] = {.ply = i,
+                                                .move = chess::Move::NO_MOVE,
+                                                .in_check = false,
+                                                .static_eval = 0,
+                                                .tt_pv = false,
+                                                .tt_hit = false,
+                                                .is_null = false};
+        }
+
         while (depth <= control.depth)
         {
-            chess::Move null = chess::Move::NULL_MOVE;
-            int32_t score = negamax(alpha, beta, depth, 0, null, true);
+            int32_t score = negamax<Root>(alpha, beta, depth, &m_stack[SEARCH_STACK_PREFIX], false);
             if (m_timer.is_stopped())
             {
                 break;
