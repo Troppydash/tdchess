@@ -1,12 +1,14 @@
 #pragma once
 
-#include "../hpplib/chess.h"
 #include "../../lib/Fathom/src/tbprobe.h"
+#include "../hpplib/chess.h"
 #include "param.h"
 
 struct endgame_table
 {
-    explicit endgame_table() {}
+    explicit endgame_table()
+    {
+    }
 
     bool load_file(const std::string &path)
     {
@@ -19,7 +21,7 @@ struct endgame_table
         return success;
     }
 
-    bool is_stored(const chess::Board &position)
+    bool is_stored(const chess::Board &position) const
     {
         int pieces = position.occ().count();
         return 3 <= pieces && pieces <= 5 &&
@@ -71,15 +73,20 @@ struct endgame_table
 
     std::pair<chess::Move, int> probe_dtz(const chess::Board &position)
     {
-        unsigned ep = position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
+        unsigned ep =
+            position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
         unsigned result = tb_probe_root(
             position.us(chess::Color::WHITE).getBits(), position.us(chess::Color::BLACK).getBits(),
-            position.pieces(chess::PieceType::KING).getBits(), position.pieces(chess::PieceType::QUEEN).getBits(),
-            position.pieces(chess::PieceType::ROOK).getBits(), position.pieces(chess::PieceType::BISHOP).getBits(),
-            position.pieces(chess::PieceType::KNIGHT).getBits(), position.pieces(chess::PieceType::PAWN).getBits(),
+            position.pieces(chess::PieceType::KING).getBits(),
+            position.pieces(chess::PieceType::QUEEN).getBits(),
+            position.pieces(chess::PieceType::ROOK).getBits(),
+            position.pieces(chess::PieceType::BISHOP).getBits(),
+            position.pieces(chess::PieceType::KNIGHT).getBits(),
+            position.pieces(chess::PieceType::PAWN).getBits(),
             position.halfMoveClock(), 0, ep, position.sideToMove() == chess::Color::WHITE, nullptr);
 
-        if (result == TB_RESULT_FAILED || result == TB_RESULT_STALEMATE || result == TB_RESULT_CHECKMATE)
+        if (result == TB_RESULT_FAILED || result == TB_RESULT_STALEMATE ||
+            result == TB_RESULT_CHECKMATE)
         {
             std::cout << "info failed probe";
             std::cout << position << std::endl;
@@ -92,6 +99,25 @@ struct endgame_table
         int promotes = TB_GET_PROMOTES(result);
         int ep_ = TB_GET_EP(result);
 
+        chess::PieceType promote_type;
+        switch (promotes)
+        {
+        case TB_PROMOTES_QUEEN:
+            promote_type = chess::PieceType::QUEEN;
+            break;
+        case TB_PROMOTES_ROOK:
+            promote_type = chess::PieceType::ROOK;
+            break;
+        case TB_PROMOTES_BISHOP:
+            promote_type = chess::PieceType::BISHOP;
+            break;
+        case TB_PROMOTES_KNIGHT:
+            promote_type = chess::PieceType::KNIGHT;
+            break;
+        default:
+            promote_type = chess::PieceType::NONE;
+        }
+
         chess::Movelist moves;
         chess::movegen::legalmoves(moves, position);
         for (auto &m : moves)
@@ -100,7 +126,7 @@ struct endgame_table
             {
                 if (m.typeOf() == chess::Move::PROMOTION)
                 {
-                    if (m.promotionType() == promotes)
+                    if (m.promotionType() == promote_type)
                         return {m, wdl};
                 }
                 else if (m.typeOf() == chess::Move::ENPASSANT)
@@ -118,15 +144,19 @@ struct endgame_table
         throw std::runtime_error{"impossible"};
     }
 
-    int32_t probe_wdl(const chess::Board &position, int16_t ply)
+    int32_t probe_wdl(const chess::Board &position, int32_t ply)
     {
-        unsigned ep = position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
-        unsigned result = tb_probe_wdl(
-            position.us(chess::Color::WHITE).getBits(), position.us(chess::Color::BLACK).getBits(),
-            position.pieces(chess::PieceType::KING).getBits(), position.pieces(chess::PieceType::QUEEN).getBits(),
-            position.pieces(chess::PieceType::ROOK).getBits(), position.pieces(chess::PieceType::BISHOP).getBits(),
-            position.pieces(chess::PieceType::KNIGHT).getBits(), position.pieces(chess::PieceType::PAWN).getBits(), 0,
-            0, ep, position.sideToMove() == chess::Color::WHITE);
+        unsigned ep =
+            position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
+        unsigned result = tb_probe_wdl(position.us(chess::Color::WHITE).getBits(),
+                                       position.us(chess::Color::BLACK).getBits(),
+                                       position.pieces(chess::PieceType::KING).getBits(),
+                                       position.pieces(chess::PieceType::QUEEN).getBits(),
+                                       position.pieces(chess::PieceType::ROOK).getBits(),
+                                       position.pieces(chess::PieceType::BISHOP).getBits(),
+                                       position.pieces(chess::PieceType::KNIGHT).getBits(),
+                                       position.pieces(chess::PieceType::PAWN).getBits(), 0, 0, ep,
+                                       position.sideToMove() == chess::Color::WHITE);
 
         switch (result)
         {

@@ -17,7 +17,7 @@ struct search_param
 
     struct result
     {
-        int16_t depth;
+        int32_t depth;
         int time;
     };
 
@@ -36,7 +36,7 @@ struct search_param
         }
 
         int target_time = std::floor(time / 20.0 + inc / 2.0);
-        return {static_cast<int16_t>(depth),
+        return {static_cast<int32_t>(depth),
                 static_cast<int>(std::min(std::min(target_time, movetime), time))};
     }
 };

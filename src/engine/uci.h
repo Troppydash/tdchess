@@ -195,7 +195,7 @@ class uci_handler
             else if (lead == "perft")
             {
                 // depth x
-                int16_t max_depth = 4;
+                int32_t max_depth = 4;
 
                 for (size_t i = 1; i < parts.size(); i++)
                 {
@@ -280,7 +280,7 @@ class uci_handler
         });
     }
 
-    void start_perft(const int16_t depth)
+    void start_perft(const int32_t depth)
     {
         start_task([&, depth]() {
             delete m_engine;

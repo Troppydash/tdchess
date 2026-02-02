@@ -17,7 +17,7 @@
 struct search_result
 {
     std::vector<chess::Move> pv_line;
-    int16_t depth;
+    int32_t depth;
     int32_t score;
 
     [[nodiscard]] std::string get_score_uci() const
@@ -63,7 +63,7 @@ struct engine_stats
 {
     int32_t nodes_searched;
     int16_t tt_occupancy;
-    int16_t sel_depth;
+    int32_t sel_depth;
     std::chrono::milliseconds total_time;
 
     void display_delta(const engine_stats &old, const search_result &result) const
@@ -105,7 +105,7 @@ struct engine_stats
 struct engine_param
 {
     // pruning
-    int16_t lmr[param::MAX_DEPTH][100];
+    int32_t lmr[param::MAX_DEPTH][100];
     std::array<int, 6> lmp_margins;
     int lmr_depth_ration = 4;
     int lmr_move_ratio = 12;
@@ -126,7 +126,7 @@ struct engine_param
     int16_t counter_bonus = 5;
 
     // evaluation
-    int16_t tempo = 15;
+    int32_t tempo = 15;
 
     explicit engine_param()
     {
@@ -178,7 +178,7 @@ struct move_ordering
     }
 
     void score_moves(const chess::Board &position, chess::Movelist &movelist,
-                     const chess::Move &pv_move, const chess::Move &prev_move, int16_t ply)
+                     const chess::Move &pv_move, const chess::Move &prev_move, int32_t ply)
     {
         for (auto &move : movelist)
         {
@@ -254,7 +254,7 @@ struct move_ordering
         hist += clamped_bonus - hist * std::abs(clamped_bonus) / MAX_HISTORY;
     }
 
-    void store_killer(const chess::Board &position, const chess::Move &killer, int ply)
+    void store_killer(const chess::Board &position, const chess::Move &killer, int32_t ply)
     {
         if (is_quiet(position, killer))
         {
@@ -285,12 +285,12 @@ struct pv_line
 
     explicit pv_line() = default;
 
-    void ply_init(int16_t ply)
+    void ply_init(int32_t ply)
     {
         pv_length[ply] = ply;
     }
 
-    void update(int16_t ply, const chess::Move &move)
+    void update(int32_t ply, const chess::Move &move)
     {
         pv_table[ply][ply] = move;
         for (int i = ply + 1; i < pv_length[ply + 1]; i++)
@@ -308,6 +308,10 @@ struct pv_line
         }
         return result;
     }
+};
+
+struct search_stack
+{
 };
 
 struct engine
@@ -369,9 +373,9 @@ struct engine
             m_nnue->unmake_move();
     }
 
-    int32_t qsearch(int32_t alpha, int32_t beta, int16_t base_ply, int16_t ply)
+    int32_t qsearch(int32_t alpha, int32_t beta, int32_t base_ply, int32_t ply)
     {
-        m_stats.sel_depth = std::max(m_stats.sel_depth, static_cast<int16_t>(base_ply + ply));
+        m_stats.sel_depth = std::max(m_stats.sel_depth, (base_ply + ply));
         m_stats.nodes_searched += 1;
         if (m_stats.nodes_searched % 2048 == 0)
             m_timer.check();
@@ -429,7 +433,7 @@ struct engine
         return best_score;
     }
 
-    int32_t negamax(int32_t alpha, int32_t beta, int16_t depth, int16_t ply,
+    int32_t negamax(int32_t alpha, int32_t beta, int32_t depth, int32_t ply,
                     const chess::Move &prev_move, bool do_null)
     {
         m_line.ply_init(ply);
@@ -503,7 +507,7 @@ struct engine
             m_position.occ().count() >= m_param.nmp_piece_count)
         {
             m_position.makeNullMove();
-            int16_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
+            int32_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
             int32_t score = -negamax(-beta, -beta + 1, depth - 1 - reduction, ply + 1,
                                      chess::Move::NULL_MOVE, false);
             m_position.unmakeNullMove();
@@ -569,7 +573,7 @@ struct engine
             else
             {
                 // [late move reduction]
-                int16_t reduction = 0;
+                int32_t reduction = 0;
                 if (!is_pv_node && explored_moves >= 4 && depth >= 3)
                     reduction = m_param.lmr[depth][explored_moves];
 
@@ -716,7 +720,7 @@ struct engine
         }
 
         int32_t alpha = -param::INF, beta = param::INF;
-        int16_t depth = 1;
+        int32_t depth = 1;
 
         engine_stats last_stats = m_stats;
 
