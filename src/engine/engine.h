@@ -404,9 +404,11 @@ struct engine
             m_nnue->unmake_move();
     }
 
-    int32_t qsearch(int32_t alpha, int32_t beta, int32_t base_ply, int32_t ply)
+    template <search_node_type node_type>
+    int32_t qsearch(int32_t alpha, int32_t beta, search_stack *ss)
     {
-        m_stats.sel_depth = std::max(m_stats.sel_depth, (base_ply + ply));
+        const int32_t ply = ss->ply;
+        m_stats.sel_depth = std::max(m_stats.sel_depth, ply + 1);
         m_stats.nodes_searched += 1;
         if (m_stats.nodes_searched % 2048 == 0)
             m_timer.check();
@@ -414,43 +416,85 @@ struct engine
         if (m_timer.is_stopped())
             return 0;
 
-        if (base_ply + ply >= param::MAX_DEPTH)
+        if (ply >= param::MAX_DEPTH)
             return evaluate();
 
-        int32_t best_score = evaluate();
-        bool in_check = ply <= 2 && m_position.inCheck();
+        // draw check
+        if (m_position.isInsufficientMaterial() || m_position.isRepetition(1))
+            return 0;
 
-        if (!in_check && best_score >= beta)
-            return best_score;
+        // 50 move limit
+        if (m_position.isHalfMoveDraw())
+        {
+            auto [_, type] = m_position.getHalfMoveDrawType();
+            if (type == chess::GameResult::DRAW)
+                return 0;
 
-        if (best_score > alpha)
-            alpha = best_score;
+            return param::MATED_IN(ply);
+        }
 
+        // [tt lookup]
+        auto &entry = m_table.probe(m_position.hash());
+        auto tt_result = entry.get(m_position.hash(), ply, param::QDEPTH, alpha, beta);
+        ss->tt_hit = tt_result.hit;
+        if (tt_result.hit)
+        {
+            return tt_result.score;
+        }
+
+        int32_t best_score = -param::VALUE_INF;
+        ss->in_check = m_position.inCheck();
+        if (ss->in_check)
+        {
+            // ignore
+        }
+        else
+        {
+            best_score = evaluate();
+            if (best_score >= beta)
+            {
+                return best_score;
+            }
+
+            if (best_score > alpha)
+                alpha = best_score;
+        }
+
+        int32_t score;
+        chess::Move best_move = chess::Move::NO_MOVE;
         chess::Movelist moves;
-        if (in_check)
+        if (ss->in_check)
+        {
             chess::movegen::legalmoves(moves, m_position);
+        }
         else
         {
             chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves, m_position);
         }
-
-        m_move_ordering.score_moves(m_position, moves, chess::Move::NO_MOVE, chess::Move::NO_MOVE,
-                                    base_ply);
-
-        for (int i = 0; i < moves.size(); ++i)
+        m_move_ordering.score_moves(m_position, moves, tt_result.move, (ss - 1)->move, ply);
+        for (int move_count = 0; move_count < moves.size(); ++move_count)
         {
-            m_move_ordering.sort_moves(moves, i);
+            m_move_ordering.sort_moves(moves, move_count);
 
-            const chess::Move &move = moves[i];
-            if (see::test(m_position, move) < 0)
-                continue;
+            const chess::Move &move = moves[move_count];
 
+            // [pruning]
+            if (!param::IS_LOSS(best_score))
+            {
+                if (see::test(m_position, move) < 0)
+                    continue;
+            }
+
+            ss->move = move;
             make_move(move);
-            int32_t score = -qsearch(-beta, -alpha, base_ply, ply + 1);
+            score = -qsearch<node_type>(-beta, -alpha, ss + 1);
             unmake_move(move);
 
             if (score > best_score)
+            {
                 best_score = score;
+                best_move = move;
+            }
 
             if (score >= beta)
                 break;
@@ -461,11 +505,24 @@ struct engine
             }
         }
 
+        // [mate check]
+        if (ss->in_check && moves.size() == 0)
+        {
+            return param::MATED_IN(ply);
+        }
+
+        if (entry.can_write(param::QDEPTH))
+        {
+            entry.set(m_position.hash(), best_score, best_move, ply, param::QDEPTH,
+                      best_score >= beta ? param::BETA_FLAG : param::ALPHA_FLAG);
+        }
+
         return best_score;
     }
 
     template <search_node_type node_type>
-    int32_t negamax(int32_t alpha, int32_t beta, int32_t depth, search_stack *ss, const bool cut_node)
+    int32_t negamax(int32_t alpha, int32_t beta, int32_t depth, search_stack *ss,
+                    const bool cut_node)
     {
         // constants
         const int32_t ply = ss->ply;
@@ -533,7 +590,7 @@ struct engine
         if (depth <= 0)
         {
             m_stats.nodes_searched -= 1;
-            return qsearch(alpha, beta, ply, 0);
+            return qsearch<is_pv_node ? PV : NonPV>(alpha, beta, ss);
         }
 
         // [tt lookup]

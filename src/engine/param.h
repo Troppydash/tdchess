@@ -18,6 +18,8 @@ constexpr uint8_t BETA_FLAG = 2;
 
 constexpr int32_t MAX_DEPTH = 255;
 constexpr int32_t TB_DEPTH = 254;
+constexpr int32_t UNSEARCHED_DEPTH = -1;
+constexpr int32_t QDEPTH = 0;
 constexpr int32_t QUIET_MOVES = 64;
 
 constexpr int32_t MATED_IN(int32_t ply)
@@ -28,6 +30,21 @@ constexpr int32_t MATED_IN(int32_t ply)
 constexpr int32_t MATE_IN(int32_t ply)
 {
     return INF - ply;
+}
+
+constexpr bool IS_WIN(int32_t value)
+{
+    return value > CHECKMATE;
+}
+
+constexpr bool IS_LOSS(int32_t value)
+{
+    return value < -CHECKMATE;
+}
+
+constexpr bool IS_DECISIVE(int32_t value)
+{
+    return IS_WIN(value) || IS_LOSS(value);
 }
 
 } // namespace param

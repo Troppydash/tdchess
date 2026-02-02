@@ -40,8 +40,8 @@ target_compile_options(tdchess_uci PRIVATE
 add_executable(tdchess_test src/main.cpp)
 target_link_libraries(tdchess_test PRIVATE fathom)
 target_compile_options(tdchess_test PRIVATE
-#        "-O3"
-#        "-march=native"
+        "-O3"
+        "-march=native"
         "-Wall"
 )
 
