@@ -462,33 +462,40 @@ struct engine
 
         int32_t score;
         chess::Move best_move = chess::Move::NO_MOVE;
-        chess::Movelist moves;
-        if (ss->in_check)
+        chess::Movelist moves{};
+        bool lazy_movegen = tt_result.move != chess::Move::NO_MOVE;
+        if (lazy_movegen)
         {
-            chess::movegen::legalmoves(moves, m_position);
+            tt_result.move.setScore(0);
+            moves.add(tt_result.move);
         }
         else
         {
-            chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves, m_position);
+            if (ss->in_check)
+                chess::movegen::legalmoves(moves, m_position);
+            else
+                chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves, m_position);
+            m_move_ordering.score_moves(m_position, moves, tt_result.move, (ss - 1)->move, ply);
         }
-        m_move_ordering.score_moves(m_position, moves, tt_result.move, (ss - 1)->move, ply);
         for (int move_count = 0; move_count < moves.size(); ++move_count)
         {
             m_move_ordering.sort_moves(moves, move_count);
-
             const chess::Move &move = moves[move_count];
 
             // [pruning]
             if (!param::IS_LOSS(best_score))
             {
                 if (see::test(m_position, move) < 0)
-                    continue;
+                    goto lazy_movegen_check;
             }
 
             ss->move = move;
             make_move(move);
             score = -qsearch<node_type>(-beta, -alpha, ss + 1);
             unmake_move(move);
+
+            if (m_timer.is_stopped())
+                return 0;
 
             if (score > best_score)
             {
@@ -503,6 +510,17 @@ struct engine
             {
                 alpha = score;
             }
+
+        lazy_movegen_check:
+            if (lazy_movegen && move_count == 0)
+            {
+                if (ss->in_check)
+                    chess::movegen::legalmoves(moves, m_position);
+                else
+                    chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves,
+                                                                                     m_position);
+                m_move_ordering.score_moves(m_position, moves, tt_result.move, (ss - 1)->move, ply);
+            }
         }
 
         // [mate check]
@@ -511,7 +529,7 @@ struct engine
             return param::MATED_IN(ply);
         }
 
-        if (entry.can_write(param::QDEPTH))
+        if (!m_timer.is_stopped() && entry.can_write(param::QDEPTH))
         {
             entry.set(m_position.hash(), best_score, best_move, ply, param::QDEPTH,
                       best_score >= beta ? param::BETA_FLAG : param::ALPHA_FLAG);

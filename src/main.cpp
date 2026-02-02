@@ -62,7 +62,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.7-delta", "1.0.7-echo", true);
+    improvement_test("1.0.7-echo", "1.0.7-foxtrot", false);
 
     return 0;
 }
