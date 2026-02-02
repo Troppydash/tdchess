@@ -385,6 +385,8 @@ struct engine
 
     int32_t qsearch(int32_t alpha, int32_t beta, int base_ply, int ply)
     {
+        // TODO: copy stockfish for this
+
         m_stats.sel_depth = std::max(m_stats.sel_depth, base_ply + ply);
         m_stats.nodes_searched += 1;
         if (m_stats.nodes_searched % 2048 == 0)
@@ -516,6 +518,8 @@ struct engine
         auto [tt_hit, tt_data] = entry.get(pos_hash, ply);
         ss->tt_hit = tt_hit;
         ss->tt_pv = pv_node || (tt_hit && tt_data.is_pv);
+        bool tt_capture =
+            tt_data.move != chess::Move::NO_MOVE && m_position.isCapture(tt_data.move);
 
         // [static evaluation]
         int32_t unadjusted_static_eval = param::VALUE_NONE;
@@ -548,7 +552,7 @@ struct engine
 
         // [tt cutoff]
         if (!pv_node && // elo penalty
-            tt_data.depth > depth - (tt_data.score <= beta) && tt_data.score != param::VALUE_NONE &&
+            tt_data.depth > depth - (tt_data.score <= beta) && tt_hit &&
             tt_data.bound & (tt_data.score >= beta ? BOUND_LOWER : BOUND_UPPER) &&
             (cutnode == (tt_data.score >= beta) || depth >= 2))
         {
@@ -669,16 +673,23 @@ struct engine
 
             // reductions
             if (cutnode)
-                reduction += 1000;
-            //
-            // if (tt_capture)
-            //     reduction += 500;
-            //
+                reduction += 1000 + 300 * (tt_data.move == chess::Move::NO_MOVE);
+
+            if (ss->tt_pv)
+            {
+                reduction -= 700;
+            }
+
+            if (tt_capture)
+            {
+                reduction += 500;
+            }
+
             if (move == tt_data.move)
                 reduction -= 700;
 
             if (all_node)
-                reduction += reduction / (depth + 1);
+                reduction += reduction / (2 * (depth + 1));
 
             // [late move reduction]
             if (depth >= 2 && move_count > 1)
@@ -692,24 +703,39 @@ struct engine
 
                 if (score > alpha)
                 {
-                    // if (d < new_depth && score > best_score + 50)
-                    // new_depth += 1;
+                    int adjusted_depth = new_depth;
+                    if (d < new_depth && score > best_score + 50)
+                        adjusted_depth += 1;
 
-                    // if (score < best_score + 10)
-                    //     new_depth -= 1;
+                    if (score < best_score + 10)
+                        adjusted_depth -= 1;
 
-                    if (new_depth > d)
-                        score = -negamax<NonPV>(-(alpha + 1), -alpha, new_depth, ss + 1, !cutnode);
+                    if (adjusted_depth > d)
+                    {
+                        score = -negamax<NonPV>(-(alpha + 1), -alpha, adjusted_depth, ss + 1, true);
+
+                        // failsafe
+                        if (score > alpha)
+                        {
+                            score = -negamax<NonPV>(-beta, -alpha, adjusted_depth, ss + 1, false);
+                        }
+                    }
                 }
             }
             // [full depth search if no lmr]
             else if (!pv_node || move_count > 1)
             {
-                // if (tt_result.move == chess::Move::NULL_MOVE)
-                //     reduction += 1000;
+                if (tt_data.move == chess::Move::NO_MOVE)
+                    reduction += 300;
 
-                // int d = new_depth - (reduction > 4000) - (reduction > 6000 && new_depth > 2);
-                score = -negamax<NonPV>(-(alpha + 1), -alpha, new_depth, ss + 1, !cutnode);
+                int d = new_depth - (reduction > 4000) - (reduction > 6000 && new_depth > 2);
+                score = -negamax<NonPV>(-(alpha + 1), -alpha, d, ss + 1, true);
+
+                // failsafe
+                if (score > alpha)
+                {
+                    score = -negamax<NonPV>(-beta, -alpha, d, ss + 1, false);
+                }
             }
 
             if (pv_node && (move_count == 1 || score > alpha))
@@ -777,7 +803,7 @@ struct engine
 
                 // malus apply
                 for (size_t j = 0; j < quiet_count; ++j)
-                    m_move_ordering.update_history(m_position, quiet_moves[j], -bonus / 2);
+                    m_move_ordering.update_history(m_position, quiet_moves[j], -bonus);
             }
         }
 

@@ -39,10 +39,20 @@ target_compile_options(tdchess_uci PRIVATE
 
 add_executable(tdchess_test src/main.cpp)
 target_link_libraries(tdchess_test PRIVATE fathom)
+target_link_options(tdchess_test PRIVATE
+        "-flto"
+)
 target_compile_options(tdchess_test PRIVATE
-#        "-O3"
-#        "-march=native"
-#        "-Wall"
+        "-O3"
+        "-march=native"
+        "-Wall"
+        "-mtune=native"
+        "-funroll-loops"
+        "-fno-trapping-math"
+        "-fipa-pta"
+        "-fomit-frame-pointer"
+        "-Wall"
+        "-Wextra"
 )
 
 add_executable(tdchess_elo src/main.cpp)

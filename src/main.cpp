@@ -43,8 +43,8 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
         settings = arena_settings{latest + "_against_" + baseline, 11, 60 * 1000,
                                   static_cast<int>(0.6 * 1000)};
 
-    arena arena{settings, book, agents, {0, 2, 4, 6, 8, 10}};
-    arena.loop(6, 50);
+    arena arena{settings, book, agents, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}};
+    arena.loop(10, 50);
 
     // arena arena{settings, book, agents, {0}};
     // arena.loop(1, 50);
@@ -61,8 +61,12 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.6-alpha", "1.0.6-charlie", true);
-    // improvement_test("1.0.6", "1.0.6-alpha", false);
+    // improvement_test("1.0.5", "1.0.6-delta", true);
+    // improvement_test("1.0.6", "1.0.6-delta", true);
+    improvement_test("1.0.6-alpha", "1.0.6-beta", true);
+    // improvement_test("1.0.6-alpha", "1.0.6-delta", true);
+    // improvement_test("1.0.6", "1.0.6-delta", true);
+    // improvement_test("1.0.5", "1.0.6-delta", false);
 
     return 0;
 }
@@ -112,7 +116,7 @@ int main()
 
     nnue nnue{};
     nnue.load_network("../nets/1.0.6-charlie.bin");
-    chess::Board start{"3Q4/5p1k/7p/6R1/p7/8/1P5K/8 b - - 0 63"};
+    chess::Board start{"r2k3r/pb2b2p/4p3/1P6/3p4/3B4/PPp3PP/R1B2RK1 w - - 2 21"};
     endgame_table table{};
     table.load_file("../syzygy");
     engine engine{&table, &nnue, 256};
