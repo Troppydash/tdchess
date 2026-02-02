@@ -443,10 +443,12 @@ struct engine
         }
 
         int32_t best_score = -param::VALUE_INF;
+        int32_t futility_base = -param::VALUE_INF;
         ss->in_check = m_position.inCheck();
         if (ss->in_check)
         {
             // ignore
+            best_score = futility_base = -param::VALUE_INF;
         }
         else
         {
@@ -458,6 +460,8 @@ struct engine
 
             if (best_score > alpha)
                 alpha = best_score;
+
+            futility_base = ss->static_eval + 300;
         }
 
         int32_t score;
@@ -482,10 +486,33 @@ struct engine
             m_move_ordering.sort_moves(moves, move_count);
             const chess::Move &move = moves[move_count];
 
-            // [pruning]
             if (!param::IS_LOSS(best_score))
             {
-                if (see::test(m_position, move) < 0)
+                // [fut prune]
+                if (m_position.givesCheck(move) == chess::CheckType::NO_CHECK &&
+                    move.to() != (ss - 1)->move.to() && !param::IS_LOSS(futility_base) &&
+                    move.typeOf() != chess::Move::PROMOTION)
+                {
+                    if (move_count > 2)
+                        continue;
+
+                    int32_t futility_value =
+                        futility_base + see::PIECE_VALUES[m_position.at(move.to())];
+                    if (futility_value <= alpha)
+                    {
+                        best_score = std::max(best_score, futility_value);
+                        goto lazy_movegen_check;
+                    }
+
+                    if (see::test(m_position, move) < alpha - futility_base)
+                    {
+                        best_score = std::max(best_score, std::min(futility_base, alpha));
+                        goto lazy_movegen_check;
+                    }
+                }
+
+                // [see pruning]
+                if (see::test(m_position, move) < -80)
                     goto lazy_movegen_check;
             }
 
@@ -528,6 +555,10 @@ struct engine
         {
             return param::MATED_IN(ply);
         }
+
+        // average out the best score
+        if (!param::IS_DECISIVE(best_score) && best_score > beta)
+            best_score = (best_score + beta) / 2;
 
         if (!m_timer.is_stopped() && entry.can_write(param::QDEPTH))
         {
