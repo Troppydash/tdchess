@@ -44,11 +44,11 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
                                   static_cast<int>(0.6 * 1000)};
 
     std::vector<int> cores;
-    for (int i = 0; i < 10; ++i)
-        cores.push_back(i);
+    for (int i = 0; i < 6; ++i)
+        cores.push_back(2*i);
 
     arena arena{settings, book, agents, cores};
-    arena.loop(cores.size(), 50);
+    arena.loop(cores.size(), 100);
 }
 
 int main()
@@ -62,7 +62,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.7-beta", "1.0.7-delta", true);
+    improvement_test("1.0.7-charlie", "1.0.7-delta", true);
 
     return 0;
 }

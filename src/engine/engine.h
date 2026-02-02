@@ -133,14 +133,16 @@ struct engine_param
         lmp_margins = {0, 8, 12, 16, 20, 24};
 
         // set lmr
-        for (int depth = 2; depth < param::MAX_DEPTH; ++depth)
+        for (int depth = 1; depth < param::MAX_DEPTH; ++depth)
             for (int move = 1; move < 100; ++move)
             {
-                lmr[depth][move] =
-                    std::round(0.99 + std::log(depth) * std::log(move) / 3.14);
+                lmr[depth][move] = std::round(0.99 + std::log(depth) * std::log(move) / 3.14);
             }
-                // lmr[depth][move] = std::max(2, depth / std::max(1, lmr_depth_ration)) +
-                                   // move / std::max(1, lmr_move_ratio);
+
+        lmr[0][0] = 0;
+        lmr[0][1] = 0;
+        lmr[1][0] = 0;
+        lmr[1][1] = 0;
 
         // set mvv_lva
         mvv_lva = {
@@ -323,6 +325,7 @@ struct search_stack
     int32_t tt_pv;
     bool tt_hit;
     bool is_null;
+    std::array<chess::Move, param::QUIET_MOVES> quiet_moves;
 };
 
 enum search_node_type
@@ -462,11 +465,11 @@ struct engine
     }
 
     template <search_node_type node_type>
-    int32_t negamax(int32_t alpha, int32_t beta, int32_t depth, search_stack *ss, bool cut_node)
+    int32_t negamax(int32_t alpha, int32_t beta, int32_t depth, search_stack *ss, const bool cut_node)
     {
         // constants
-        int32_t ply = ss->ply;
-        chess::Move &prev_move = (ss - 1)->move;
+        const int32_t ply = ss->ply;
+        const chess::Move &prev_move = (ss - 1)->move;
         m_line.ply_init(ply);
 
         m_stats.nodes_searched += 1;
@@ -479,14 +482,13 @@ struct engine
         if (ply >= param::MAX_DEPTH)
             return evaluate();
 
-        const bool is_root = node_type == Root;
-        const bool is_pv_node = (node_type == PV || node_type == Root);
+        constexpr bool is_root = node_type == Root;
+        constexpr bool is_pv_node = (node_type == PV || node_type == Root);
         const bool is_all_node = !(is_pv_node || cut_node);
-        ss->in_check = m_position.inCheck();
 
-        // [check extension]
-        if (ss->in_check && ply < depth * 2)
-            depth += 1;
+        assert(!(is_pv_node && cut_node));
+        assert(!(is_all_node && cut_node));
+        assert(alpha < beta);
 
         // check draw
         if (!is_root && (m_position.isInsufficientMaterial() || m_position.isRepetition(1)))
@@ -502,6 +504,38 @@ struct engine
             return param::MATED_IN(ply);
         }
 
+        // [mate distance pruning]
+        if (!is_root)
+        {
+            int32_t mating_value = param::MATE_IN(ply);
+            if (mating_value < beta)
+            {
+                beta = mating_value;
+                if (alpha >= beta)
+                    return mating_value;
+            }
+
+            mating_value = param::MATED_IN(ply);
+            if (mating_value > alpha)
+            {
+                alpha = mating_value;
+                if (beta <= alpha)
+                    return mating_value;
+            }
+        }
+
+        // [check extension]
+        ss->in_check = m_position.inCheck();
+        if (ss->in_check && ply < depth * 2)
+            depth += 1;
+
+        // [qsearch]
+        if (depth <= 0)
+        {
+            m_stats.nodes_searched -= 1;
+            return qsearch(alpha, beta, ply, 0);
+        }
+
         // [tt lookup]
         auto &entry = m_table.probe(m_position.hash());
         auto tt_result = entry.get(m_position.hash(), ply, depth, alpha, beta);
@@ -510,8 +544,6 @@ struct engine
         {
             return tt_result.score;
         }
-
-        ss->static_eval = evaluate();
 
         // check syzygy
         if (m_endgame != nullptr && !is_root && m_endgame->is_stored(m_position))
@@ -522,11 +554,7 @@ struct engine
             return score;
         }
 
-        if (depth <= 0)
-        {
-            m_stats.nodes_searched -= 1;
-            return qsearch(alpha, beta, ply, 0);
-        }
+        ss->static_eval = evaluate();
 
         // [static null move pruning]
         if (!ss->in_check && !is_pv_node && std::abs(beta) < param::CHECKMATE)
@@ -538,9 +566,9 @@ struct engine
         }
 
         // [null move pruning]
-        bool only_pawns =
-            m_position.occ().count() == (2 + m_position.pieces(chess::PieceType::PAWN).count());
-        if (cut_node && !ss->in_check && !ss->is_null && !only_pawns && beta < param::CHECKMATE)
+        const bool has_non_pawns = m_position.hasNonPawnMaterial(chess::Color::WHITE) &&
+                                   m_position.hasNonPawnMaterial(chess::Color::BLACK);
+        if (cut_node && !ss->in_check && !ss->is_null && has_non_pawns && beta < param::CHECKMATE)
         {
             int32_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
 
@@ -579,11 +607,10 @@ struct engine
             legal_moves = moves.size();
         }
 
-        int32_t best_score = std::numeric_limits<int32_t>::min();
+        int32_t best_score = -param::VALUE_INF;
         chess::Move best_move = chess::Move::NO_MOVE;
 
         // track quiet moves for malus
-        chess::Move quiet_moves[64]{};
         int quiet_count = 0;
 
         for (int i = 0; i < moves.size(); ++i)
@@ -593,6 +620,24 @@ struct engine
 
             ss->move = move;
             explored_moves += 1;
+
+            // [late move reduction]
+            int32_t reduction = 0;
+            if (depth >= 2)
+                reduction += m_param.lmr[depth][explored_moves] * 1024;
+
+            if (cut_node)
+                reduction += 1300;
+
+            bool tactical = m_position.isCapture(move);
+            if (tactical)
+                reduction -= 300;
+
+            if (move == tt_result.move)
+                reduction -= 700;
+
+            int32_t depth_reduction = std::min(depth - 1 - reduction / 1024, depth + 1);
+
             make_move(move);
 
             int32_t score;
@@ -625,16 +670,10 @@ struct engine
                 {
                     // LATER SEARCH WITH CUT_NODE
 
-                    // [late move reduction]
-                    int32_t reduction = 0;
-                    if (depth >= 3)
-                        reduction = m_param.lmr[depth][explored_moves];
-
                     // [pv search]
-                    score =
-                        -negamax<NonPV>(-(alpha + 1), -alpha, depth - reduction - 1, ss + 1, true);
+                    score = -negamax<NonPV>(-(alpha + 1), -alpha, depth_reduction, ss + 1, true);
 
-                    if (score > alpha && reduction > 0)
+                    if (score > alpha && depth_reduction < depth - 1)
                         score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1, true);
                 }
             }
@@ -650,16 +689,10 @@ struct engine
                 {
                     // CUT_NODE
 
-                    // [late move reduction]
-                    int32_t reduction = 0;
-                    if (depth >= 3)
-                        reduction = m_param.lmr[depth][explored_moves];
-
                     // [pv search]
-                    score =
-                        -negamax<NonPV>(-(alpha + 1), -alpha, depth - reduction - 1, ss + 1, true);
+                    score = -negamax<NonPV>(-(alpha + 1), -alpha, depth_reduction, ss + 1, true);
 
-                    if (score > alpha && reduction > 0)
+                    if (score > alpha && depth_reduction < depth - 1)
                         score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1, true);
                 }
             }
@@ -688,15 +721,15 @@ struct engine
 
                     // malus apply
                     for (int j = 0; j < quiet_count; ++j)
-                        m_move_ordering.update_history(m_position, quiet_moves[j], -bonus);
+                        m_move_ordering.update_history(m_position, ss->quiet_moves[j], -bonus);
                 }
 
                 break;
             }
 
             // malus save
-            if (m_move_ordering.is_quiet(m_position, move) && quiet_count < 64)
-                quiet_moves[quiet_count++] = move;
+            if (m_move_ordering.is_quiet(m_position, move) && quiet_count < param::QUIET_MOVES)
+                ss->quiet_moves[quiet_count++] = move;
 
             if (score > alpha)
             {
@@ -817,24 +850,12 @@ struct engine
         // make search stack
         for (int i = SEARCH_STACK_PREFIX; i >= 0; --i)
         {
-            m_stack[i] = {.ply = 0,
-                          .move = chess::Move::NO_MOVE,
-                          .in_check = false,
-                          .static_eval = 0,
-                          .tt_pv = false,
-                          .tt_hit = false,
-                          .is_null = false};
+            m_stack[i] = {.ply = 0};
         }
 
         for (int i = 0; i < param::MAX_DEPTH; ++i)
         {
-            m_stack[i + SEARCH_STACK_PREFIX] = {.ply = i,
-                                                .move = chess::Move::NO_MOVE,
-                                                .in_check = false,
-                                                .static_eval = 0,
-                                                .tt_pv = false,
-                                                .tt_hit = false,
-                                                .is_null = false};
+            m_stack[i + SEARCH_STACK_PREFIX] = {.ply = i};
         }
 
         while (depth <= control.depth)

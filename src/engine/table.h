@@ -18,7 +18,7 @@ class table_entry
     uint64_t m_hash = 0;
     int32_t m_score = 0;
     chess::Move m_best_move = chess::Move::NO_MOVE;
-    int32_t m_depth = 0;
+    int32_t m_depth = -1;
     uint8_t m_flag = 0;
 
     [[nodiscard]] table_entry_result get(uint64_t hash, int32_t ply, int32_t depth, int32_t alpha, int32_t beta) const
