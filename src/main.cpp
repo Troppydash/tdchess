@@ -43,8 +43,12 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
         settings = arena_settings{latest + "_against_" + baseline, 11, 60 * 1000,
                                   static_cast<int>(0.6 * 1000)};
 
-    arena arena{settings, book, agents, {0, 2, 4, 6, 8, 10}};
-    arena.loop(6, 50);
+    std::vector<int> cores;
+    for (int i = 0; i < 10; ++i)
+        cores.push_back(i);
+
+    arena arena{settings, book, agents, cores};
+    arena.loop(cores.size(), 50);
 }
 
 int main()
@@ -58,7 +62,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.4", "1.0.5", false);
+    improvement_test("1.0.5", "1.0.7-alpha", true);
 
     return 0;
 }
@@ -108,9 +112,14 @@ int main()
 
     nnue nnue{};
     nnue.load_network("../nets/1.0.5.bin");
-    chess::Board start{"8/8/Q7/2N2k1r/1P2q3/1KP5/5p2/8 b - - 12 14"};
-    nnue.initialize(start);
-    std::cout << nnue.evaluate(start.sideToMove(), evaluate_bucket(start)) << std::endl;
+    chess::Board start{"r2k3r/pb2b2p/4p3/1P6/3p4/3B4/PPp3PP/R1B2RK1 w - - 2 21"};
+    endgame_table table{};
+    table.load_file("../syzygy");
+    engine engine{&table, &nnue, 256};
+    search_param param;
+    param.movetime = 10000;
+    engine.search(start, param, true, true);
+
     // return 0;
     // engine engine{nullptr, &nnue, 256};
     // search_param param;

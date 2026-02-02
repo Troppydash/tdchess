@@ -8,7 +8,7 @@
 
 inline int random_range(const int lower, const int upper)
 {
-    static thread_local std::mt19937 generator;
+    static thread_local std::mt19937 generator{std::random_device{}()};
     std::uniform_int_distribution<int> distribution(lower, upper - 1);
     return distribution(generator);
 }

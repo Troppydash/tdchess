@@ -17,4 +17,15 @@ constexpr uint8_t BETA_FLAG = 2;
 
 constexpr int16_t MAX_DEPTH = 255;
 constexpr int16_t TB_DEPTH = 254;
+
+constexpr int32_t MATED_IN(int16_t ply)
+{
+    return -INF + static_cast<int32_t>(ply);
+}
+
+constexpr int32_t MATE_IN(int16_t ply)
+{
+    return INF - static_cast<int32_t>(ply);
+}
+
 } // namespace param

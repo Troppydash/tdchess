@@ -463,7 +463,7 @@ struct engine
             if (type == chess::GameResult::DRAW)
                 return 0;
 
-            return -param::INF + ply;
+            return param::MATED_IN(ply);
         }
 
         // [tt lookup]
@@ -645,7 +645,7 @@ struct engine
         if (legal_moves == 0)
         {
             if (m_position.inCheck())
-                return -param::INF + ply;
+                return param::MATED_IN(ply);
 
             // draw
             return 0;
