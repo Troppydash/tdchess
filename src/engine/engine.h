@@ -133,10 +133,14 @@ struct engine_param
         lmp_margins = {0, 8, 12, 16, 20, 24};
 
         // set lmr
-        for (int depth = 0; depth < param::MAX_DEPTH; ++depth)
-            for (int move = 0; move < 100; ++move)
-                lmr[depth][move] = std::max(2, depth / std::max(1, lmr_depth_ration)) +
-                                   move / std::max(1, lmr_move_ratio);
+        for (int depth = 2; depth < param::MAX_DEPTH; ++depth)
+            for (int move = 1; move < 100; ++move)
+            {
+                lmr[depth][move] =
+                    std::round(0.99 + std::log(depth) * std::log(move) / 3.14);
+            }
+                // lmr[depth][move] = std::max(2, depth / std::max(1, lmr_depth_ration)) +
+                                   // move / std::max(1, lmr_move_ratio);
 
         // set mvv_lva
         mvv_lva = {
@@ -588,13 +592,14 @@ struct engine
             const chess::Move &move = moves[i];
 
             ss->move = move;
+            explored_moves += 1;
             make_move(move);
 
             int32_t score;
             if (is_pv_node)
             {
                 // PV-NODE, goal is to full search to get exact score
-                if (explored_moves == 0)
+                if (explored_moves == 1)
                 {
                     score = -negamax<PV>(-beta, -alpha, depth - 1, ss + 1, false);
                 }
@@ -611,7 +616,7 @@ struct engine
             else if (cut_node)
             {
                 // CUT-NODE, goal is to find one move that fails high
-                if (explored_moves == 0)
+                if (explored_moves == 1)
                 {
                     // FIRST SEARCH WITH ALL_NODE
                     score = -negamax<NonPV>(-beta, -alpha, depth - 1, ss + 1, false);
@@ -622,22 +627,21 @@ struct engine
 
                     // [late move reduction]
                     int32_t reduction = 0;
-                    if (explored_moves >= 4 && depth >= 3)
+                    if (depth >= 3)
                         reduction = m_param.lmr[depth][explored_moves];
 
                     // [pv search]
                     score =
-                        -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1 - reduction, ss + 1, true);
+                        -negamax<NonPV>(-(alpha + 1), -alpha, depth - reduction - 1, ss + 1, true);
 
-                    // score < beta &&
-                    if (score > alpha &&  reduction > 0)
+                    if (score > alpha && reduction > 0)
                         score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1, true);
                 }
             }
             else
             {
                 // ALL-NODE, goal is to prove that all moves fail-low
-                if (explored_moves == 0)
+                if (explored_moves == 1)
                 {
                     // CUT_NODE
                     score = -negamax<NonPV>(-beta, -alpha, depth - 1, ss + 1, true);
@@ -648,12 +652,12 @@ struct engine
 
                     // [late move reduction]
                     int32_t reduction = 0;
-                    if (explored_moves >= 4 && depth >= 3)
+                    if (depth >= 3)
                         reduction = m_param.lmr[depth][explored_moves];
 
                     // [pv search]
                     score =
-                        -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1 - reduction, ss + 1, true);
+                        -negamax<NonPV>(-(alpha + 1), -alpha, depth - reduction - 1, ss + 1, true);
 
                     if (score > alpha && reduction > 0)
                         score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1, true);
@@ -700,8 +704,6 @@ struct engine
                 alpha = score;
                 m_line.update(ply, move);
             }
-
-            explored_moves += 1;
 
             if (lazy_move_gen && explored_moves == 1)
             {

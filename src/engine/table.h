@@ -49,12 +49,12 @@ class table_entry
                 }
                 else if (m_flag == param::ALPHA_FLAG && score <= alpha)
                 {
-                    adj_score = score;
+                    adj_score = alpha;
                     should_use = true;
                 }
                 else if (m_flag == param::BETA_FLAG && score >= beta)
                 {
-                    adj_score = score;
+                    adj_score = beta;
                     should_use = true;
                 }
             }
