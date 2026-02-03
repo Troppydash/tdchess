@@ -13,6 +13,17 @@ inline void pin_thread_to_processor(int logical_processor)
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
 }
 
+inline int32_t parse_i32(std::string_view s)
+{
+    int32_t out = 0;
+    auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), out);
+    if (ec == std::errc() && ptr == s.data() + s.size())
+    {
+        return out;
+    }
+
+    throw std::runtime_error{"bad range"};
+}
 
 class uci_handler
 {
@@ -22,6 +33,8 @@ class uci_handler
     nnue *m_nnue = nullptr;
     int m_tt_size = 256;
     int m_thread_aff = -1;
+    int m_move_overhead = 100;
+    search_param m_param{};
 
     engine *m_engine = nullptr;
     std::thread m_engine_thread;
@@ -67,7 +80,9 @@ class uci_handler
                 std::cout << "option name SyzygyPath type string default <empty>\n";
                 std::cout << "option name NNUEPath type string default <empty>\n";
                 std::cout << "option name TTSizeMB type spin default 256 min 8 max 4096\n";
-                std::cout << "option name CoreAff type spin default -1 min -1 max " << total_threads - 1 << "\n";
+                std::cout << "option name CoreAff type spin default -1 min -1 max "
+                          << total_threads - 1 << "\n";
+                std::cout << "option name MoveOverhead type spin default 100 min 0 max 2000\n";
                 std::cout << "uciok\n";
             }
             else if (lead == "setoption")
@@ -92,11 +107,15 @@ class uci_handler
                 }
                 else if (parts[2] == "TTSizeMB")
                 {
-                    m_tt_size = atoi(parts[4].c_str());
+                    m_tt_size = parse_i32(parts[4]);
                 }
                 else if (parts[2] == "CoreAff")
                 {
-                    m_thread_aff = atoi(parts[4].c_str());
+                    m_thread_aff = parse_i32(parts[4]);
+                }
+                else if (parts[2] == "MoveOverhead")
+                {
+                    m_move_overhead = parse_i32(parts[4]);
                 }
                 else
                 {
@@ -108,8 +127,8 @@ class uci_handler
                 size_t moves = 2;
                 if (parts[1] == "fen")
                 {
-                    std::string fen =
-                        std::format("{} {} {} {} {} {}", parts[2], parts[3], parts[4], parts[5], parts[6], parts[7]);
+                    std::string fen = std::format("{} {} {} {} {} {}", parts[2], parts[3], parts[4],
+                                                  parts[5], parts[6], parts[7]);
                     m_position = chess::Board::fromFen(fen);
                     moves = 8;
                 }
@@ -133,7 +152,7 @@ class uci_handler
             }
             else if (lead == "ucinewgame")
             {
-                // ignore
+                m_param.reset();
             }
             else if (lead == "isready")
             {
@@ -141,7 +160,7 @@ class uci_handler
             }
             else if (lead == "go")
             {
-                search_param param{};
+                m_param.clear_some();
 
                 for (size_t i = 1; i < parts.size(); i++)
                 {
@@ -152,37 +171,38 @@ class uci_handler
                         continue;
                     else if (parts[i] == "depth")
                     {
-                        param.depth = std::atoi(parts[i + 1].c_str());
+                        m_param.depth = parse_i32(parts[i + 1]);
                         i += 1;
                     }
                     else if (parts[i] == "movetime")
                     {
-                        param.movetime = std::atoi(parts[i + 1].c_str());
+                        m_param.movetime = parse_i32(parts[i + 1]);
                         i += 1;
                     }
                     else if (parts[i] == "wtime")
                     {
-                        param.wtime = std::atoi(parts[i + 1].c_str());
+                        m_param.wtime = parse_i32(parts[i + 1]);
                         i += 1;
                     }
                     else if (parts[i] == "btime")
                     {
-                        param.btime = std::atoi(parts[i + 1].c_str());
+                        m_param.btime = parse_i32(parts[i + 1]);
                         i += 1;
                     }
                     else if (parts[i] == "winc")
                     {
-                        param.winc = std::atoi(parts[i + 1].c_str());
+                        m_param.winc = parse_i32(parts[i + 1]);
                         i += 1;
                     }
                     else if (parts[i] == "binc")
                     {
-                        param.binc = std::atoi(parts[i + 1].c_str());
+                        m_param.binc = parse_i32(parts[i + 1]);
                         i += 1;
                     }
                 }
 
-                start_search(param);
+                m_param.move_overhead = m_move_overhead;
+                start_search();
             }
             else if (lead == "stop")
             {
@@ -204,7 +224,7 @@ class uci_handler
 
                     if (parts[i] == "depth")
                     {
-                        max_depth = std::atoi(parts[i + 1].c_str());
+                        max_depth = parse_i32(parts[i + 1]);
                         i += 1;
                     }
                 }
@@ -222,7 +242,7 @@ class uci_handler
 
                     if (parts[i] == "depth")
                     {
-                        param.depth = std::atoi(parts[i + 1].c_str());
+                        param.depth = parse_i32(parts[i + 1]);
                         i += 1;
                     }
                 }
@@ -262,13 +282,13 @@ class uci_handler
             m_engine_thread.join();
     }
 
-    void start_search(search_param param)
+    void start_search()
     {
-        start_task([&, param]() {
+        start_task([&]() {
             delete m_engine;
             m_engine = new engine{m_endgame_table, m_nnue, m_tt_size};
 
-            auto result = m_engine->search(m_position, param, true, true);
+            auto result = m_engine->search(m_position, m_param, true, true);
 
             // display results
             std::cout << "bestmove " << chess::uci::moveToUci(result.pv_line[0]);
@@ -294,7 +314,8 @@ class uci_handler
         start_task([&, param]() {
             delete m_engine;
             m_engine = new engine{m_endgame_table, m_nnue, m_tt_size};
-            m_engine->search(m_position, param, true, true);
+            search_param temp_param = param;
+            m_engine->search(m_position, temp_param, true, true);
 
             std::cout << "info finalnps " << m_engine->m_stats.get_nps() << std::endl;
         });

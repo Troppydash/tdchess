@@ -181,6 +181,9 @@ template <typename Result = gsprt_results> class arena
         agent agent0{agent0_settings};
         agent agent1{agent1_settings};
 
+        agent0.new_game();
+        agent1.new_game();
+
         arena_clock agent0_clock{m_settings.basetime, m_settings.increment};
         arena_clock agent1_clock{m_settings.basetime, m_settings.increment};
 
@@ -205,13 +208,15 @@ template <typename Result = gsprt_results> class arena
             search_param param;
             if (agent0_side2move == chess::Color::WHITE)
             {
-                param = search_param{agent0_clock.get_time(), agent1_clock.get_time(),
-                                     agent0_clock.get_incr(), agent1_clock.get_incr()};
+                param =
+                    search_param::from_game_state(agent0_clock.get_time(), agent1_clock.get_time(),
+                                                  agent0_clock.get_incr(), agent1_clock.get_incr());
             }
             else
             {
-                param = search_param{agent1_clock.get_time(), agent0_clock.get_time(),
-                                     agent1_clock.get_incr(), agent0_clock.get_incr()};
+                param =
+                    search_param::from_game_state(agent1_clock.get_time(), agent0_clock.get_time(),
+                                                  agent1_clock.get_incr(), agent0_clock.get_incr());
             }
 
             chess::Move move = chess::Move::NO_MOVE;
@@ -222,6 +227,7 @@ template <typename Result = gsprt_results> class arena
                 bool timeout = agent0_clock.stop();
                 if (timeout)
                 {
+                    std::cout << "[warning] " <<  agent0_settings.m_alias << " out of time at move " << moves.size() << std::endl;
                     return AGENT1;
                 }
             }
@@ -232,6 +238,7 @@ template <typename Result = gsprt_results> class arena
                 bool timeout = agent1_clock.stop();
                 if (timeout)
                 {
+                    std::cout << "[warning] " <<  agent1_settings.m_alias << " out of time at move " << moves.size() << std::endl;
                     return AGENT0;
                 }
             }
@@ -253,7 +260,7 @@ template <typename Result = gsprt_results> class arena
         auto [moves, position] = m_book.generate_game(m_settings.book_depth);
 
         std::cout << "[matchup] core " << input.core << " " << input.agent0.m_alias << " vs "
-             << input.agent1.m_alias << " fen " << position.getFen() << std::endl;
+                  << input.agent1.m_alias << " fen " << position.getFen() << std::endl;
 
         std::pair<double, double> scores{0, 0};
 

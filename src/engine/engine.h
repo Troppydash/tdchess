@@ -319,13 +319,13 @@ struct pv_line
 struct search_stack
 {
     int32_t ply;
-    chess::Move move;
-    bool in_check;
-    int32_t static_eval;
-    int32_t tt_pv;
-    bool tt_hit;
-    bool is_null;
-    std::array<chess::Move, param::QUIET_MOVES> quiet_moves;
+    chess::Move move = chess::Move::NO_MOVE;
+    bool in_check = false;
+    int32_t static_eval = 0;
+    bool tt_pv = false;
+    bool tt_hit = false;
+    bool is_null = false;
+    std::array<chess::Move, param::QUIET_MOVES> quiet_moves{};
 };
 
 enum search_node_type
@@ -590,7 +590,7 @@ struct engine
 
         constexpr bool is_root = node_type == Root;
         constexpr bool is_pv_node = (node_type == PV || node_type == Root);
-        const bool is_all_node = !(is_pv_node || cut_node);
+        // const bool is_all_node = !(is_pv_node || cut_node);
 
         assert(!(is_pv_node && cut_node));
         assert(!(is_all_node && cut_node));
@@ -912,10 +912,10 @@ struct engine
         std::cout.imbue(original);
     }
 
-    search_result search(const chess::Board &reference, search_param param, bool verbose = false,
+    search_result search(const chess::Board &reference, search_param &param, bool verbose = false,
                          bool uci = false)
     {
-        auto control = param.time_control(reference.sideToMove());
+        auto control = param.time_control( reference.fullMoveNumber(), reference.sideToMove());
 
         m_timer.start(control.time);
         m_position = reference;

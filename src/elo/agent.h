@@ -87,6 +87,11 @@ class agent
         return m_name;
     }
 
+    void new_game()
+    {
+        m_in << "ucinewgame" << std::endl;
+    }
+
     chess::Move search(const std::vector<chess::Move> &moves, const search_param param, const int core = -1)
     {
         // set core
