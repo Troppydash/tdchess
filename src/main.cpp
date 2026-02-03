@@ -29,10 +29,10 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
     std::string baseline_prefix = "../builds/" + baseline;
     std::string latest_prefix = "../builds/" + latest;
     const agent_settings base{
-        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 128,
+        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 64,
         false};
     const agent_settings late{
-        latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 128, false};
+        latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 128};
     std::vector<agent_settings> agents{late, base};
 
     arena_settings settings;
@@ -44,8 +44,8 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
                                   static_cast<int>(0.6 * 1000)};
 
     std::vector<int> cores;
-    for (int i = 0; i < 10; ++i)
-        cores.push_back(i);
+    for (int i = 0; i < 6; ++i)
+        cores.push_back(2*i);
 
     arena arena{settings, book, agents, cores};
     arena.loop(cores.size(), 100);
@@ -62,7 +62,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.8", "1.0.8-delta", true);
+    improvement_test("1.0.8-delta", "1.0.9", true);
 
     return 0;
 }
@@ -104,12 +104,12 @@ int evaluate_bucket(const chess::Board &position)
 int main()
 {
 
-    search_param param{};
-    param.wtime = 238699;
-    param.winc = 2000;
-    param.move_overhead = 1300;
-
-    std::cout << param.time_control(5, 0).time << std::endl;
+    // search_param param{};
+    // param.wtime = 238699;
+    // param.winc = 2000;
+    // param.move_overhead = 1300;
+    //
+    // std::cout << param.time_control(5, 0).time << std::endl;
 
 
     // agent_settings settings{"test",
@@ -153,15 +153,16 @@ int main()
     //     position.makeMove(move);
     // }
 
-    // nnue nnue{};
-    // nnue.load_network("../nets/1.0.8-alpha.bin");
-    // chess::Board start{"r2k3r/pb2b2p/4p3/1P6/3p4/3B4/PPp3PP/R1B2RK1 w - - 2 21"};
-    // endgame_table table{};
-    // table.load_file("../syzygy");
-    // engine engine{&table, &nnue, 256};
-    // search_param param;
-    // param.movetime = 10000;
-    // engine.search(start, param, true, true);
+    nnue nnue{};
+    nnue.load_network("../nets/1.0.9.bin");
+    chess::Board start{"r2k3r/pb2b2p/4p3/1P6/3p4/3B4/PPp3PP/R1B2RK1 w - - 2 21"};
+    endgame_table etable{};
+    etable.load_file("../syzygy");
+    table tt{256};
+    engine engine{&etable, &nnue, &tt};
+    search_param param;
+    param.movetime = 10000;
+    engine.search(start, param, true, true);
 
     return 0;
 }

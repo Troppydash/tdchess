@@ -170,6 +170,7 @@ class uci_handler
             }
             else if (lead == "ucinewgame")
             {
+                stop_task();
                 m_param.reset();
             }
             else if (lead == "isready")
@@ -302,11 +303,12 @@ class uci_handler
 
     void start_search()
     {
-        start_task([&]() {
+        chess::Board position = m_position;
+        start_task([&, position]() {
             delete m_engine;
             m_engine = new engine{m_endgame_table, m_nnue, m_tt};
 
-            auto result = m_engine->search(m_position, m_param, true, true);
+            auto result = m_engine->search(position, m_param, true, true);
 
             // display results
             std::cout << "bestmove " << chess::uci::moveToUci(result.pv_line[0]);
@@ -320,20 +322,22 @@ class uci_handler
 
     void start_perft(const int32_t depth)
     {
-        start_task([&, depth]() {
+        chess::Board position = m_position;
+        start_task([&, depth, position]() {
             delete m_engine;
             m_engine = new engine{m_endgame_table, m_nnue, m_tt};
-            m_engine->perft(m_position, depth);
+            m_engine->perft(position, depth);
         });
     }
 
     void start_bench(search_param param)
     {
-        start_task([&, param]() {
+        chess::Board position = m_position;
+        start_task([&, param, position]() {
             delete m_engine;
             m_engine = new engine{m_endgame_table, m_nnue, m_tt};
             search_param temp_param = param;
-            m_engine->search(m_position, temp_param, true, true);
+            m_engine->search(position, temp_param, true, true);
 
             std::cout << "info finalnps " << m_engine->m_stats.get_nps() << std::endl;
         });

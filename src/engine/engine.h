@@ -365,8 +365,7 @@ struct engine
     }
 
     explicit engine(endgame_table *endgame, nnue *nnue, table *table)
-        : m_stats(), m_table(table), m_move_ordering(m_param), m_endgame(endgame),
-          m_nnue(nnue)
+        : m_stats(), m_table(table), m_move_ordering(m_param), m_endgame(endgame), m_nnue(nnue)
     {
         // init tables
         if (m_nnue == nullptr)
@@ -437,24 +436,48 @@ struct engine
         auto &entry = m_table->probe(m_position.hash());
         auto tt_result = entry.get(m_position.hash(), ply, param::QDEPTH, alpha, beta);
         ss->tt_hit = tt_result.hit;
-        if (tt_result.hit)
+        if (tt_result.can_use)
         {
             return tt_result.score;
         }
 
+        // [static evaluation]
         int32_t best_score = -param::VALUE_INF;
         int32_t futility_base = -param::VALUE_INF;
         ss->in_check = m_position.inCheck();
+        int32_t unadjusted_static_eval = param::VALUE_NONE;
         if (ss->in_check)
         {
-            // ignore
             best_score = futility_base = -param::VALUE_INF;
         }
         else
         {
-            best_score = evaluate();
+            if (ss->tt_hit)
+            {
+                unadjusted_static_eval = tt_result.static_eval;
+                if (!param::IS_VALID(unadjusted_static_eval))
+                    unadjusted_static_eval = evaluate();
+
+                ss->static_eval = best_score = unadjusted_static_eval;
+            }
+            else
+            {
+                unadjusted_static_eval = evaluate();
+                ss->static_eval = best_score = unadjusted_static_eval;
+            }
+
             if (best_score >= beta)
             {
+                if (!param::IS_DECISIVE(best_score))
+                    best_score = (best_score + beta) / 2;
+
+                if (!ss->tt_hit && entry.can_write(param::UNSEARCHED_DEPTH))
+                {
+                    entry.set(m_position.hash(), param::BETA_FLAG, best_score, ply,
+                              param::UNSEARCHED_DEPTH, chess::Move::NO_MOVE, unadjusted_static_eval,
+                              false);
+                }
+
                 return best_score;
             }
 
@@ -467,7 +490,7 @@ struct engine
         int32_t score;
         chess::Move best_move = chess::Move::NO_MOVE;
         chess::Movelist moves{};
-        bool lazy_movegen = tt_result.move != chess::Move::NO_MOVE;
+        bool lazy_movegen = tt_result.hit && tt_result.move != chess::Move::NO_MOVE;
         if (lazy_movegen)
         {
             tt_result.move.setScore(0);
@@ -562,8 +585,9 @@ struct engine
 
         if (!m_timer.is_stopped() && entry.can_write(param::QDEPTH))
         {
-            entry.set(m_position.hash(), best_score, best_move, ply, param::QDEPTH,
-                      best_score >= beta ? param::BETA_FLAG : param::ALPHA_FLAG);
+            entry.set(m_position.hash(), best_score >= beta ? param::BETA_FLAG : param::ALPHA_FLAG,
+                      best_score, ply, param::QDEPTH, best_move, unadjusted_static_eval,
+                      ss->tt_hit && ss->tt_pv);
         }
 
         return best_score;
@@ -646,52 +670,92 @@ struct engine
         auto &entry = m_table->probe(m_position.hash());
         auto tt_result = entry.get(m_position.hash(), ply, depth, alpha, beta);
         ss->tt_hit = tt_result.hit;
-        if (tt_result.hit && !is_root)
+        ss->tt_pv = is_pv_node || (tt_result.hit && tt_result.is_pv);
+
+        // [tt early return]
+        if (tt_result.can_use && !is_root)
         {
             return tt_result.score;
+        }
+
+        // [tt evaluation fix]
+        int32_t unadjusted_static_eval = param::VALUE_NONE;
+        int32_t adjusted_static_eval = param::VALUE_NONE;
+        if (ss->in_check)
+        {
+            ss->static_eval = adjusted_static_eval = (ss - 2)->static_eval;
+        }
+        else if (ss->tt_hit)
+        {
+            unadjusted_static_eval = tt_result.static_eval;
+            if (!param::IS_VALID(unadjusted_static_eval))
+                unadjusted_static_eval = evaluate();
+
+            ss->static_eval = adjusted_static_eval = unadjusted_static_eval;
+        }
+        else
+        {
+            unadjusted_static_eval = evaluate();
+            ss->static_eval = adjusted_static_eval = unadjusted_static_eval;
+
+            if (entry.can_write(param::UNSEARCHED_DEPTH))
+            {
+                entry.set(m_position.hash(), param::NO_FLAG, param::VALUE_NONE, ply,
+                          param::UNSEARCHED_DEPTH, chess::Move::NO_MOVE, unadjusted_static_eval,
+                          ss->tt_pv);
+            }
         }
 
         // check syzygy
         if (m_endgame != nullptr && !is_root && m_endgame->is_stored(m_position))
         {
             int32_t score = m_endgame->probe_wdl(m_position, ply);
-            entry.set(m_position.hash(), score, chess::Move::NO_MOVE, ply, param::TB_DEPTH,
-                      param::EXACT_FLAG);
+            entry.set(m_position.hash(), param::EXACT_FLAG, score, ply, param::TB_DEPTH,
+                      chess::Move::NO_MOVE, unadjusted_static_eval, ss->tt_pv);
             return score;
         }
 
-        ss->static_eval = evaluate();
+        if (ss->in_check)
+        {
+            goto moves;
+        }
 
         // [static null move pruning]
         if (!ss->in_check && !is_pv_node && std::abs(beta) < param::CHECKMATE)
         {
-            int32_t static_score = ss->static_eval;
+            int32_t static_score = adjusted_static_eval;
             int32_t margin = m_param.static_null_base_margin * depth;
             if (static_score - margin >= beta)
                 return static_score - margin;
         }
 
         // [null move pruning]
-        const bool has_non_pawns = m_position.hasNonPawnMaterial(chess::Color::WHITE) &&
-                                   m_position.hasNonPawnMaterial(chess::Color::BLACK);
-        if (cut_node && !ss->in_check && !ss->is_null && has_non_pawns && beta < param::CHECKMATE)
         {
-            int32_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
-
-            (ss + 1)->is_null = true;
-            m_position.makeNullMove();
-            int32_t null_score = -negamax<NonPV>(-beta, -beta + 1, depth - reduction, ss + 1, true);
-            m_position.unmakeNullMove();
-            (ss + 1)->is_null = false;
-
-            if (m_timer.is_stopped())
-                return 0;
-
-            if (null_score >= beta && null_score < param::CHECKMATE)
+            const bool has_non_pawns = m_position.hasNonPawnMaterial(chess::Color::WHITE) &&
+                                       m_position.hasNonPawnMaterial(chess::Color::BLACK);
+            if (cut_node && !ss->in_check && !ss->is_null && has_non_pawns &&
+                beta < param::CHECKMATE)
             {
-                return beta;
+                int32_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
+
+                (ss + 1)->is_null = true;
+                m_position.makeNullMove();
+                int32_t null_score =
+                    -negamax<NonPV>(-beta, -beta + 1, depth - reduction, ss + 1, true);
+                m_position.unmakeNullMove();
+                (ss + 1)->is_null = false;
+
+                if (m_timer.is_stopped())
+                    return 0;
+
+                if (null_score >= beta && null_score < param::CHECKMATE)
+                {
+                    return beta;
+                }
             }
         }
+
+    moves:
 
         uint8_t tt_flag = param::ALPHA_FLAG;
         int legal_moves = 0;
@@ -699,7 +763,7 @@ struct engine
 
         // [tt-move generation]
         chess::Movelist moves{};
-        bool lazy_move_gen = tt_result.move != chess::Move::NO_MOVE;
+        bool lazy_move_gen = tt_result.hit && tt_result.move != chess::Move::NO_MOVE;
         if (lazy_move_gen)
         {
             tt_result.move.setScore(0);
@@ -860,12 +924,17 @@ struct engine
                 return param::MATED_IN(ply);
 
             // draw
-            return 0;
+            return param::VALUE_DRAW;
         }
 
-        if (depth >= entry.m_depth && !m_timer.is_stopped())
+        // if no good move found, last move good so add this one too
+        if (best_score <= alpha)
+            ss->tt_pv = ss->tt_pv || (ss - 1)->tt_pv;
+
+        if (entry.can_write(depth) && !m_timer.is_stopped())
         {
-            entry.set(m_position.hash(), best_score, best_move, ply, depth, tt_flag);
+            entry.set(m_position.hash(), tt_flag, best_score, ply, depth, best_move,
+                      unadjusted_static_eval, ss->tt_pv);
         }
 
         return best_score;
@@ -924,7 +993,7 @@ struct engine
         // };
 
         // timer info first
-        const auto control = param.time_control( reference.fullMoveNumber(), reference.sideToMove());
+        const auto control = param.time_control(reference.fullMoveNumber(), reference.sideToMove());
         std::cout << "info searchtime " << control.time << std::endl;
 
         m_timer.start(control.time);
