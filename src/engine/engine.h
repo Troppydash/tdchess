@@ -925,6 +925,8 @@ struct engine
 
         // timer info first
         const auto control = param.time_control( reference.fullMoveNumber(), reference.sideToMove());
+        std::cout << "info searchtime " << control.time << std::endl;
+
         m_timer.start(control.time);
         auto reference_time = timer::now();
         m_stats = engine_stats{0, 0, 0, timer::now() - reference_time};

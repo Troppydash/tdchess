@@ -1,15 +1,16 @@
 import math
 import matplotlib.pyplot as plt
 
-move_overhead = 30
-timer = 1*60*1000
-inc = 0.1 * 1000
-startmove = 11
+move_overhead = 1300
+timer = 2*60*1000
+inc = 3 * 1000
+startmove = 0
+time_adjust = -1
 
 def time_control(x, original_time_adjust):
     time, inc, moves = x
 
-    ply = moves * 2
+    ply = (moves - 1) * 2
     scaled_time = time
 
     cent_mtg = 5051
@@ -39,24 +40,27 @@ def time_control(x, original_time_adjust):
     return max(10, optimum_time), original_time_adjust
 
 
-
+# _, time_adjust = time_control([4*60*1000, 2000, 0], time_adjust)
+# # time_adjust = 0.3128 * math.log10(time_left) - 0.4354
+# print(time_control([238699, 2000, 2], -1))
+#
+# exit()
 moves = []
 timers = []
 spent = []
 total_moves = 100
 
 
-time_adjust = -1
 for move in range(startmove, total_moves):
-    moves.append(move)
-    timers.append(timer / 1000)
-
     movetime, time_adjust = time_control([timer, inc, move], time_adjust)
     spent.append(movetime)
 
 
     timer -= movetime
     timer -= move_overhead
+
+    moves.append(move)
+    timers.append(timer / 1000)
 
     if timer < 0:
         print(f"{move} th move out of time")

@@ -69,6 +69,11 @@ struct search_param
             time = btime;
         }
 
+        // ignore if time and inc are invalid
+        if (time == param::TIME_MAX || inc == param::TIME_MAX)
+            return {depth, movetime};
+
+
         // sf style, movestogo = 0
         int ply = (moves - 1) * 2;
         int64_t scaled_time = time;

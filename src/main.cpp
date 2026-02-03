@@ -103,46 +103,55 @@ int evaluate_bucket(const chess::Board &position)
 
 int main()
 {
-    agent_settings settings{"test",
-                            "../builds/1.0.8-delta/tdchess",
-                            "../builds/1.0.8-delta/nnue.bin",
-                            "../syzygy",
-                            128,
-                            true};
-    agent agent{settings};
 
-    agent.new_game();
-    int64_t movetime = 50;
+    search_param param{};
+    param.wtime = 238699;
+    param.winc = 2000;
+    param.move_overhead = 1300;
 
-    chess::Board position{};
-    std::vector<chess::Move> moves{};
+    std::cout << param.time_control(5, 0).time << std::endl;
 
-    // arena_clock clock0{60*1000, 100};
-    // arena_clock clock1{60*1000, 100};
 
-    // random position
-    while (true)
-    {
-        auto is_over = position.isGameOver();
-        if (is_over.second != chess::GameResult::NONE)
-            break;
-
-        search_param param{};
-        param.movetime = movetime;
-
-        chess::Move move;
-        agent.new_game();
-        auto start = std::chrono::high_resolution_clock::now();
-        move = agent.search(moves, param, 1);
-        auto end = std::chrono::high_resolution_clock::now();
-        std::cout << "movetime " << movetime <<  " actual time "
-                  << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
-                  << std::endl;
-
-        // always make the move
-        moves.push_back(move);
-        position.makeMove(move);
-    }
+    // agent_settings settings{"test",
+    //                         "../builds/1.0.8-delta/tdchess",
+    //                         "../builds/1.0.8-delta/nnue.bin",
+    //                         "../syzygy",
+    //                         128,
+    //                         true};
+    // agent agent{settings};
+    //
+    // agent.new_game();
+    // int64_t movetime = 50;
+    //
+    // chess::Board position{};
+    // std::vector<chess::Move> moves{};
+    //
+    // // arena_clock clock0{60*1000, 100};
+    // // arena_clock clock1{60*1000, 100};
+    //
+    // // random position
+    // while (true)
+    // {
+    //     auto is_over = position.isGameOver();
+    //     if (is_over.second != chess::GameResult::NONE)
+    //         break;
+    //
+    //     search_param param{};
+    //     param.movetime = movetime;
+    //
+    //     chess::Move move;
+    //     agent.new_game();
+    //     auto start = std::chrono::high_resolution_clock::now();
+    //     move = agent.search(moves, param, 1);
+    //     auto end = std::chrono::high_resolution_clock::now();
+    //     std::cout << "movetime " << movetime <<  " actual time "
+    //               << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
+    //               << std::endl;
+    //
+    //     // always make the move
+    //     moves.push_back(move);
+    //     position.makeMove(move);
+    // }
 
     // nnue nnue{};
     // nnue.load_network("../nets/1.0.8-alpha.bin");
