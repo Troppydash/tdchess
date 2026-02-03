@@ -136,9 +136,13 @@ class table
         for (size_t i = 0; i < m_size; ++i)
         {
             m_entries[i].m_hash = 0;
-            m_entries[i].m_static_eval = param::VALUE_NONE;
-            m_entries[i].m_score = param::VALUE_NONE;
-            m_entries[i].m_flag = param::NO_FLAG;
+
+            // we don't reset these coz they are never touched without tt hit
+            // m_entries[i].m_static_eval = param::VALUE_NONE;
+            // m_entries[i].m_score = param::VALUE_NONE;
+            // m_entries[i].m_flag = param::NO_FLAG;
+            // m_entries[i].m_is_pv = false;
+            // m_entries[i].m_best_move = chess::Move::NO_MOVE;
         }
     }
 

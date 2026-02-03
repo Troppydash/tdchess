@@ -321,7 +321,7 @@ struct search_stack
     int32_t ply;
     chess::Move move = chess::Move::NO_MOVE;
     bool in_check = false;
-    int32_t static_eval = 0;
+    int32_t static_eval = param::VALUE_DRAW;
     bool tt_pv = false;
     bool tt_hit = false;
     bool is_null = false;
@@ -493,7 +493,6 @@ struct engine
         bool lazy_movegen = tt_result.hit && tt_result.move != chess::Move::NO_MOVE;
         if (lazy_movegen)
         {
-            tt_result.move.setScore(0);
             moves.add(tt_result.move);
         }
         else
@@ -671,7 +670,8 @@ struct engine
         auto tt_result = entry.get(m_position.hash(), ply, depth, alpha, beta);
         ss->tt_hit = tt_result.hit;
         ss->tt_pv = is_pv_node || (tt_result.hit && tt_result.is_pv);
-
+        bool is_tt_capture = tt_result.hit && tt_result.move != chess::Move::NO_MOVE &&
+                             m_position.isCapture(tt_result.move);
         // [tt early return]
         // Note: we can extend this when pv_node, but it won't improve performance at all
         if (tt_result.can_use && !is_root)
@@ -725,8 +725,6 @@ struct engine
                           : wdl > draw_score ? param::BETA_FLAG
                                              : param::EXACT_FLAG;
 
-
-
             // Note: we return early here since we don't care about a good pv line
             if (entry.can_write(param::TB_DEPTH))
             {
@@ -769,8 +767,15 @@ struct engine
             goto moves;
         }
 
+        // [razoring]
+        // drop to qsearch if static eval is low enough
+        // if (!is_pv_node && adjusted_static_eval < alpha - 500 - 400 * depth * depth)
+        // {
+        //     return qsearch<NonPV>(alpha, beta, ss);
+        // }
+
         // [static null move pruning]
-        if (!ss->in_check && !is_pv_node && std::abs(beta) < param::CHECKMATE)
+        if (!is_pv_node && std::abs(beta) < param::CHECKMATE)
         {
             int32_t static_score = adjusted_static_eval;
             int32_t margin = m_param.static_null_base_margin * depth;
@@ -782,8 +787,7 @@ struct engine
         {
             const bool has_non_pawns = m_position.hasNonPawnMaterial(chess::Color::WHITE) &&
                                        m_position.hasNonPawnMaterial(chess::Color::BLACK);
-            if (cut_node && !ss->in_check && !ss->is_null && has_non_pawns &&
-                beta < param::CHECKMATE)
+            if (cut_node && !ss->is_null && has_non_pawns && beta < param::CHECKMATE)
             {
                 int32_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
 
@@ -815,7 +819,6 @@ struct engine
         bool lazy_move_gen = tt_result.hit && tt_result.move != chess::Move::NO_MOVE;
         if (lazy_move_gen)
         {
-            tt_result.move.setScore(0);
             moves.add(tt_result.move);
             legal_moves = 1;
         }
@@ -844,17 +847,28 @@ struct engine
             if (depth >= 2)
                 reduction += m_param.lmr[depth][explored_moves] * 1024;
 
+            // reduce on cut node
             if (cut_node)
                 reduction += 1300;
 
+            // increase if capture
             bool tactical = m_position.isCapture(move);
             if (tactical)
                 reduction -= 300;
 
-            if (move == tt_result.move)
+            // reduce if tt is capture
+            // if (is_tt_capture)
+            //     reduction += 500;
+
+            // increase if move is tt move
+            if (ss->tt_hit && move == tt_result.move)
                 reduction -= 700;
 
-            int32_t depth_reduction = std::min(depth - 1 - reduction / 1024, depth + 1);
+            // increase if pv node like
+            // if (ss->tt_pv)
+            //     reduction -= 700;
+
+            int32_t reduced_depth = std::min(depth - 1 - reduction / 1024, depth + 1);
 
             make_move(move);
 
@@ -889,9 +903,9 @@ struct engine
                     // LATER SEARCH WITH CUT_NODE
 
                     // [pv search]
-                    score = -negamax<NonPV>(-(alpha + 1), -alpha, depth_reduction, ss + 1, true);
+                    score = -negamax<NonPV>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
 
-                    if (score > alpha && depth_reduction < depth - 1)
+                    if (score > alpha && reduced_depth < depth - 1)
                         score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1, true);
                 }
             }
@@ -908,9 +922,9 @@ struct engine
                     // CUT_NODE
 
                     // [pv search]
-                    score = -negamax<NonPV>(-(alpha + 1), -alpha, depth_reduction, ss + 1, true);
+                    score = -negamax<NonPV>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
 
-                    if (score > alpha && depth_reduction < depth - 1)
+                    if (score > alpha && reduced_depth < depth - 1)
                         score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1, true);
                 }
             }
@@ -965,12 +979,6 @@ struct engine
             }
         }
 
-        // hack to make a move in root
-        if (is_root && best_move == chess::Move::NO_MOVE)
-        {
-            best_move = moves[0];
-        }
-
         // checkmate or draw
         if (legal_moves == 0)
         {
@@ -993,6 +1001,12 @@ struct engine
         {
             entry.set(m_position.hash(), tt_flag, best_score, ply, depth, best_move,
                       unadjusted_static_eval, ss->tt_pv);
+        }
+
+        // hack to make a move in root
+        if (is_root && best_move == chess::Move::NO_MOVE && m_line.pv_length[0] == 0)
+        {
+            m_line.update(ply, moves[0]);
         }
 
         return best_score;

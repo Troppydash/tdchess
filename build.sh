@@ -1,3 +1,4 @@
+set -e
 
 version="$1"
 if [ -z $version ]
