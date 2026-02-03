@@ -346,7 +346,7 @@ struct engine
     // constants
     const engine_param m_param;
     // tt
-    table m_table;
+    table *m_table;
     // move ordering
     move_ordering m_move_ordering;
     // pv-line
@@ -360,12 +360,12 @@ struct engine
     nnue *m_nnue = nullptr;
 
     // must be set via methods
-    explicit engine(const int table_size_in_mb) : engine(nullptr, nullptr, table_size_in_mb)
+    explicit engine(table *table) : engine(nullptr, nullptr, table)
     {
     }
 
-    explicit engine(endgame_table *endgame, nnue *nnue, const int table_size_in_mb)
-        : m_stats(), m_table(table_size_in_mb), m_move_ordering(m_param), m_endgame(endgame),
+    explicit engine(endgame_table *endgame, nnue *nnue, table *table)
+        : m_stats(), m_table(table), m_move_ordering(m_param), m_endgame(endgame),
           m_nnue(nnue)
     {
         // init tables
@@ -434,7 +434,7 @@ struct engine
         }
 
         // [tt lookup]
-        auto &entry = m_table.probe(m_position.hash());
+        auto &entry = m_table->probe(m_position.hash());
         auto tt_result = entry.get(m_position.hash(), ply, param::QDEPTH, alpha, beta);
         ss->tt_hit = tt_result.hit;
         if (tt_result.hit)
@@ -643,7 +643,7 @@ struct engine
         }
 
         // [tt lookup]
-        auto &entry = m_table.probe(m_position.hash());
+        auto &entry = m_table->probe(m_position.hash());
         auto tt_result = entry.get(m_position.hash(), ply, depth, alpha, beta);
         ss->tt_hit = tt_result.hit;
         if (tt_result.hit && !is_root)
@@ -915,11 +915,24 @@ struct engine
     search_result search(const chess::Board &reference, search_param &param, bool verbose = false,
                          bool uci = false)
     {
+        // chess::Movelist m;
+        // chess::movegen::legalmoves(m, reference);
+        // return search_result{
+        //     {m[0]},
+        //     1,
+        //     0
+        // };
+
+        // timer info first
         const auto control = param.time_control( reference.fullMoveNumber(), reference.sideToMove());
         m_timer.start(control.time);
-        m_position = reference;
         auto reference_time = timer::now();
         m_stats = engine_stats{0, 0, 0, timer::now() - reference_time};
+
+        // expensive table clear
+        assert(m_table != nullptr);
+        m_table->clear();
+        m_position = reference;
 
         if (m_nnue != nullptr)
         {
@@ -930,13 +943,12 @@ struct engine
         int32_t depth = 1;
 
         engine_stats last_stats = m_stats;
-
         search_result result{};
 
         if (m_endgame != nullptr && m_endgame->is_stored(m_position))
         {
             // root search
-            auto probe = m_endgame->probe_dtm(m_position);
+            auto probe = m_endgame->probe_dtm(m_position, m_timer);
             result.pv_line = probe.first;
             result.depth = 1;
             result.score = probe.second;
@@ -994,7 +1006,7 @@ struct engine
             if (verbose)
             {
                 m_stats.total_time = timer::now() - reference_time;
-                m_stats.tt_occupancy = m_table.occupied();
+                m_stats.tt_occupancy = m_table->occupied();
                 if (uci)
                     m_stats.display_uci(result);
                 else

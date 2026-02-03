@@ -4,6 +4,7 @@
 #include "param.h"
 
 #include <cmath>
+#include <cstring>
 
 struct table_entry_result
 {
@@ -22,8 +23,8 @@ class table_entry
     uint8_t m_flag = 0;
     // TODO: add more shit here
 
-
-    [[nodiscard]] table_entry_result get(uint64_t hash, int32_t ply, int32_t depth, int32_t alpha, int32_t beta) const
+    [[nodiscard]] table_entry_result get(uint64_t hash, int32_t ply, int32_t depth, int32_t alpha,
+                                         int32_t beta) const
     {
         int32_t adj_score = 0;
         bool should_use = false;
@@ -65,7 +66,8 @@ class table_entry
         return {adj_score, should_use, best_move};
     }
 
-    void set(uint64_t hash, int32_t score, const chess::Move &best_move, int32_t ply, int32_t depth, uint8_t flag)
+    void set(uint64_t hash, int32_t score, const chess::Move &best_move, int32_t ply, int32_t depth,
+             uint8_t flag)
     {
         m_hash = hash;
         m_depth = depth;
@@ -90,7 +92,7 @@ class table_entry
 class table
 {
   public:
-    std::vector<table_entry> m_entries;
+    table_entry *m_entries = nullptr;
     size_t m_size;
     int m_power;
     uint64_t m_mask;
@@ -102,7 +104,19 @@ class table
         m_size = 1ull << m_power;
         m_mask = m_size - 1;
 
-        m_entries.resize(m_size);
+        m_entries = static_cast<table_entry *>(std::malloc(m_size * sizeof(table_entry)));
+        clear();
+    }
+
+    ~table()
+    {
+        if (m_entries != nullptr)
+            std::free(m_entries);
+    }
+
+    void clear()
+    {
+        std::memset(m_entries, 0, m_size * sizeof(table_entry));
     }
 
     table_entry &probe(const uint64_t hash)
@@ -113,12 +127,12 @@ class table
     int16_t occupied() const
     {
         size_t count = 0;
-        for (const auto &entry : m_entries)
+        for (size_t i = 0; i < m_size; ++i)
         {
-            if (entry.m_hash > 0)
+            if (m_entries[i].m_hash != 0)
                 count++;
         }
 
-        return static_cast<int16_t>(count * 1000 / m_entries.size());
+        return static_cast<int16_t>(count * 1000 / m_size);
     }
 };

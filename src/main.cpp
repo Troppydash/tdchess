@@ -62,7 +62,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.8", "1.0.8-charlie", true);
+    improvement_test("1.0.8", "1.0.8-delta", true);
 
     return 0;
 }
@@ -90,8 +90,9 @@ int main()
 }
 
 #else
-#include "engine/nnue.h"
 #include "elo/agent.h"
+#include "elo/arena.h"
+#include "engine/nnue.h"
 
 int evaluate_bucket(const chess::Board &position)
 {
@@ -99,20 +100,25 @@ int evaluate_bucket(const chess::Board &position)
     constexpr int divisor = 32 / n;
     return (position.occ().count() - 2) / divisor;
 }
+
 int main()
 {
-    agent_settings settings{"test", "../builds/1.0.8-charlie/tdchess",
-                            "../builds/1.0.8-charlie/nnue.bin", "../syzygy", 128, true};
+    agent_settings settings{"test",
+                            "../builds/1.0.8-delta/tdchess",
+                            "../builds/1.0.8-delta/nnue.bin",
+                            "../syzygy",
+                            128,
+                            true};
     agent agent{settings};
 
     agent.new_game();
-
+    int64_t movetime = 50;
 
     chess::Board position{};
     std::vector<chess::Move> moves{};
 
-    arena_clock clock0{60*1000, 100};
-    arena_clock clock1{60*1000, 100};
+    // arena_clock clock0{60*1000, 100};
+    // arena_clock clock1{60*1000, 100};
 
     // random position
     while (true)
@@ -121,49 +127,17 @@ int main()
         if (is_over.second != chess::GameResult::NONE)
             break;
 
-        // search_param param{};
-        // param.movetime = movetime;
         search_param param{};
-        param = search_param::from_game_state(
-                clock0.get_time(), clock1.get_time(), clock0.get_incr(), clock1.get_incr());
+        param.movetime = movetime;
 
         chess::Move move;
-        if (position.sideToMove() == chess::Color::WHITE)
-        {
-            agent.new_game();
-            auto start = std::chrono::high_resolution_clock::now();
-            clock0.start();
-            move = agent.search(moves, param, 1);
-            bool ok =clock0.stop();
-            if (ok)
-            {
-                std::cout << "agent 0 timeout\n";
-                break;
-            }
-
-            auto end = std::chrono::high_resolution_clock::now();
-            std::cout << "actual time "
-                      << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
-                      << std::endl;
-
-        } else
-        {
-            agent.new_game();
-            clock1.start();
-            move = agent.search(moves, param, 1);
-            bool ok = clock1.stop();
-            if (ok)
-            {
-                std::cout << "agent 1 timeout\n";
-                break;
-            }
-        }
-        // auto end = std::chrono::high_resolution_clock::now();
-
-        // std::cout << chess::uci::moveToUci(move) << std::endl;
-        // std::cout << "movetime " << movetime << " actual time "
-        //           << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
-        //           << std::endl;
+        agent.new_game();
+        auto start = std::chrono::high_resolution_clock::now();
+        move = agent.search(moves, param, 1);
+        auto end = std::chrono::high_resolution_clock::now();
+        std::cout << "movetime " << movetime <<  " actual time "
+                  << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
+                  << std::endl;
 
         // always make the move
         moves.push_back(move);
@@ -179,7 +153,6 @@ int main()
     // search_param param;
     // param.movetime = 10000;
     // engine.search(start, param, true, true);
-
 
     return 0;
 }

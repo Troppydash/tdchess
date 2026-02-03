@@ -3,6 +3,7 @@
 #include "../../lib/Fathom/src/tbprobe.h"
 #include "../hpplib/chess.h"
 #include "param.h"
+#include "timer.h"
 
 struct endgame_table
 {
@@ -29,7 +30,8 @@ struct endgame_table
                  position.castlingRights().has(chess::Color::BLACK));
     }
 
-    std::pair<std::vector<chess::Move>, int32_t> probe_dtm(const chess::Board &reference)
+    std::pair<std::vector<chess::Move>, int32_t> probe_dtm(const chess::Board &reference,
+                                                           timer &timer)
     {
         chess::Board position{reference};
         std::vector<chess::Move> pv_line;
@@ -46,8 +48,16 @@ struct endgame_table
             auto [move, _] = probe_dtz(position);
             pv_line.push_back(move);
             ply += 1;
-
             position.makeMove(move);
+
+
+            // timer check in case long position, here to ensure that at least one pv is found
+            if (ply % 16 == 0)
+            {
+                timer.check();
+                if (timer.is_stopped())
+                    break;
+            }
         }
 
         int32_t score = 0;
@@ -82,8 +92,8 @@ struct endgame_table
             position.pieces(chess::PieceType::ROOK).getBits(),
             position.pieces(chess::PieceType::BISHOP).getBits(),
             position.pieces(chess::PieceType::KNIGHT).getBits(),
-            position.pieces(chess::PieceType::PAWN).getBits(),
-            position.halfMoveClock(), 0, ep, position.sideToMove() == chess::Color::WHITE, nullptr);
+            position.pieces(chess::PieceType::PAWN).getBits(), position.halfMoveClock(), 0, ep,
+            position.sideToMove() == chess::Color::WHITE, nullptr);
 
         if (result == TB_RESULT_FAILED || result == TB_RESULT_STALEMATE ||
             result == TB_RESULT_CHECKMATE)

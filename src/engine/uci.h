@@ -43,22 +43,26 @@ class uci_handler
     chess::Board m_position;
     endgame_table *m_endgame_table = nullptr;
     nnue *m_nnue = nullptr;
-    int m_tt_size = 256;
     int m_thread_aff = -1;
     int64_t m_move_overhead = 75;
     search_param m_param{};
 
     engine *m_engine = nullptr;
+    table *m_tt;
     std::thread m_engine_thread;
 
   public:
-    explicit uci_handler() = default;
+    explicit uci_handler()
+    {
+        m_tt = new table{128};
+    };
 
     ~uci_handler()
     {
         delete m_engine;
         delete m_endgame_table;
         delete m_nnue;
+        delete m_tt;
     }
 
     void loop()
@@ -91,7 +95,7 @@ class uci_handler
                 std::cout << "id author troppydash\n";
                 std::cout << "option name SyzygyPath type string default <empty>\n";
                 std::cout << "option name NNUEPath type string default <empty>\n";
-                std::cout << "option name TTSizeMB type spin default 256 min 8 max 4096\n";
+                std::cout << "option name TTSizeMB type spin default 128 min 8 max 4096\n";
                 std::cout << "option name CoreAff type spin default -1 min -1 max "
                           << total_threads - 1 << "\n";
                 std::cout << "option name MoveOverhead type spin default 75 min 0 max 2000\n";
@@ -119,7 +123,9 @@ class uci_handler
                 }
                 else if (parts[2] == "TTSizeMB")
                 {
-                    m_tt_size = parse_i32(parts[4]);
+                    size_t tt_size = parse_i32(parts[4]);
+                    delete m_tt;
+                    m_tt = new table{tt_size};
                 }
                 else if (parts[2] == "CoreAff")
                 {
@@ -298,7 +304,7 @@ class uci_handler
     {
         start_task([&]() {
             delete m_engine;
-            m_engine = new engine{m_endgame_table, m_nnue, m_tt_size};
+            m_engine = new engine{m_endgame_table, m_nnue, m_tt};
 
             auto result = m_engine->search(m_position, m_param, true, true);
 
@@ -316,7 +322,7 @@ class uci_handler
     {
         start_task([&, depth]() {
             delete m_engine;
-            m_engine = new engine{m_endgame_table, m_nnue, m_tt_size};
+            m_engine = new engine{m_endgame_table, m_nnue, m_tt};
             m_engine->perft(m_position, depth);
         });
     }
@@ -325,7 +331,7 @@ class uci_handler
     {
         start_task([&, param]() {
             delete m_engine;
-            m_engine = new engine{m_endgame_table, m_nnue, m_tt_size};
+            m_engine = new engine{m_endgame_table, m_nnue, m_tt};
             search_param temp_param = param;
             m_engine->search(m_position, temp_param, true, true);
 
