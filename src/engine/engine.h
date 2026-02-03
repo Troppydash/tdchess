@@ -673,6 +673,7 @@ struct engine
         ss->tt_pv = is_pv_node || (tt_result.hit && tt_result.is_pv);
 
         // [tt early return]
+        // Note: we can extend this when pv_node, but it won't improve performance at all
         if (tt_result.can_use && !is_root)
         {
             return tt_result.score;
@@ -706,13 +707,61 @@ struct engine
             }
         }
 
-        // check syzygy
+        // [check syzygy endgame table]
+        int32_t best_score = -param::VALUE_INF;
+        int32_t max_score = param::VALUE_INF;
         if (m_endgame != nullptr && !is_root && m_endgame->is_stored(m_position))
         {
-            int32_t score = m_endgame->probe_wdl(m_position, ply);
-            entry.set(m_position.hash(), param::EXACT_FLAG, score, ply, param::TB_DEPTH,
-                      chess::Move::NO_MOVE, unadjusted_static_eval, ss->tt_pv);
-            return score;
+            int32_t wdl = m_endgame->probe_wdl(m_position);
+            int32_t draw_score = 1;
+
+            int32_t tb_score = param::VALUE_SYZYGY - ply;
+
+            int32_t score = wdl < -draw_score  ? -tb_score
+                            : wdl > draw_score ? tb_score
+                                               : param::VALUE_DRAW + 2 * wdl * draw_score;
+
+            int8_t flag = wdl < -draw_score  ? param::ALPHA_FLAG
+                          : wdl > draw_score ? param::BETA_FLAG
+                                             : param::EXACT_FLAG;
+
+
+
+            // Note: we return early here since we don't care about a good pv line
+            if (entry.can_write(param::TB_DEPTH))
+            {
+                entry.set(m_position.hash(), flag, score, ply, param::TB_DEPTH,
+                          chess::Move::NO_MOVE, param::VALUE_NONE, ss->tt_pv);
+                return score;
+            }
+
+            // Note: the below will force the engine into searching for a better mate,
+            // which actually just wastes resources
+            // if (flag == param::EXACT_FLAG ||
+            //     (flag == param::BETA_FLAG ? score >= beta : score <= alpha))
+            // {
+            //     int32_t target_depth = param::TB_DEPTH;
+            //     if (entry.can_write(target_depth))
+            //     {
+            //         entry.set(m_position.hash(), flag, score, ply, target_depth,
+            //                   chess::Move::NO_MOVE, param::VALUE_NONE, ss->tt_pv);
+            //     }
+            //
+            //     return score;
+            // }
+            //
+            // if (is_pv_node)
+            // {
+            //     if (flag == param::BETA_FLAG)
+            //     {
+            //         best_score = score;
+            //         alpha = std::max(alpha, best_score);
+            //     }
+            //     else
+            //     {
+            //         max_score = score;
+            //     }
+            // }
         }
 
         if (ss->in_check)
@@ -777,7 +826,6 @@ struct engine
             legal_moves = moves.size();
         }
 
-        int32_t best_score = -param::VALUE_INF;
         chess::Move best_move = chess::Move::NO_MOVE;
 
         // track quiet moves for malus
@@ -917,6 +965,12 @@ struct engine
             }
         }
 
+        // hack to make a move in root
+        if (is_root && best_move == chess::Move::NO_MOVE)
+        {
+            best_move = moves[0];
+        }
+
         // checkmate or draw
         if (legal_moves == 0)
         {
@@ -926,6 +980,10 @@ struct engine
             // draw
             return param::VALUE_DRAW;
         }
+
+        // cap if endgame table found
+        if (is_pv_node)
+            best_score = std::min(best_score, max_score);
 
         // if no good move found, last move good so add this one too
         if (best_score <= alpha)
@@ -1010,7 +1068,7 @@ struct engine
             m_nnue->initialize(m_position);
         }
 
-        int32_t alpha = -param::INF, beta = param::INF;
+        int32_t alpha = -param::VALUE_INF, beta = param::VALUE_INF;
         int32_t depth = 1;
 
         engine_stats last_stats = m_stats;
@@ -1057,8 +1115,8 @@ struct engine
             // [asp window]
             if (score <= alpha || score >= beta)
             {
-                alpha = -param::INF;
-                beta = param::INF;
+                alpha = -param::VALUE_INF;
+                beta = param::VALUE_INF;
                 continue;
             }
 

@@ -154,7 +154,7 @@ struct endgame_table
         throw std::runtime_error{"impossible"};
     }
 
-    int32_t probe_wdl(const chess::Board &position, int32_t ply)
+    int32_t probe_wdl(const chess::Board &position)
     {
         unsigned ep =
             position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
@@ -171,15 +171,15 @@ struct endgame_table
         switch (result)
         {
         case TB_LOSS:
-            return -param::SYZYGY + ply;
+            return -2;
         case TB_BLESSED_LOSS:
-            return -param::SYZYGY50;
+            return -1;
         case TB_DRAW:
             return 0;
         case TB_CURSED_WIN:
-            return param::SYZYGY50;
+            return 1;
         case TB_WIN:
-            return param::SYZYGY - ply;
+            return 2;
         }
 
         if (result == TB_RESULT_FAILED)

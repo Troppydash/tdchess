@@ -14,6 +14,14 @@ echo "building version $version"
 cmake --build ./cmake-build-release --target tdchess_uci -j 10
 
 echo "copying uci and weights to ./builds/${version}"
+
+DIR="./builds/${version}"
+if [ -d "$DIR" ]; then
+    echo "Directory $DIR exists. Deleting..."
+    rm -ri "$DIR"
+    rm -ri "./builds/${version}_linux.zip"
+fi
+
 mkdir ./builds/${version}
 cp ./cmake-build-release/tdchess_uci ./builds/${version}/tdchess
 cp ./nets/${version}.bin ./builds/${version}/nnue.bin
