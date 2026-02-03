@@ -45,7 +45,7 @@ class uci_handler
     nnue *m_nnue = nullptr;
     int m_tt_size = 256;
     int m_thread_aff = -1;
-    int64_t m_move_overhead = 30;
+    int64_t m_move_overhead = 75;
     search_param m_param{};
 
     engine *m_engine = nullptr;
@@ -94,7 +94,7 @@ class uci_handler
                 std::cout << "option name TTSizeMB type spin default 256 min 8 max 4096\n";
                 std::cout << "option name CoreAff type spin default -1 min -1 max "
                           << total_threads - 1 << "\n";
-                std::cout << "option name MoveOverhead type spin default 30 min 0 max 2000\n";
+                std::cout << "option name MoveOverhead type spin default 75 min 0 max 2000\n";
                 std::cout << "uciok\n";
             }
             else if (lead == "setoption")

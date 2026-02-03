@@ -915,8 +915,7 @@ struct engine
     search_result search(const chess::Board &reference, search_param &param, bool verbose = false,
                          bool uci = false)
     {
-        auto control = param.time_control( reference.fullMoveNumber(), reference.sideToMove());
-
+        const auto control = param.time_control( reference.fullMoveNumber(), reference.sideToMove());
         m_timer.start(control.time);
         m_position = reference;
         auto reference_time = timer::now();

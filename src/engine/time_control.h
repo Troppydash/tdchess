@@ -84,11 +84,11 @@ struct search_param
 
         double logtime_in_sec = std::log10(scaled_time / 1000.0);
         double opt_constant = std::min(0.0032116 + 0.000321123 * logtime_in_sec, 0.00508017);
-        double opt_scale = std::min(0.0121431 + std::pow(ply + 2.94693, 0.461073) * opt_constant,
+        double opt_scale = std::min(0.0201431 + std::pow(ply + 2.94693, 0.461073) * opt_constant,
                                     0.213035 * (double)time / (double)time_left) *
                            original_time_adjust;
 
-        int64_t optimum_time = std::max(50L, static_cast<int64_t>(opt_scale * time_left));
+        int64_t optimum_time = std::max(10L, static_cast<int64_t>(opt_scale * time_left));
         int64_t true_time = std::min(std::min(optimum_time, time - move_overhead), movetime);
         return {depth, true_time};
     }

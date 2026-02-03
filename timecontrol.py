@@ -1,7 +1,7 @@
 import math
 import matplotlib.pyplot as plt
 
-move_overhead = 0
+move_overhead = 30
 timer = 1*60*1000
 inc = 0.1 * 1000
 startmove = 11
@@ -30,7 +30,7 @@ def time_control(x, original_time_adjust):
     )
 
     opt_scale = min(
-        0.0121431 + math.pow(ply + 2.94693, 0.461073) * opt_constant,
+        0.0201431 + math.pow(ply + 2.94693, 0.461073) * opt_constant,
         0.213035 * time / time_left
     ) * original_time_adjust
 
@@ -43,7 +43,7 @@ def time_control(x, original_time_adjust):
 moves = []
 timers = []
 spent = []
-total_moves = 200
+total_moves = 100
 
 
 time_adjust = -1

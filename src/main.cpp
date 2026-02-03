@@ -62,7 +62,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.8", "1.0.8-beta", true);
+    improvement_test("1.0.8", "1.0.8-charlie", true);
 
     return 0;
 }
@@ -101,48 +101,84 @@ int evaluate_bucket(const chess::Board &position)
 }
 int main()
 {
-    // agent_settings settings{"test", "../builds/1.0.8-beta/tdchess",
-    //                         "../builds/1.0.8-beta/nnue.bin", "../syzygy", 128, true};
-    // agent agent{settings};
-    //
-    // agent.new_game();
-    //
-    // int movetime = 200;
-    //
-    // chess::Board position{};
-    // std::vector<chess::Move> moves{};
-    // // random position
-    // while (true)
-    // {
-    //     auto is_over = position.isGameOver();
-    //     if (is_over.second != chess::GameResult::NONE)
-    //         break;
-    //
-    //     search_param param{};
-    //     param.movetime = movetime;
-    //     auto start = std::chrono::high_resolution_clock::now();
-    //     chess::Move move = agent.search(moves, param, 1);
-    //     auto end = std::chrono::high_resolution_clock::now();
-    //
-    //     std::cout << chess::uci::moveToUci(move) << std::endl;
-    //     std::cout << "movetime " << movetime << " actual time "
-    //               << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
-    //               << std::endl;
-    //
-    //     // always make the move
-    //     moves.push_back(move);
-    //     position.makeMove(move);
-    // }
+    agent_settings settings{"test", "../builds/1.0.8-charlie/tdchess",
+                            "../builds/1.0.8-charlie/nnue.bin", "../syzygy", 128, true};
+    agent agent{settings};
 
-    nnue nnue{};
-    nnue.load_network("../nets/1.0.8-alpha.bin");
-    chess::Board start{"r2k3r/pb2b2p/4p3/1P6/3p4/3B4/PPp3PP/R1B2RK1 w - - 2 21"};
-    endgame_table table{};
-    table.load_file("../syzygy");
-    engine engine{&table, &nnue, 256};
-    search_param param;
-    param.movetime = 10000;
-    engine.search(start, param, true, true);
+    agent.new_game();
+
+
+    chess::Board position{};
+    std::vector<chess::Move> moves{};
+
+    arena_clock clock0{60*1000, 100};
+    arena_clock clock1{60*1000, 100};
+
+    // random position
+    while (true)
+    {
+        auto is_over = position.isGameOver();
+        if (is_over.second != chess::GameResult::NONE)
+            break;
+
+        // search_param param{};
+        // param.movetime = movetime;
+        search_param param{};
+        param = search_param::from_game_state(
+                clock0.get_time(), clock1.get_time(), clock0.get_incr(), clock1.get_incr());
+
+        chess::Move move;
+        if (position.sideToMove() == chess::Color::WHITE)
+        {
+            agent.new_game();
+            auto start = std::chrono::high_resolution_clock::now();
+            clock0.start();
+            move = agent.search(moves, param, 1);
+            bool ok =clock0.stop();
+            if (ok)
+            {
+                std::cout << "agent 0 timeout\n";
+                break;
+            }
+
+            auto end = std::chrono::high_resolution_clock::now();
+            std::cout << "actual time "
+                      << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
+                      << std::endl;
+
+        } else
+        {
+            agent.new_game();
+            clock1.start();
+            move = agent.search(moves, param, 1);
+            bool ok = clock1.stop();
+            if (ok)
+            {
+                std::cout << "agent 1 timeout\n";
+                break;
+            }
+        }
+        // auto end = std::chrono::high_resolution_clock::now();
+
+        // std::cout << chess::uci::moveToUci(move) << std::endl;
+        // std::cout << "movetime " << movetime << " actual time "
+        //           << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
+        //           << std::endl;
+
+        // always make the move
+        moves.push_back(move);
+        position.makeMove(move);
+    }
+
+    // nnue nnue{};
+    // nnue.load_network("../nets/1.0.8-alpha.bin");
+    // chess::Board start{"r2k3r/pb2b2p/4p3/1P6/3p4/3B4/PPp3PP/R1B2RK1 w - - 2 21"};
+    // endgame_table table{};
+    // table.load_file("../syzygy");
+    // engine engine{&table, &nnue, 256};
+    // search_param param;
+    // param.movetime = 10000;
+    // engine.search(start, param, true, true);
 
 
     return 0;
