@@ -20,7 +20,7 @@ class timer
         m_forced_stopped = false;
     }
 
-    void start(int ms)
+    void start(int64_t ms)
     {
         m_target = now() + std::chrono::milliseconds(ms);
         m_is_stopped = false;

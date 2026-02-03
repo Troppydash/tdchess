@@ -25,6 +25,18 @@ inline int32_t parse_i32(std::string_view s)
     throw std::runtime_error{"bad range"};
 }
 
+inline int64_t parse_i64(std::string_view s)
+{
+    int64_t out = 0;
+    auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), out);
+    if (ec == std::errc() && ptr == s.data() + s.size())
+    {
+        return out;
+    }
+
+    throw std::runtime_error{"bad range"};
+}
+
 class uci_handler
 {
   private:
@@ -33,7 +45,7 @@ class uci_handler
     nnue *m_nnue = nullptr;
     int m_tt_size = 256;
     int m_thread_aff = -1;
-    int m_move_overhead = 100;
+    int64_t m_move_overhead = 30;
     search_param m_param{};
 
     engine *m_engine = nullptr;
@@ -82,7 +94,7 @@ class uci_handler
                 std::cout << "option name TTSizeMB type spin default 256 min 8 max 4096\n";
                 std::cout << "option name CoreAff type spin default -1 min -1 max "
                           << total_threads - 1 << "\n";
-                std::cout << "option name MoveOverhead type spin default 100 min 0 max 2000\n";
+                std::cout << "option name MoveOverhead type spin default 30 min 0 max 2000\n";
                 std::cout << "uciok\n";
             }
             else if (lead == "setoption")
@@ -115,7 +127,7 @@ class uci_handler
                 }
                 else if (parts[2] == "MoveOverhead")
                 {
-                    m_move_overhead = parse_i32(parts[4]);
+                    m_move_overhead = parse_i64(parts[4]);
                 }
                 else
                 {
@@ -176,27 +188,27 @@ class uci_handler
                     }
                     else if (parts[i] == "movetime")
                     {
-                        m_param.movetime = parse_i32(parts[i + 1]);
+                        m_param.movetime = parse_i64(parts[i + 1]);
                         i += 1;
                     }
                     else if (parts[i] == "wtime")
                     {
-                        m_param.wtime = parse_i32(parts[i + 1]);
+                        m_param.wtime = parse_i64(parts[i + 1]);
                         i += 1;
                     }
                     else if (parts[i] == "btime")
                     {
-                        m_param.btime = parse_i32(parts[i + 1]);
+                        m_param.btime = parse_i64(parts[i + 1]);
                         i += 1;
                     }
                     else if (parts[i] == "winc")
                     {
-                        m_param.winc = parse_i32(parts[i + 1]);
+                        m_param.winc = parse_i64(parts[i + 1]);
                         i += 1;
                     }
                     else if (parts[i] == "binc")
                     {
-                        m_param.binc = parse_i32(parts[i + 1]);
+                        m_param.binc = parse_i64(parts[i + 1]);
                         i += 1;
                     }
                 }

@@ -47,4 +47,6 @@ constexpr bool IS_DECISIVE(int32_t value)
     return IS_WIN(value) || IS_LOSS(value);
 }
 
+constexpr int64_t TIME_MAX = 1'000'000'000;
+
 } // namespace param

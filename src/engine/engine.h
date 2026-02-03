@@ -590,7 +590,7 @@ struct engine
 
         constexpr bool is_root = node_type == Root;
         constexpr bool is_pv_node = (node_type == PV || node_type == Root);
-        // const bool is_all_node = !(is_pv_node || cut_node);
+        const bool is_all_node = !(is_pv_node || cut_node);
 
         assert(!(is_pv_node && cut_node));
         assert(!(is_all_node && cut_node));

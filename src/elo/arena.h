@@ -14,8 +14,8 @@ struct arena_settings
     std::string name;
     int book_depth;
 
-    int basetime;
-    int increment;
+    int64_t basetime;
+    int64_t increment;
 
     bool verbose = false;
 };
@@ -24,12 +24,12 @@ class arena_clock
 {
 
   private:
-    int m_time;
-    int m_incr;
+    int64_t m_time;
+    int64_t m_incr;
     std::chrono::microseconds m_ref;
 
   public:
-    explicit arena_clock(int time, int incr) : m_time(time), m_incr(incr)
+    explicit arena_clock(int64_t time, int64_t incr) : m_time(time), m_incr(incr)
     {
     }
 
@@ -40,7 +40,7 @@ class arena_clock
 
     bool stop()
     {
-        int diff = std::chrono::duration_cast<std::chrono::milliseconds>(now() - m_ref).count();
+        int64_t diff = std::chrono::duration_cast<std::chrono::milliseconds>(now() - m_ref).count();
         m_time -= diff;
         if (m_time < 0)
             return true;
@@ -49,12 +49,12 @@ class arena_clock
         return false;
     }
 
-    int get_time() const
+    int64_t get_time() const
     {
         return m_time;
     }
 
-    int get_incr() const
+    int64_t get_incr() const
     {
         return m_incr;
     }

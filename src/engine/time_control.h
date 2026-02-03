@@ -8,19 +8,19 @@
 
 struct search_param
 {
-    int32_t wtime{};
-    int32_t btime{};
-    int32_t winc{};
-    int32_t binc{};
+    int64_t wtime{};
+    int64_t btime{};
+    int64_t winc{};
+    int64_t binc{};
     int32_t depth{};
-    int32_t movetime{};
-    int32_t move_overhead{};
+    int64_t movetime{};
+    int64_t move_overhead{};
     double original_time_adjust{};
 
     struct result
     {
         int32_t depth;
-        int32_t time;
+        int64_t time;
     };
 
     explicit search_param()
@@ -28,7 +28,7 @@ struct search_param
         reset();
     }
 
-    static search_param from_game_state(int32_t wtime, int32_t btime, int32_t winc, int32_t binc)
+    static search_param from_game_state(int64_t wtime, int64_t btime, int64_t winc, int64_t binc)
     {
         search_param param{};
         param.wtime = wtime;
@@ -40,12 +40,12 @@ struct search_param
 
     void clear_some()
     {
-        wtime = std::numeric_limits<int32_t>::max();
-        btime = std::numeric_limits<int32_t>::max();
-        winc = std::numeric_limits<int32_t>::max();
-        binc = std::numeric_limits<int32_t>::max();
+        wtime = param::TIME_MAX;
+        btime = param::TIME_MAX;
+        winc = param::TIME_MAX;
+        binc = param::TIME_MAX;
         depth = param::MAX_DEPTH;
-        movetime = std::numeric_limits<int32_t>::max();
+        movetime = param::TIME_MAX;
         move_overhead = 0;
     }
 
@@ -57,7 +57,7 @@ struct search_param
 
     [[nodiscard]] result time_control(int moves, chess::Color side2move)
     {
-        int inc, time;
+        int64_t inc, time;
         if (side2move == chess::Color::WHITE)
         {
             inc = winc;
@@ -71,13 +71,13 @@ struct search_param
 
         // sf style, movestogo = 0
         int ply = (moves - 1) * 2;
-        int scaled_time = time;
-        int cent_mtg = 5051;
+        int64_t scaled_time = time;
+        int64_t cent_mtg = 5051;
         if (scaled_time < 1000)
-            cent_mtg = static_cast<int>(scaled_time * 5.051);
+            cent_mtg = static_cast<int64_t>(scaled_time * 5.051);
 
-        int time_left =
-            std::max(1, time + (inc * (cent_mtg - 100) - move_overhead * (200 + cent_mtg)) / 100);
+        int64_t time_left =
+            std::max(1L, time + (inc * (cent_mtg - 100) - move_overhead * (200 + cent_mtg)) / 100);
 
         if (original_time_adjust < 0)
             original_time_adjust = 0.3128 * std::log10(time_left) - 0.4354;
@@ -88,8 +88,8 @@ struct search_param
                                     0.213035 * (double)time / (double)time_left) *
                            original_time_adjust;
 
-        int32_t optimum_time = std::max(100, static_cast<int32_t>(opt_scale * time_left));
-        int32_t true_time = std::min(std::min(optimum_time, time - move_overhead), movetime);
+        int64_t optimum_time = std::max(50L, static_cast<int64_t>(opt_scale * time_left));
+        int64_t true_time = std::min(std::min(optimum_time, time - move_overhead), movetime);
         return {depth, true_time};
     }
 };
