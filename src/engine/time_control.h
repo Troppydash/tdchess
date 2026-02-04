@@ -93,7 +93,7 @@ struct search_param
                                     0.213035 * (double)time / (double)time_left) *
                            original_time_adjust;
 
-        int64_t optimum_time = std::max(10L, static_cast<int64_t>(opt_scale * time_left));
+        int64_t optimum_time = std::max(100L, static_cast<int64_t>(opt_scale * time_left));
         int64_t true_time = std::min(std::min(optimum_time, time - move_overhead), movetime);
         return {depth, true_time};
     }

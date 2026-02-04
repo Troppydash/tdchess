@@ -844,31 +844,36 @@ struct engine
 
             // [late move reduction]
             int32_t reduction = 0;
-            if (depth >= 2)
+            if (depth >= 1)
                 reduction += m_param.lmr[depth][explored_moves] * 1024;
 
             // reduce on cut node
             if (cut_node)
-                reduction += 1300;
+                reduction += 2200;
 
             // increase if capture
-            bool tactical = m_position.isCapture(move);
-            if (tactical)
-                reduction -= 300;
+            // bool tactical = m_position.isCapture(move);
+            // if (tactical)
+                // reduction -= 300;
 
             // reduce if tt is capture
             // if (is_tt_capture)
             //     reduction += 500;
 
             // increase if move is tt move
-            if (ss->tt_hit && move == tt_result.move)
-                reduction -= 700;
+            // if (ss->tt_hit && move == tt_result.move)
+            //     reduction -= 700;
 
             // increase if pv node like
             // if (ss->tt_pv)
             //     reduction -= 700;
 
+            // no reductions on pv move
+            if (explored_moves == 1 && lazy_move_gen)
+                reduction = 0;
+
             int32_t reduced_depth = std::min(depth - 1 - reduction / 1024, depth + 1);
+
 
             make_move(move);
 
@@ -882,7 +887,7 @@ struct engine
                 }
                 else
                 {
-                    // [pv search]
+                    // [pv search, we never reduce depth on pv nodes]
                     score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1, true);
                     if (alpha < score && score < beta)
                     {
@@ -892,41 +897,23 @@ struct engine
             }
             else if (cut_node)
             {
-                // CUT-NODE, goal is to find one move that fails high
-                if (explored_moves == 1)
-                {
-                    // FIRST SEARCH WITH ALL_NODE
-                    score = -negamax<NonPV>(-beta, -alpha, depth - 1, ss + 1, false);
-                }
-                else
-                {
-                    // LATER SEARCH WITH CUT_NODE
+                // CUTNODE, prove that at least one node fails high
 
-                    // [pv search]
-                    score = -negamax<NonPV>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
+                // [pv search]
+                score = -negamax<NonPV>(-beta, -beta + 1, reduced_depth, ss + 1, false);
 
-                    if (score > alpha && reduced_depth < depth - 1)
-                        score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1, true);
-                }
+                if (score >= beta && reduced_depth < depth - 1)
+                    score = -negamax<NonPV>(-beta, -beta + 1, depth - 1, ss + 1, false);
             }
             else
             {
                 // ALL-NODE, goal is to prove that all moves fail-low
-                if (explored_moves == 1)
-                {
-                    // CUT_NODE
-                    score = -negamax<NonPV>(-beta, -alpha, depth - 1, ss + 1, true);
-                }
-                else
-                {
-                    // CUT_NODE
 
-                    // [pv search]
-                    score = -negamax<NonPV>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
+                // [pv search]
+                score = -negamax<NonPV>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
 
-                    if (score > alpha && reduced_depth < depth - 1)
-                        score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1, true);
-                }
+                if (score > alpha && reduced_depth < depth - 1)
+                    score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1, true);
             }
 
             unmake_move(move);

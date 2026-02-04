@@ -29,7 +29,7 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
     std::string baseline_prefix = "../builds/" + baseline;
     std::string latest_prefix = "../builds/" + latest;
     const agent_settings base{
-        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 64,
+        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 128,
         false};
     const agent_settings late{
         latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 128};
@@ -155,7 +155,8 @@ int main()
 
     nnue nnue{};
     nnue.load_network("../nets/1.0.9.bin");
-    chess::Board start{"r2k3r/pb2b2p/4p3/1P6/3p4/3B4/PPp3PP/R1B2RK1 w - - 2 21"};
+    chess::Board start{"8/3q4/8/1kpr2PP/p4Q2/4Q1K1/8/8 w - - 3 59"};
+    // should be e3e2
     endgame_table etable{};
     etable.load_file("../syzygy");
     table tt{256};
