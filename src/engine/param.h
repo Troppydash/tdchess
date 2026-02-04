@@ -12,7 +12,15 @@ constexpr int32_t VALUE_DRAW = 0;
 
 // TODO: use dtz to get a true mate in x
 constexpr int32_t VALUE_SYZYGY = CHECKMATE - 50;
-// constexpr int32_t SYZYGY50 = 10;
+
+// move ordering
+constexpr int16_t MVV_OFFSET = std::numeric_limits<int16_t>::max() - 256;
+constexpr int16_t MAX_HISTORY = MVV_OFFSET - 200;
+constexpr int16_t PV_SCORE = 200;
+constexpr std::array<int16_t, 7> PROMOTION_SCORES = {0, 10, 20, 30, 40, 0, 0};
+constexpr size_t NUMBER_KILLERS = 2;
+constexpr std::array<int16_t, NUMBER_KILLERS> KILLER_SCORE = {-10, -20};
+constexpr int16_t COUNTER_BONUS = 5;
 
 constexpr uint8_t EXACT_FLAG = 3;
 constexpr uint8_t BETA_FLAG = 2;

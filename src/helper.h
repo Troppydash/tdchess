@@ -20,6 +20,16 @@ constexpr int16_t clamp(int16_t x, int16_t lower, int16_t upper)
     return x;
 }
 
+// constexpr int32_t clamp(int32_t x, int32_t lower, int32_t upper)
+// {
+//     if (x < lower)
+//         return lower;
+//     if (x > upper)
+//         return upper;
+//
+//     return x;
+// }
+
 inline std::vector<std::string> string_split(std::string const &input)
 {
     std::stringstream ss(input);

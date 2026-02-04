@@ -118,12 +118,6 @@ struct engine_param
 
     // move ordering
     std::array<std::array<int16_t, 6>, 7> mvv_lva;
-    int16_t mvv_offset = std::numeric_limits<int16_t>::max() - 256;
-    int16_t max_history = mvv_offset - 100;
-    int16_t pv_score = 65;
-    int16_t first_killer = -10;
-    int16_t second_killer = -20;
-    int16_t counter_bonus = 5;
 
     // evaluation
     int32_t tempo = 15;
@@ -157,24 +151,44 @@ struct engine_param
     }
 };
 
+template <typename I, I LIMIT> struct history_entry
+{
+    I value = 0;
+
+    I get_value() const
+    {
+        return value;
+    }
+
+    void add_bonus(I bonus)
+    {
+        I clamped_bonus = helper::clamp(bonus, -LIMIT, LIMIT);
+        value += clamped_bonus - value * std::abs(clamped_bonus) / LIMIT;
+    }
+};
+
 struct move_ordering
 {
-    chess::Move m_killers[param::MAX_DEPTH][2];
+    std::array<chess::Move, param::NUMBER_KILLERS> m_killers[param::MAX_DEPTH];
+
     chess::Move m_counter[2][64][64];
-    int16_t m_history[2][64][64];
+
+    history_entry<int16_t, param::MAX_HISTORY> m_main_history[2][64][64];
+
     const engine_param m_param;
 
     explicit move_ordering(const engine_param &param) : m_param(param)
     {
         // init killer/counter/history
-        for (auto &i : m_history)
+        for (auto &i : m_main_history)
             for (auto &j : i)
-                for (int16_t &k : j)
-                    k = 0;
+                for (auto &k : j)
+                    k.value = 0;
 
         for (auto &m : m_killers)
         {
-            m[0] = m[1] = chess::Move::NO_MOVE;
+            for (size_t i = 0; i < param::NUMBER_KILLERS; ++i)
+                m[i] = chess::Move::NO_MOVE;
         }
 
         for (auto &i : m_counter)
@@ -189,37 +203,66 @@ struct move_ordering
         for (auto &move : movelist)
         {
             int16_t score = 0;
-            auto captured = position.at(move.to()).type();
 
+            // pv
             if (move == pv_move)
-                score += m_param.mvv_offset + m_param.pv_score;
-            else if (position.isCapture(move))
+            {
+                score += param::MVV_OFFSET + param::PV_SCORE;
+                goto done;
+            }
+
+            // captures
+            if (position.isCapture(move))
             {
                 auto moved = position.at(move.from()).type();
-                score += m_param.mvv_offset + m_param.mvv_lva[captured][moved];
+                auto captured = position.at(move.to()).type();
+                score += param::MVV_OFFSET + m_param.mvv_lva[captured][moved];
+
+                if (move.typeOf() == chess::Move::PROMOTION)
+                    score += param::PROMOTION_SCORES[move.promotionType()];
+
+                goto done;
             }
-            else if (move == m_killers[ply][0])
-                score += m_param.mvv_offset + m_param.first_killer;
-            else if (move == m_killers[ply][1])
-                score += m_param.mvv_offset + m_param.second_killer;
-            else
+
+            // promotions
+            if (move.typeOf() == chess::Move::PROMOTION)
+            {
+                score += param::MVV_OFFSET + param::PROMOTION_SCORES[move.promotionType()];
+                goto done;
+            }
+
+            // killers
+            {
+                // current ply
+                for (size_t i = 0; i < param::NUMBER_KILLERS; ++i)
+                {
+                    if (move == m_killers[ply][i])
+                    {
+                        score += param::MVV_OFFSET + param::KILLER_SCORE[i];
+                        goto done;
+                    }
+                }
+            }
+
+            // rest
             {
                 if (prev_move != chess::Move::NO_MOVE && is_quiet(position, move))
                 {
                     const auto &counter = m_counter[position.sideToMove()][prev_move.from().index()]
                                                    [prev_move.to().index()];
                     if (move == counter)
-                        score += m_param.counter_bonus;
+                        score += param::COUNTER_BONUS;
                 }
 
                 if (is_quiet(position, move))
                 {
-                    int16_t history_score =
-                        m_history[position.sideToMove()][move.from().index()][move.to().index()];
-                    score += history_score;
+                    score += m_main_history[position.sideToMove()][move.from().index()]
+                                           [move.to().index()]
+                                               .get_value();
                 }
             }
 
+        done:
             move.setScore(score);
         }
     }
@@ -241,42 +284,29 @@ struct move_ordering
             std::swap(movelist[i], movelist[highest_index]);
     }
 
-    void age_history()
-    {
-        for (auto &i : m_history)
-        {
-            for (auto &j : i)
-            {
-                for (int16_t &k : j)
-                {
-                    k /= 2;
-                }
-            }
-        }
-    }
-
     bool is_quiet(const chess::Board &position, const chess::Move &move) const
     {
-        return !position.isCapture(move);
+        return !position.isCapture(move) && move.typeOf() != chess::Move::PROMOTION;
     }
 
-    void update_history(const chess::Board &position, const chess::Move &move, int16_t bonus)
+    void update_main_history(const chess::Board &position, const chess::Move &move, int16_t bonus)
     {
-        const int16_t MAX_HISTORY = m_param.max_history;
-        int16_t clamped_bonus = helper::clamp(bonus, -MAX_HISTORY, MAX_HISTORY);
-        auto &hist = m_history[position.sideToMove()][move.from().index()][move.to().index()];
-        hist += clamped_bonus - hist * std::abs(clamped_bonus) / MAX_HISTORY;
+        m_main_history[position.sideToMove()][move.from().index()][move.to().index()].add_bonus(
+            bonus);
     }
 
-    void store_killer(const chess::Board &position, const chess::Move &killer, int32_t ply)
+    void store_killer(const chess::Move &killer, int32_t ply)
     {
-        if (is_quiet(position, killer))
+        chess::Move insert = killer;
+        for (size_t i = 0; i < param::NUMBER_KILLERS && insert != chess::Move::NO_MOVE; ++i)
         {
-            if (m_killers[ply][0] != killer)
+            if (killer == m_killers[ply][i])
             {
-                m_killers[ply][1] = m_killers[ply][0];
-                m_killers[ply][0] = killer;
+                m_killers[ply][i] = insert;
+                break;
             }
+
+            std::swap(m_killers[ply][i], insert);
         }
     }
 
@@ -967,16 +997,24 @@ struct engine
             {
                 tt_flag = param::BETA_FLAG;
                 m_move_ordering.incr_counter(m_position, prev_move, move);
-                m_move_ordering.store_killer(m_position, move, ply);
 
+                if (m_move_ordering.is_quiet(m_position, move) && cut_node)
+                {
+                    m_move_ordering.store_killer(move, ply);
+                }
+
+                // [main history update]
                 if (m_move_ordering.is_quiet(m_position, move))
                 {
-                    const int16_t bonus = 300 * depth - 250;
-                    m_move_ordering.update_history(m_position, move, bonus);
+                    const int16_t main_history_bonus = 300 * depth - 250;
+                    m_move_ordering.update_main_history(m_position, move, main_history_bonus);
 
                     // malus apply
                     for (int j = 0; j < quiet_count; ++j)
-                        m_move_ordering.update_history(m_position, ss->quiet_moves[j], -bonus);
+                    {
+                        auto &m = ss->quiet_moves[j];
+                        m_move_ordering.update_main_history(m_position, m, -main_history_bonus);
+                    }
                 }
 
                 break;
