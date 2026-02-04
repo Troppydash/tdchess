@@ -172,6 +172,7 @@ class uci_handler
             {
                 stop_task();
                 m_param.reset();
+                m_tt->clear();
             }
             else if (lead == "isready")
             {

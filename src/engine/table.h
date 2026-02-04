@@ -106,7 +106,8 @@ class table_entry
 
     bool can_write(int32_t depth, uint8_t age) const
     {
-        return depth >= (m_depth - (m_depth >= 2)) || age > m_age;
+        uint8_t age_diff = (age - m_age) & 255;
+        return depth >= m_depth || age_diff >= 1;
     }
 };
 
@@ -117,6 +118,7 @@ class table
     size_t m_size;
     int m_power;
     uint64_t m_mask;
+    uint8_t m_generation;
 
     explicit table(size_t size_in_mb)
     {
@@ -137,6 +139,8 @@ class table
 
     void clear()
     {
+        m_generation = 0;
+
         for (size_t i = 0; i < m_size; ++i)
         {
             m_entries[i].m_hash = 0;
@@ -146,7 +150,8 @@ class table
             m_entries[i].m_flag = param::NO_FLAG;
             m_entries[i].m_is_pv = false;
             m_entries[i].m_best_move = chess::Move::NO_MOVE;
-            m_entries[i].m_age = 0;
+            // because we increase gen at search start
+            m_entries[i].m_age = 1;
         }
     }
 

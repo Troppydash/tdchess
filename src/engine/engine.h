@@ -181,6 +181,7 @@ struct move_ordering
     {
     }
 
+    template <bool IN_Q>
     void score_moves(const chess::Board &position, chess::Movelist &movelist,
                      const chess::Move &pv_move, const chess::Move &prev_move, int32_t ply)
     {
@@ -197,8 +198,17 @@ struct move_ordering
 
             if (move.typeOf() == chess::Move::PROMOTION)
             {
-                score += param::PROMOTION_OFFSET + param::PROMOTION_SCORES[move.promotionType()];
-                assert(score < param::PV_OFFSET && score >= param::PROMOTION_OFFSET);
+                if (move.promotionType() == chess::PieceType::QUEEN)
+                {
+                    score +=
+                        param::PROMOTION_OFFSET + param::PROMOTION_SCORES[move.promotionType()];
+                    assert(score < param::PV_OFFSET && score >= param::PROMOTION_OFFSET);
+                }
+                else
+                {
+                    // bad moves are underpromotion
+                    score += param::BAD_CAPTURE_OFFSET;
+                }
                 goto done;
             }
 
@@ -207,27 +217,36 @@ struct move_ordering
             {
                 // mvv lva, victim * 16 - attacker, max 15000, scaled to [-200, 200]
                 double mvv_lva = (see::TRADITIONAL_PIECE_VALUES[position.at(move.to())] * 16 -
-                                   see::TRADITIONAL_PIECE_VALUES[position.at(move.from())]) /
-                                  76.0;
+                                  see::TRADITIONAL_PIECE_VALUES[position.at(move.from())]) /
+                                 76.0;
+
+                // if (IN_Q)
+                // {
+                    // ignore fancy in qsearch
+                    score += param::GOOD_CAPTURE_OFFSET + std::round(mvv_lva);
+                    goto done;
+                // }
 
                 // see ranking, [-2000, 2000], scale by 40 to [-200, 200]
-                // double exchange = std::clamp(see::test(position, move), -3200, 3200);
-                // double scaled_exchange = exchange / 17;
-
-                // int16_t average_score = std::round((mvv_lva * 3.0 + scaled_exchange) / 4.0);
-                int16_t average_score = mvv_lva;
-                if (average_score >= -10)
-                {
-                    score += param::GOOD_CAPTURE_OFFSET + std::max(static_cast<short>(0), average_score);
-                    assert(score < param::PROMOTION_OFFSET && score >= param::GOOD_CAPTURE_OFFSET);
-                }
-                else
-                {
-                    score += param::BAD_CAPTURE_OFFSET + average_score + 200.0;
-                    assert(score < param::KILLER_OFFSET && score >= param::BAD_CAPTURE_OFFSET);
-                }
-
-                goto done;
+                // double see_raw = std::clamp(see::test(position, move), -3200, 3200);
+                // double see_score = see_raw / 17.0;
+                //
+                // double see_weight = 0.1;
+                // int16_t average_score =
+                //     std::round((mvv_lva * (1.0 - see_weight) + see_weight * see_score) / 2.0 + 100.0);
+                //
+                // if (see_raw >= 0)
+                // {
+                //     score += param::GOOD_CAPTURE_OFFSET + average_score;
+                //     assert(score < param::PROMOTION_OFFSET && score >= param::GOOD_CAPTURE_OFFSET);
+                // }
+                // else
+                // {
+                //     score += param::BAD_CAPTURE_OFFSET + average_score;
+                //     assert(score < param::KILLER_OFFSET && score >= param::BAD_CAPTURE_OFFSET);
+                // }
+                //
+                // goto done;
             }
 
             // killers
@@ -402,7 +421,6 @@ struct engine
     endgame_table *m_endgame = nullptr;
     // nnue ref
     nnue *m_nnue = nullptr;
-    uint8_t m_start_age = 0;
 
     // must be set via methods
     explicit engine(table *table) : engine(nullptr, nullptr, table)
@@ -528,11 +546,11 @@ struct engine
                 if (!param::IS_DECISIVE(best_score))
                     best_score = (best_score + beta) / 2;
 
-                if (!ss->tt_hit && entry.can_write(param::UNSEARCHED_DEPTH, m_start_age))
+                if (!ss->tt_hit && entry.can_write(param::UNSEARCHED_DEPTH, m_table->m_generation))
                 {
                     entry.set(m_position.hash(), param::BETA_FLAG, best_score, ply,
                               param::UNSEARCHED_DEPTH, chess::Move::NO_MOVE, unadjusted_static_eval,
-                              false, m_start_age);
+                              false, m_table->m_generation);
                 }
 
                 return best_score;
@@ -558,7 +576,8 @@ struct engine
                 chess::movegen::legalmoves(moves, m_position);
             else
                 chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves, m_position);
-            m_move_ordering.score_moves(m_position, moves, tt_result.move, (ss - 1)->move, ply);
+            m_move_ordering.score_moves<true>(m_position, moves, tt_result.move, (ss - 1)->move,
+                                              ply);
         }
         for (int move_count = 0; move_count < moves.size(); ++move_count)
         {
@@ -625,7 +644,8 @@ struct engine
                 else
                     chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves,
                                                                                      m_position);
-                m_move_ordering.score_moves(m_position, moves, tt_result.move, (ss - 1)->move, ply);
+                m_move_ordering.score_moves<true>(m_position, moves, tt_result.move, (ss - 1)->move,
+                                                  ply);
             }
         }
 
@@ -639,11 +659,11 @@ struct engine
         if (!param::IS_DECISIVE(best_score) && best_score > beta)
             best_score = (best_score + beta) / 2;
 
-        if (!m_timer.is_stopped() && entry.can_write(param::QDEPTH, m_start_age))
+        if (!m_timer.is_stopped() && entry.can_write(param::QDEPTH, m_table->m_generation))
         {
             entry.set(m_position.hash(), best_score >= beta ? param::BETA_FLAG : param::ALPHA_FLAG,
                       best_score, ply, param::QDEPTH, best_move, unadjusted_static_eval,
-                      ss->tt_hit && ss->tt_pv, m_start_age);
+                      ss->tt_hit && ss->tt_pv, m_table->m_generation);
         }
 
         return best_score;
@@ -763,11 +783,11 @@ struct engine
             unadjusted_static_eval = evaluate();
             ss->static_eval = adjusted_static_eval = unadjusted_static_eval;
 
-            if (entry.can_write(param::UNSEARCHED_DEPTH, m_start_age))
+            if (entry.can_write(param::UNSEARCHED_DEPTH, m_table->m_generation))
             {
                 entry.set(m_position.hash(), param::NO_FLAG, param::VALUE_NONE, ply,
                           param::UNSEARCHED_DEPTH, chess::Move::NO_MOVE, unadjusted_static_eval,
-                          ss->tt_pv, m_start_age);
+                          ss->tt_pv, m_table->m_generation);
             }
         }
 
@@ -790,10 +810,10 @@ struct engine
                                              : param::EXACT_FLAG;
 
             // Note: we return early here since we don't care about a good pv line
-            if (entry.can_write(param::TB_DEPTH, m_start_age))
+            if (entry.can_write(param::TB_DEPTH, m_table->m_generation))
             {
                 entry.set(m_position.hash(), flag, score, ply, param::TB_DEPTH,
-                          chess::Move::NO_MOVE, param::VALUE_NONE, ss->tt_pv, m_start_age);
+                          chess::Move::NO_MOVE, param::VALUE_NONE, ss->tt_pv, m_table->m_generation);
                 return score;
             }
 
@@ -892,7 +912,7 @@ struct engine
         else
         {
             chess::movegen::legalmoves(moves, m_position);
-            m_move_ordering.score_moves(m_position, moves, tt_result.move, prev_move, ply);
+            m_move_ordering.score_moves<false>(m_position, moves, tt_result.move, prev_move, ply);
             legal_moves = moves.size();
         }
 
@@ -1041,7 +1061,8 @@ struct engine
             if (lazy_move_gen && explored_moves == 1)
             {
                 chess::movegen::legalmoves(moves, m_position);
-                m_move_ordering.score_moves(m_position, moves, tt_result.move, prev_move, ply);
+                m_move_ordering.score_moves<false>(m_position, moves, tt_result.move, prev_move,
+                                                   ply);
                 m_move_ordering.sort_moves(moves, 0);
                 legal_moves = moves.size();
             }
@@ -1065,10 +1086,10 @@ struct engine
         if (best_score <= alpha)
             ss->tt_pv = ss->tt_pv || (ss - 1)->tt_pv;
 
-        if (entry.can_write(depth, m_start_age) && !m_timer.is_stopped())
+        if (entry.can_write(depth, m_table->m_generation) && !m_timer.is_stopped())
         {
             entry.set(m_position.hash(), tt_flag, best_score, ply, depth, best_move,
-                      unadjusted_static_eval, ss->tt_pv, m_start_age);
+                      unadjusted_static_eval, ss->tt_pv, m_table->m_generation);
         }
 
         // hack to make a move in root
@@ -1141,8 +1162,8 @@ struct engine
         m_stats = engine_stats{0, 0, 0, timer::now() - reference_time};
 
         // update age
-        m_start_age = reference.halfMoveClock() % 4;
         assert(m_table != nullptr);
+        m_table->m_generation += 1;
 
         m_position = reference;
 
