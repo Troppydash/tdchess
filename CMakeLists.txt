@@ -39,20 +39,31 @@ target_compile_options(tdchess_uci PRIVATE
 
 add_executable(tdchess_test src/main.cpp)
 target_link_libraries(tdchess_test PRIVATE fathom)
+#target_link_options(tdchess_test PRIVATE
+#        -fsanitize=undefined
+#)
 target_compile_options(tdchess_test PRIVATE
 #        "-O3"
 #        "-march=native"
 #        "-Wall"
+#        -fsanitize=undefined
+#        -g
 )
 
 add_executable(tdchess_elo src/main.cpp)
 target_link_libraries(tdchess_elo PRIVATE fathom)
 target_compile_definitions(tdchess_elo PRIVATE TDCHESS_ELO)
 target_include_directories(tdchess_elo PRIVATE ${Boost_INCLUDE_DIRS})
+#target_link_options(tdchess_elo PRIVATE
+#        -fsanitize=undefined
+#)
 target_compile_options(tdchess_elo PRIVATE
+#                -fsanitize=undefined
+#                -g
         "-O3"
         "-march=native"
         "-Wall"
+        "-Wextra"
 )
 
 add_executable(tdchess_pgo src/main.cpp)

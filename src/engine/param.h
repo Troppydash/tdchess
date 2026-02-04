@@ -3,8 +3,8 @@
 
 namespace param
 {
-constexpr int32_t INF = 10000000;
-constexpr int32_t CHECKMATE = 9000000;
+constexpr int32_t INF = 60000;
+constexpr int32_t CHECKMATE = 50000;
 constexpr int32_t NNUE_MAX = CHECKMATE - 100;
 constexpr int32_t VALUE_INF = INF + 10;
 constexpr int32_t VALUE_NONE = VALUE_INF + 10;

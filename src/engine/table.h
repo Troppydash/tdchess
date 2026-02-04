@@ -15,6 +15,7 @@ struct table_entry_result
     chess::Move move;
     int32_t static_eval;
     bool is_pv;
+    uint8_t flag;
 };
 
 class table_entry
@@ -31,7 +32,7 @@ class table_entry
     [[nodiscard]] table_entry_result get(uint64_t hash, int32_t ply, int32_t depth, int32_t alpha,
                                          int32_t beta) const
     {
-        int32_t adj_score = 0;
+        int32_t adj_score = param::VALUE_NONE;
         bool can_use = false;
         bool is_hit = false;
         if (m_hash == hash)
@@ -57,12 +58,12 @@ class table_entry
                     }
                     else if (m_flag == param::ALPHA_FLAG && score <= alpha)
                     {
-                        adj_score = alpha;
+                        adj_score = score;
                         can_use = true;
                     }
                     else if (m_flag == param::BETA_FLAG && score >= beta)
                     {
-                        adj_score = beta;
+                        adj_score = score;
                         can_use = true;
                     }
                 }
@@ -75,7 +76,8 @@ class table_entry
                 .depth = m_depth,
                 .move = m_best_move,
                 .static_eval = m_static_eval,
-                .is_pv = m_is_pv};
+                .is_pv = m_is_pv,
+                .flag = m_flag};
     }
 
     void set(uint64_t hash, uint8_t flag, int32_t score, int32_t ply, int32_t depth,
@@ -136,13 +138,12 @@ class table
         for (size_t i = 0; i < m_size; ++i)
         {
             m_entries[i].m_hash = 0;
-
-            // we don't reset these coz they are never touched without tt hit
-            // m_entries[i].m_static_eval = param::VALUE_NONE;
-            // m_entries[i].m_score = param::VALUE_NONE;
-            // m_entries[i].m_flag = param::NO_FLAG;
-            // m_entries[i].m_is_pv = false;
-            // m_entries[i].m_best_move = chess::Move::NO_MOVE;
+            m_entries[i].m_depth = param::UNSEARCHED_DEPTH;
+            m_entries[i].m_static_eval = param::VALUE_NONE;
+            m_entries[i].m_score = param::VALUE_NONE;
+            m_entries[i].m_flag = param::NO_FLAG;
+            m_entries[i].m_is_pv = false;
+            m_entries[i].m_best_move = chess::Move::NO_MOVE;
         }
     }
 
