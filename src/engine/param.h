@@ -19,7 +19,8 @@ constexpr int16_t MAX_HISTORY = MVV_OFFSET - 200;
 constexpr int16_t PV_SCORE = 200;
 constexpr std::array<int16_t, 7> PROMOTION_SCORES = {0, 10, 20, 30, 40, 0, 0};
 constexpr size_t NUMBER_KILLERS = 2;
-constexpr std::array<int16_t, NUMBER_KILLERS> KILLER_SCORE = {-10, -20};
+constexpr std::array<int16_t, NUMBER_KILLERS> KILLER_SCORE = {-60, -70};
+constexpr int16_t MATE_KILLER_BONUS = 50;
 constexpr int16_t COUNTER_BONUS = 5;
 
 constexpr uint8_t EXACT_FLAG = 3;

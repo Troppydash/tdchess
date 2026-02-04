@@ -169,32 +169,16 @@ template <typename I, I LIMIT> struct history_entry
 
 struct move_ordering
 {
-    std::array<chess::Move, param::NUMBER_KILLERS> m_killers[param::MAX_DEPTH];
+    std::array<std::pair<chess::Move, bool>, param::NUMBER_KILLERS> m_killers[param::MAX_DEPTH]{};
 
-    chess::Move m_counter[2][64][64];
+    chess::Move m_counter[2][64][64]{};
 
-    history_entry<int16_t, param::MAX_HISTORY> m_main_history[2][64][64];
+    history_entry<int16_t, param::MAX_HISTORY> m_main_history[2][64][64]{};
 
     const engine_param m_param;
 
     explicit move_ordering(const engine_param &param) : m_param(param)
     {
-        // init killer/counter/history
-        for (auto &i : m_main_history)
-            for (auto &j : i)
-                for (auto &k : j)
-                    k.value = 0;
-
-        for (auto &m : m_killers)
-        {
-            for (size_t i = 0; i < param::NUMBER_KILLERS; ++i)
-                m[i] = chess::Move::NO_MOVE;
-        }
-
-        for (auto &i : m_counter)
-            for (auto &j : i)
-                for (auto &k : j)
-                    k = chess::Move::NO_MOVE;
     }
 
     void score_moves(const chess::Board &position, chess::Movelist &movelist,
@@ -214,6 +198,8 @@ struct move_ordering
             // captures
             if (position.isCapture(move))
             {
+                // see ranking
+
                 auto moved = position.at(move.from()).type();
                 auto captured = position.at(move.to()).type();
                 score += param::MVV_OFFSET + m_param.mvv_lva[captured][moved];
@@ -236,9 +222,13 @@ struct move_ordering
                 // current ply
                 for (size_t i = 0; i < param::NUMBER_KILLERS; ++i)
                 {
-                    if (move == m_killers[ply][i])
+                    if (move == m_killers[ply][i].first)
                     {
                         score += param::MVV_OFFSET + param::KILLER_SCORE[i];
+                        // mate killers bonus
+                        if (m_killers[ply][i].second)
+                            score += param::MATE_KILLER_BONUS;
+
                         goto done;
                     }
                 }
@@ -295,12 +285,12 @@ struct move_ordering
             bonus);
     }
 
-    void store_killer(const chess::Move &killer, int32_t ply)
+    void store_killer(const chess::Move &killer, int32_t ply, bool is_mate)
     {
-        chess::Move insert = killer;
-        for (size_t i = 0; i < param::NUMBER_KILLERS && insert != chess::Move::NO_MOVE; ++i)
+        std::pair<chess::Move, bool> insert = {killer, is_mate};
+        for (size_t i = 0; i < param::NUMBER_KILLERS && insert.first != chess::Move::NO_MOVE; ++i)
         {
-            if (killer == m_killers[ply][i])
+            if (killer == m_killers[ply][i].first)
             {
                 m_killers[ply][i] = insert;
                 break;
@@ -786,7 +776,7 @@ struct engine
             // Note: we return early here since we don't care about a good pv line
             if (entry.can_write(param::TB_DEPTH, m_start_age))
             {
-                entry.set(m_position.hash(), param::EXACT_FLAG, score, ply, param::TB_DEPTH,
+                entry.set(m_position.hash(), flag, score, ply, param::TB_DEPTH,
                           chess::Move::NO_MOVE, param::VALUE_NONE, ss->tt_pv, m_start_age);
                 return score;
             }
@@ -998,9 +988,10 @@ struct engine
                 tt_flag = param::BETA_FLAG;
                 m_move_ordering.incr_counter(m_position, prev_move, move);
 
+                // [killer moves update]
                 if (m_move_ordering.is_quiet(m_position, move) && cut_node)
                 {
-                    m_move_ordering.store_killer(move, ply);
+                    m_move_ordering.store_killer(move, ply, param::IS_WIN(score));
                 }
 
                 // [main history update]
