@@ -28,6 +28,7 @@ class table_entry
     int32_t m_static_eval = param::VALUE_NONE;
     bool m_is_pv = false;
     uint8_t m_flag = param::NO_FLAG;
+    uint8_t m_age = 0;
 
     [[nodiscard]] table_entry_result get(uint64_t hash, int32_t ply, int32_t depth, int32_t alpha,
                                          int32_t beta) const
@@ -81,7 +82,7 @@ class table_entry
     }
 
     void set(uint64_t hash, uint8_t flag, int32_t score, int32_t ply, int32_t depth,
-             const chess::Move &best_move, int32_t static_eval, bool is_pv)
+             const chess::Move &best_move, int32_t static_eval, bool is_pv, uint8_t age)
     {
         m_hash = hash;
         m_depth = depth;
@@ -100,11 +101,12 @@ class table_entry
         }
 
         m_score = score;
+        m_age = age;
     }
 
-    bool can_write(int32_t depth) const
+    bool can_write(int32_t depth, uint8_t age) const
     {
-        return depth >= m_depth;
+        return depth >= (m_depth - (m_depth >= 2)) || age > m_age;
     }
 };
 
@@ -144,6 +146,7 @@ class table
             m_entries[i].m_flag = param::NO_FLAG;
             m_entries[i].m_is_pv = false;
             m_entries[i].m_best_move = chess::Move::NO_MOVE;
+            m_entries[i].m_age = 0;
         }
     }
 

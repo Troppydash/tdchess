@@ -38,7 +38,7 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
     arena_settings settings;
     if (is_short)
         settings = arena_settings{latest + "_against_" + baseline, 11, 10 * 1000,
-                                  static_cast<int>(0.3 * 1000)};
+                                  static_cast<int>(0.1 * 1000)};
     else
         settings = arena_settings{latest + "_against_" + baseline, 11, 60 * 1000,
                                   static_cast<int>(0.6 * 1000)};
