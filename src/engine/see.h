@@ -7,7 +7,7 @@ struct see
 {
     constexpr static std::array<int32_t, 7> TRADITIONAL_PIECE_VALUES = {
         // pawn, knight, bishop, rook, queen, king, none
-        200, 320, 330, 500, 900, 0, 0,
+        100, 320, 330, 500, 900, 1000, 0,
     };
 
     constexpr static std::array<int32_t, 7> PIECE_VALUES = {

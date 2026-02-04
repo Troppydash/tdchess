@@ -215,38 +215,50 @@ struct move_ordering
             // captures
             if (position.isCapture(move))
             {
-                // mvv lva, victim * 16 - attacker, max 15000, scaled to [-200, 200]
-                double mvv_lva = (see::TRADITIONAL_PIECE_VALUES[position.at(move.to())] * 16 -
-                                  see::TRADITIONAL_PIECE_VALUES[position.at(move.from())]) /
-                                 76.0;
+                // mvv lva, victim * 16 - attacker, [15000, 700] max 15000, scaled to [-200, 200]
+                double mvv_lva = (see::TRADITIONAL_PIECE_VALUES[position.at(move.to()).type()] * 16 -
+                                  see::TRADITIONAL_PIECE_VALUES[position.at(move.from()).type()]);
 
-                // if (IN_Q)
-                // {
+                constexpr double KVALUE = see::TRADITIONAL_PIECE_VALUES[static_cast<uint8_t>(chess::PieceType::KING)];
+                constexpr double QVALUE = see::TRADITIONAL_PIECE_VALUES[static_cast<uint8_t>(chess::PieceType::QUEEN)];
+                constexpr double PVALUE = see::TRADITIONAL_PIECE_VALUES[static_cast<uint8_t>(chess::PieceType::PAWN)];
+                constexpr double MAX = QVALUE * 16 - PVALUE;
+                constexpr double MIN = PVALUE * 16 - KVALUE;
+                constexpr double MID = (MAX + MIN) / 2.0;
+                constexpr double SCALE = (MAX - MIN);
+
+                // from [-0.5, 0.5] to [-200, 200]
+                mvv_lva = (mvv_lva - MID) / SCALE * 2.0 * 200.0;
+                assert(mvv_lva <= 200.0 && mvv_lva >= -200.0);
+                if (IN_Q)
+                {
                     // ignore fancy in qsearch
-                    score += param::GOOD_CAPTURE_OFFSET + std::round(mvv_lva);
+                    score += param::GOOD_CAPTURE_OFFSET + std::round((mvv_lva / 2.0) + 100.0);
+                    assert(score >= param::GOOD_CAPTURE_OFFSET && score < param::PV_OFFSET);
                     goto done;
-                // }
+                }
 
                 // see ranking, [-2000, 2000], scale by 40 to [-200, 200]
-                // double see_raw = std::clamp(see::test(position, move), -3200, 3200);
-                // double see_score = see_raw / 17.0;
-                //
-                // double see_weight = 0.1;
-                // int16_t average_score =
-                //     std::round((mvv_lva * (1.0 - see_weight) + see_weight * see_score) / 2.0 + 100.0);
-                //
-                // if (see_raw >= 0)
-                // {
-                //     score += param::GOOD_CAPTURE_OFFSET + average_score;
-                //     assert(score < param::PROMOTION_OFFSET && score >= param::GOOD_CAPTURE_OFFSET);
-                // }
-                // else
-                // {
-                //     score += param::BAD_CAPTURE_OFFSET + average_score;
-                //     assert(score < param::KILLER_OFFSET && score >= param::BAD_CAPTURE_OFFSET);
-                // }
-                //
-                // goto done;
+                double see_raw = std::clamp(see::test(position, move), -3200, 3200);
+                double see_score = see_raw / 17.0;
+
+                double see_weight = 0.1;
+                int16_t average_score =
+                    std::round((mvv_lva * (1.0 - see_weight) + see_weight * see_score) / 2.0 + 100.0);
+
+                // additional odds
+                if (see_raw >= -700)
+                {
+                    score += param::GOOD_CAPTURE_OFFSET + average_score;
+                    assert(score < param::PROMOTION_OFFSET && score >= param::GOOD_CAPTURE_OFFSET);
+                }
+                else
+                {
+                    score += param::BAD_CAPTURE_OFFSET + average_score;
+                    assert(score < param::KILLER_OFFSET && score >= param::BAD_CAPTURE_OFFSET);
+                }
+
+                goto done;
             }
 
             // killers
