@@ -191,29 +191,42 @@ struct move_ordering
             // pv
             if (move == pv_move)
             {
-                score += param::MVV_OFFSET + param::PV_SCORE;
+                score += param::PV_OFFSET;
+                goto done;
+            }
+
+            if (move.typeOf() == chess::Move::PROMOTION)
+            {
+                score += param::PROMOTION_OFFSET + param::PROMOTION_SCORES[move.promotionType()];
+                assert(score < param::PV_OFFSET && score >= param::PROMOTION_OFFSET);
                 goto done;
             }
 
             // captures
             if (position.isCapture(move))
             {
-                // see ranking
+                // mvv lva, victim * 16 - attacker, max 15000, scaled to [-200, 200]
+                double mvv_lva = (see::TRADITIONAL_PIECE_VALUES[position.at(move.to())] * 16 -
+                                   see::TRADITIONAL_PIECE_VALUES[position.at(move.from())]) /
+                                  76.0;
 
-                auto moved = position.at(move.from()).type();
-                auto captured = position.at(move.to()).type();
-                score += param::MVV_OFFSET + m_param.mvv_lva[captured][moved];
+                // see ranking, [-2000, 2000], scale by 40 to [-200, 200]
+                // double exchange = std::clamp(see::test(position, move), -3200, 3200);
+                // double scaled_exchange = exchange / 17;
 
-                if (move.typeOf() == chess::Move::PROMOTION)
-                    score += param::PROMOTION_SCORES[move.promotionType()];
+                // int16_t average_score = std::round((mvv_lva * 3.0 + scaled_exchange) / 4.0);
+                int16_t average_score = mvv_lva;
+                if (average_score >= -10)
+                {
+                    score += param::GOOD_CAPTURE_OFFSET + std::max(static_cast<short>(0), average_score);
+                    assert(score < param::PROMOTION_OFFSET && score >= param::GOOD_CAPTURE_OFFSET);
+                }
+                else
+                {
+                    score += param::BAD_CAPTURE_OFFSET + average_score + 200.0;
+                    assert(score < param::KILLER_OFFSET && score >= param::BAD_CAPTURE_OFFSET);
+                }
 
-                goto done;
-            }
-
-            // promotions
-            if (move.typeOf() == chess::Move::PROMOTION)
-            {
-                score += param::MVV_OFFSET + param::PROMOTION_SCORES[move.promotionType()];
                 goto done;
             }
 
@@ -224,11 +237,12 @@ struct move_ordering
                 {
                     if (move == m_killers[ply][i].first)
                     {
-                        score += param::MVV_OFFSET + param::KILLER_SCORE[i];
+                        score += param::KILLER_OFFSET + param::KILLER_SCORE[i];
                         // mate killers bonus
                         if (m_killers[ply][i].second)
                             score += param::MATE_KILLER_BONUS;
 
+                        assert(score < param::GOOD_CAPTURE_OFFSET && score >= param::KILLER_OFFSET);
                         goto done;
                     }
                 }
@@ -250,6 +264,8 @@ struct move_ordering
                                            [move.to().index()]
                                                .get_value();
                 }
+
+                assert(score < param::BAD_CAPTURE_OFFSET);
             }
 
         done:
