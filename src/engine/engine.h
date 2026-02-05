@@ -775,9 +775,9 @@ struct engine
         tt_result.move = tt_result.hit ? tt_result.move : chess::Move::NO_MOVE;
         bool is_tt_capture =
             tt_result.move != chess::Move::NO_MOVE && m_position.isCapture(tt_result.move);
+
         // [tt early return]
-        // Note: we can extend this when pv_node, but it won't improve performance at all
-        if (tt_result.can_use && !is_root)
+        if (!is_root && !is_pv_node && tt_result.can_use)
         {
             return tt_result.score;
         }
@@ -788,7 +788,7 @@ struct engine
         ss->in_check = m_position.inCheck();
         if (ss->in_check)
         {
-            ss->static_eval = adjusted_static_eval = (ss - 2)->static_eval;
+            ss->static_eval = adjusted_static_eval = param::VALUE_NONE;
         }
         else if (ss->tt_hit)
         {
@@ -838,14 +838,16 @@ struct engine
                           : wdl > draw_score ? param::BETA_FLAG
                                              : param::EXACT_FLAG;
 
-            // Note: we return early here since we don't care about a good pv line
-            if (entry.can_write(param::TB_DEPTH, m_table->m_generation))
+            // TODO: fix early return
+            int32_t new_depth = param::TB_DEPTH;
+            if (entry.can_write(new_depth, m_table->m_generation))
             {
-                entry.set(m_position.hash(), flag, score, ply, param::TB_DEPTH,
-                          chess::Move::NO_MOVE, param::VALUE_NONE, ss->tt_pv,
-                          m_table->m_generation);
-                return score;
+                entry.set(m_position.hash(), flag, score, ply,
+                          new_depth, chess::Move::NO_MOVE,
+                          param::VALUE_NONE, ss->tt_pv, m_table->m_generation);
             }
+
+            return score;
         }
 
         if (ss->in_check)
@@ -869,7 +871,6 @@ struct engine
         {
             const bool has_non_pawns = m_position.hasNonPawnMaterial(chess::Color::WHITE) &&
                                        m_position.hasNonPawnMaterial(chess::Color::BLACK);
-            //  && adjusted_static_eval >= beta + 300 - 50 * depth
             if (cut_node && !ss->is_null && has_non_pawns && beta < param::CHECKMATE)
             {
                 int32_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
@@ -1001,7 +1002,7 @@ struct engine
 
             // [late move reduction]
             int32_t reduction = 0;
-            if (depth >= 3 && move_count > 0 && !is_pv_node)
+            if (!is_pv_node && depth >= 3 && move_count >= 2 && !ss->in_check && !is_capture)
                 reduction += m_param.lmr[depth][move_count] * 1024;
 
             int32_t reduced_depth;
@@ -1026,6 +1027,21 @@ struct engine
                         if (fut_value <= alpha)
                             goto lazy_move_gen;
                     }
+
+                    // [see pruning for captures and checks]
+                    // need to ensure that we don't prune: sac last non-pawn for stalemate
+                    auto non_pawn_pieces_sqs =
+                        m_position.pieces(chess::PieceType::KNIGHT, m_position.sideToMove()) |
+                        m_position.pieces(chess::PieceType::BISHOP, m_position.sideToMove()) |
+                        m_position.pieces(chess::PieceType::ROOK, m_position.sideToMove()) |
+                        m_position.pieces(chess::PieceType::QUEEN, m_position.sideToMove());
+                    auto moved_sq = chess::Bitboard(1ull << move.from().index());
+                    if (alpha >= param::VALUE_DRAW || non_pawn_pieces_sqs != moved_sq)
+                    {
+                        int32_t margin = 200 + 400 * depth;
+                        if (!see::test_ge(m_position, move, -margin))
+                            goto lazy_move_gen;
+                    }
                 }
                 else
                 {
@@ -1043,15 +1059,20 @@ struct engine
                             goto lazy_move_gen;
                         }
                     }
+
+                    // [see general pruning]
+                    int32_t margin = 100 + 50 * lmr_depth * lmr_depth;
+                    if (!see::test_ge(m_position, move, -margin))
+                    {
+                        goto lazy_move_gen;
+                    }
                 }
             }
 
-            // reduce on cut node
-            // if (cut_node)
-            //     reduction += 1200;
+            // [singular extension]
 
-            // check extension
-            if (m_position.givesCheck(move) != chess::CheckType::NO_CHECK)
+            // [check extension]
+            if (is_check)
             {
                 reduction -= 1100;
             }

@@ -37,7 +37,7 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
 
     arena_settings settings;
     if (is_short)
-        settings = arena_settings{latest + "_against_" + baseline, 16, 20 * 1000,
+        settings = arena_settings{latest + "_against_" + baseline, 16, 10 * 1000,
                                   static_cast<int>(0.1 * 1000)};
     else
         settings = arena_settings{latest + "_against_" + baseline, 16 , 60 * 1000,
@@ -62,7 +62,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.10-charlie", "1.0.10-delta", true);
+    improvement_test("1.0.10-delta", "1.0.11", true);
 
     return 0;
 }

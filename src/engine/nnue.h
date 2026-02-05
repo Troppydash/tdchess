@@ -38,10 +38,19 @@ inline int32_t screlu(int16_t x)
     return val * val;
 }
 
+
+struct dirty_entry
+{
+    chess::Move move;
+
+};
+
 class nnue
 {
   private:
     network m_network{};
+    // alignas(64)
+
     accumulator m_sides[2][param::MAX_DEPTH]{};
     int m_ply{0};
 
