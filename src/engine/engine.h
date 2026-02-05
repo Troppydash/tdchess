@@ -216,12 +216,16 @@ struct move_ordering
             if (position.isCapture(move))
             {
                 // mvv lva, victim * 16 - attacker, [15000, 700] max 15000, scaled to [-200, 200]
-                double mvv_lva = (see::TRADITIONAL_PIECE_VALUES[position.at(move.to()).type()] * 16 -
-                                  see::TRADITIONAL_PIECE_VALUES[position.at(move.from()).type()]);
+                double mvv_lva =
+                    (see::TRADITIONAL_PIECE_VALUES[position.at(move.to()).type()] * 16 -
+                     see::TRADITIONAL_PIECE_VALUES[position.at(move.from()).type()]);
 
-                constexpr double KVALUE = see::TRADITIONAL_PIECE_VALUES[static_cast<uint8_t>(chess::PieceType::KING)];
-                constexpr double QVALUE = see::TRADITIONAL_PIECE_VALUES[static_cast<uint8_t>(chess::PieceType::QUEEN)];
-                constexpr double PVALUE = see::TRADITIONAL_PIECE_VALUES[static_cast<uint8_t>(chess::PieceType::PAWN)];
+                constexpr double KVALUE =
+                    see::TRADITIONAL_PIECE_VALUES[static_cast<uint8_t>(chess::PieceType::KING)];
+                constexpr double QVALUE =
+                    see::TRADITIONAL_PIECE_VALUES[static_cast<uint8_t>(chess::PieceType::QUEEN)];
+                constexpr double PVALUE =
+                    see::TRADITIONAL_PIECE_VALUES[static_cast<uint8_t>(chess::PieceType::PAWN)];
                 constexpr double MAX = QVALUE * 16 - PVALUE;
                 constexpr double MIN = PVALUE * 16 - KVALUE;
                 constexpr double MID = (MAX + MIN) / 2.0;
@@ -243,8 +247,8 @@ struct move_ordering
                 double see_score = see_raw / 17.0;
 
                 double see_weight = 0.1;
-                int16_t average_score =
-                    std::round((mvv_lva * (1.0 - see_weight) + see_weight * see_score) / 2.0 + 100.0);
+                int16_t average_score = std::round(
+                    (mvv_lva * (1.0 - see_weight) + see_weight * see_score) / 2.0 + 100.0);
 
                 // additional odds
                 if (see_raw >= -700)
@@ -825,7 +829,8 @@ struct engine
             if (entry.can_write(param::TB_DEPTH, m_table->m_generation))
             {
                 entry.set(m_position.hash(), flag, score, ply, param::TB_DEPTH,
-                          chess::Move::NO_MOVE, param::VALUE_NONE, ss->tt_pv, m_table->m_generation);
+                          chess::Move::NO_MOVE, param::VALUE_NONE, ss->tt_pv,
+                          m_table->m_generation);
                 return score;
             }
 
@@ -890,6 +895,9 @@ struct engine
             {
                 int32_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
 
+                // since nmp uses ss+1, we fake that this move is nothing
+                ss->move = chess::Move::NO_MOVE;
+
                 (ss + 1)->is_null = true;
                 m_position.makeNullMove();
                 int32_t null_score =
@@ -903,6 +911,72 @@ struct engine
                 if (null_score >= beta && null_score < param::CHECKMATE)
                 {
                     return beta;
+                }
+            }
+        }
+
+        // [prob cut]
+        // the score of a lower depth is likely similar to a score of higher depth
+        // goal is to convert beta to beta of a lower depth, and reject that
+        // we do move gen and eval using this first
+        {
+            // assume a 350 shift
+            int32_t probcut_beta = beta + 300;
+            if (!is_pv_node && depth >= 3 && !param::IS_DECISIVE(beta) &&
+                // also ignore when tt score is lower than expected beta
+                !(tt_result.hit && param::IS_VALID(tt_result.score) &&
+                  tt_result.score < probcut_beta))
+            {
+                // only care about capture/good moves
+                chess::Movelist moves{};
+                chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves, m_position);
+
+                // add pv move as well
+                if (tt_result.move != chess::Move::NO_MOVE)
+                    moves.add(tt_result.move);
+
+                m_move_ordering.score_moves<true>(m_position, moves, tt_result.move, prev_move,
+                                                  ply);
+
+                int32_t probcut_depth = std::clamp(depth - 3, 0, depth);
+                for (int i = 0; i < moves.size(); ++i)
+                {
+                    m_move_ordering.sort_moves(moves, i);
+                    chess::Move &move = moves[i];
+
+                    // skip second pv move
+                    if (i == 1 && move == tt_result.move)
+                        continue;
+
+                    ss->move = move;
+                    make_move(move);
+
+                    // check if move exceeds beta first
+                    int32_t score = -qsearch<NonPV>(-probcut_beta, -probcut_beta + 1, ss + 1);
+                    // full search if qsearch null window worked
+                    if (score >= probcut_beta && probcut_depth > 0)
+                    {
+                        score = -negamax<NonPV>(-probcut_beta, -probcut_beta + 1, probcut_depth,
+                                                ss + 1, !cut_node);
+                    }
+
+                    unmake_move(move);
+
+                    // check if can cut at lower depth
+                    if (score >= probcut_beta)
+                    {
+                        if (entry.can_write(probcut_depth + 1, m_table->m_generation))
+                        {
+                            entry.set(m_position.hash(), param::BETA_FLAG, score, ply,
+                                      probcut_depth + 1, move, unadjusted_static_eval, ss->tt_pv,
+                                      m_table->m_generation);
+                        }
+
+                        if (!param::IS_DECISIVE(score))
+                        {
+                            return score - probcut_beta + beta;
+                        }
+                    }
                 }
             }
         }
