@@ -60,10 +60,10 @@ target_include_directories(tdchess_elo PRIVATE ${Boost_INCLUDE_DIRS})
 target_compile_options(tdchess_elo PRIVATE
 #                -fsanitize=undefined
 #                -g
-#        "-O3"
-#        "-march=native"
-#        "-Wall"
-#        "-Wextra"
+        "-O3"
+        "-march=native"
+        "-Wall"
+        "-Wextra"
 )
 
 add_executable(tdchess_pgo src/main.cpp)

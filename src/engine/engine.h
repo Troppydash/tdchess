@@ -400,7 +400,7 @@ struct search_stack
     int32_t ply;
     chess::Move move = chess::Move::NO_MOVE;
     bool in_check = false;
-    int32_t static_eval = param::VALUE_DRAW;
+    int32_t static_eval = param::VALUE_NONE;
     bool tt_pv = false;
     bool tt_hit = false;
     bool is_null = false;
@@ -1019,11 +1019,79 @@ struct engine
             const chess::Move &move = moves[move_count];
             ss->move = move;
 
+            bool is_capture = m_position.isCapture(move);
+            bool is_check = m_position.givesCheck(move) != chess::CheckType::NO_CHECK;
 
             // [late move reduction]
             int32_t reduction = 0;
             if (depth >= 2)
                 reduction += m_param.lmr[depth][move_count] * 1024;
+
+            int32_t reduced_depth;
+            int32_t score;
+
+            // [low depth pruning]
+            bool has_non_pawn = m_position.hasNonPawnMaterial(chess::Color::WHITE) &&
+                                m_position.hasNonPawnMaterial(chess::Color::BLACK);
+            if (!is_root && move_count > 0 && !is_pv_node && has_non_pawn &&
+                !param::IS_LOSS(best_score))
+            {
+                // int32_t lmr_depth = std::max(0, depth - 1 - reduction / 1024);
+                int32_t lmr_depth = depth;
+
+                if (is_capture || is_check)
+                {
+                    auto captured = m_position.at(move.to()).type();
+
+                    // [fut prune for captures]
+                    if (!is_check && lmr_depth < 7 && param::IS_VALID(ss->static_eval))
+                    {
+                        int32_t fut_value =
+                            ss->static_eval + 400 + 300 * lmr_depth + see::PIECE_VALUES[captured];
+                        if (fut_value <= alpha)
+                            goto lazy_move_gen;
+                    }
+
+                    // [see pruning for captures and checks]
+                    // need to ensure that we don't prune: sac last non-pawn for stalemate
+                    // auto non_pawn_pieces_sqs =
+                    //     m_position.pieces(chess::PieceType::KNIGHT, m_position.sideToMove()) |
+                    //     m_position.pieces(chess::PieceType::BISHOP, m_position.sideToMove()) |
+                    //     m_position.pieces(chess::PieceType::ROOK, m_position.sideToMove()) |
+                    //     m_position.pieces(chess::PieceType::QUEEN, m_position.sideToMove());
+                    // auto moved_sq = chess::Bitboard(1ull << move.from().index());
+                    // if (alpha >= param::VALUE_DRAW || non_pawn_pieces_sqs != moved_sq)
+                    // {
+                    //     int32_t margin = 300 * depth;
+                    //     if (see::test(m_position, move) < -margin)
+                    //         goto lazy_move_gen;
+                    // }
+                }
+                else
+                {
+                    // [fut prune for general]
+                    int32_t fut_value = ss->static_eval + 400 + 300 * lmr_depth;
+
+                    if (!ss->in_check && lmr_depth < 14 && fut_value <= alpha &&
+                        param::IS_VALID(ss->static_eval))
+                    {
+                        // shift best_score to fut value
+                        // if (best_score < fut_value && !param::IS_DECISIVE(best_score) &&
+                        // !param::IS_WIN(fut_value))
+                        // best_score = fut_value;
+
+                        goto lazy_move_gen;
+                    }
+
+                    // [see general pruning]
+                    // lmr_depth = std::max(0, lmr_depth);
+                    // int32_t margin = 100 * lmr_depth * lmr_depth;
+                    // if (see::test(m_position, move) < -margin)
+                    // {
+                    //     goto lazy_move_gen;
+                    // }
+                }
+            }
 
             // reduce on cut node
             if (cut_node)
@@ -1056,11 +1124,10 @@ struct engine
             if (move_count == 0 && lazy_move_gen)
                 reduction = 0;
 
-            int32_t reduced_depth = std::min(depth - 1 - reduction / 1024, depth);
+            reduced_depth = std::min(depth - 1 - reduction / 1024, depth);
 
             make_move(move);
 
-            int32_t score;
             if (is_pv_node)
             {
                 // PV-NODE, goal is to full search to get exact score
@@ -1149,6 +1216,7 @@ struct engine
                 m_line.update(ply, move);
             }
 
+        lazy_move_gen:
             if (lazy_move_gen && move_count == 0)
             {
                 chess::movegen::legalmoves(moves, m_position);
