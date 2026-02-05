@@ -13,6 +13,10 @@ Data sources
 - Syzygy database: http://tablebase.sesse.net/syzygy/3-4-5/
 - NNUE training: https://huggingface.co/datasets/linrock/test80-2024/blob/main/test80-2024-06-jun-2tb7p.min-v2.v6.binpack.zst
 
+Opening books
+- For running: https://sites.google.com/site/computerschess/perfect-2023-books
+- For testing: https://www.chessprogramming.net/new-version-of-the-baron-v3-43-plus-the-barons-polyglot-opening-book/
+
 Code references
 - Fishtest GSPRT: https://github.com/official-stockfish/fishtest/blob/master/server/fishtest/stats/sprt.py
 

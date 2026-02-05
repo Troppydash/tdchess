@@ -184,8 +184,8 @@ template <typename Result = gsprt_results> class arena
         agent agent0{agent0_settings};
         agent agent1{agent1_settings};
 
-        agent0.new_game();
-        agent1.new_game();
+        agent0.new_game(core);
+        agent1.new_game(core);
 
         arena_clock agent0_clock{m_settings.basetime, m_settings.increment};
         arena_clock agent1_clock{m_settings.basetime, m_settings.increment};
@@ -226,7 +226,7 @@ template <typename Result = gsprt_results> class arena
             if (side2move == agent0_side2move)
             {
                 agent0_clock.start();
-                move = agent0.search(moves, param, core);
+                move = agent0.search(moves, param);
                 bool timeout = agent0_clock.stop();
                 if (timeout)
                 {
@@ -237,7 +237,7 @@ template <typename Result = gsprt_results> class arena
             else
             {
                 agent1_clock.start();
-                move = agent1.search(moves, param, core);
+                move = agent1.search(moves, param);
                 bool timeout = agent1_clock.stop();
                 if (timeout)
                 {

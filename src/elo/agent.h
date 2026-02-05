@@ -281,18 +281,17 @@ class agent
         return m_name;
     }
 
-    void new_game() const
+    void new_game(int core = -1) const
     {
         pipe_helpers::write_line(m_in, "ucinewgame\n");
+        // set core
+        pipe_helpers::write_line(m_in,
+                                 "setoption name CoreAff value " + std::to_string(core) + "\n");
     }
 
     chess::Move search(const std::vector<chess::Move> &moves, const search_param param,
                        const int core = -1)
     {
-        // set core
-        pipe_helpers::write_line(m_in,
-                                 "setoption name CoreAff value " + std::to_string(core) + "\n");
-
         // load position
         chess::Board board;
         std::string position_string = "position startpos moves";
