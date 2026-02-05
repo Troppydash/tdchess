@@ -11,7 +11,7 @@ constexpr int32_t VALUE_NONE = VALUE_INF + 10;
 constexpr int32_t VALUE_DRAW = 0;
 
 // TODO: use dtz to get a true mate in x
-constexpr int32_t VALUE_SYZYGY = CHECKMATE - 50;
+constexpr int32_t VALUE_SYZYGY = INF - 500;
 
 // move ordering
 // PV_OFFSET

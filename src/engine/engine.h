@@ -823,10 +823,11 @@ struct engine
 
         // [check syzygy endgame table]
         int32_t best_score = -param::VALUE_INF;
+        int32_t max_score = param::VALUE_INF;
         if (m_endgame != nullptr && !is_root && m_endgame->is_stored(m_position))
         {
             int32_t wdl = m_endgame->probe_wdl(m_position);
-            int32_t draw_score = 1;
+            int32_t draw_score = 0;
 
             int32_t tb_score = param::VALUE_SYZYGY - ply;
 
@@ -839,15 +840,32 @@ struct engine
                                              : param::EXACT_FLAG;
 
             // TODO: fix early return
-            int32_t new_depth = param::TB_DEPTH;
-            if (entry.can_write(new_depth, m_table->m_generation))
+            if (flag == param::EXACT_FLAG ||
+                (flag == param::BETA_FLAG ? score >= beta : score <= alpha))
             {
-                entry.set(m_position.hash(), flag, score, ply,
-                          new_depth, chess::Move::NO_MOVE,
-                          param::VALUE_NONE, ss->tt_pv, m_table->m_generation);
+                int32_t new_depth = param::TB_DEPTH;
+                if (entry.can_write(new_depth, m_table->m_generation))
+                {
+                    entry.set(m_position.hash(), flag, score, ply, new_depth, chess::Move::NO_MOVE,
+                              unadjusted_static_eval, ss->tt_pv, m_table->m_generation);
+                }
+
+                return score;
             }
 
-            return score;
+            if (is_pv_node)
+            {
+                if (flag == param::BETA_FLAG)
+                {
+                    best_score = score;
+                    alpha = std::max(alpha, score);
+                }
+                else
+                {
+                    max_score = score;
+                }
+            }
+
         }
 
         if (ss->in_check)
@@ -1173,9 +1191,20 @@ struct engine
             return param::VALUE_DRAW;
         }
 
+        if (is_pv_node)
+            best_score = std::min(best_score, max_score);
+
         // if no good move found, last move good so add this one too
-        if (best_score <= alpha)
+        if (best_score < alpha)
             ss->tt_pv = ss->tt_pv || (ss - 1)->tt_pv;
+
+        // hack to make a move in root
+        if (is_root && best_move == chess::Move::NO_MOVE && m_line.pv_length[0] == 0)
+        {
+            m_line.pv_table[0][0] = moves[0];
+            m_line.pv_length[0] = 1;
+            best_move = moves[0];
+        }
 
         if (entry.can_write(depth, m_table->m_generation) && !m_timer.is_stopped())
         {
@@ -1183,11 +1212,7 @@ struct engine
                       unadjusted_static_eval, ss->tt_pv, m_table->m_generation);
         }
 
-        // hack to make a move in root
-        if (is_root && best_move == chess::Move::NO_MOVE && m_line.pv_length[0] == 0)
-        {
-            m_line.update(ply, moves[0]);
-        }
+
 
         return best_score;
     }

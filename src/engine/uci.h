@@ -67,6 +67,8 @@ class uci_handler
 
     void loop()
     {
+        std::ios::sync_with_stdio(false);
+
         std::string buffer{};
         while (true)
         {
