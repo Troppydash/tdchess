@@ -50,7 +50,6 @@ struct endgame_table
             ply += 1;
             position.makeMove(move);
 
-
             // timer check in case long position, here to ensure that at least one pv is found
             if (ply % 16 == 0)
             {
@@ -141,8 +140,7 @@ struct endgame_table
                 }
                 else if (m.typeOf() == chess::Move::ENPASSANT)
                 {
-                    if (ep_ == m.to().index())
-                        return {m, wdl};
+                    return {m, wdl};
                 }
                 else
                 {
@@ -150,6 +148,9 @@ struct endgame_table
                 }
             }
         }
+
+        std::cout << ep << "," << ep_ << std::endl;
+        std::cout << position << std::endl;
 
         throw std::runtime_error{"impossible"};
     }

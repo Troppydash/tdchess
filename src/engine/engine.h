@@ -397,7 +397,7 @@ struct pv_line
 
 struct search_stack
 {
-    int32_t ply;
+    int32_t ply = 0;
     chess::Move move = chess::Move::NO_MOVE;
     bool in_check = false;
     int32_t static_eval = param::VALUE_NONE;
@@ -1033,10 +1033,8 @@ struct engine
             // [low depth pruning]
             bool has_non_pawn = m_position.hasNonPawnMaterial(chess::Color::WHITE) &&
                                 m_position.hasNonPawnMaterial(chess::Color::BLACK);
-            if (!is_root && move_count > 0 && !is_pv_node && has_non_pawn &&
-                !param::IS_LOSS(best_score))
+            if (move_count > 0 && has_non_pawn && !param::IS_LOSS(best_score))
             {
-                // int32_t lmr_depth = std::max(0, depth - 1 - reduction / 1024);
                 int32_t lmr_depth = depth;
 
                 if (is_capture || is_check)
@@ -1044,15 +1042,17 @@ struct engine
                     auto captured = m_position.at(move.to()).type();
 
                     // [fut prune for captures]
-                    if (!is_check && lmr_depth < 7 && param::IS_VALID(ss->static_eval))
+                    if (!is_check && lmr_depth < 7 &&
+                        param::IS_VALID(ss->static_eval))
                     {
                         int32_t fut_value =
-                            ss->static_eval + 400 + 300 * lmr_depth + see::PIECE_VALUES[captured];
+                            ss->static_eval + 300 + 300 * lmr_depth + see::PIECE_VALUES[captured];
                         if (fut_value <= alpha)
                             goto lazy_move_gen;
                     }
 
                     // [see pruning for captures and checks]
+                    // TODO: fix this slow down by negamax see
                     // need to ensure that we don't prune: sac last non-pawn for stalemate
                     // auto non_pawn_pieces_sqs =
                     //     m_position.pieces(chess::PieceType::KNIGHT, m_position.sideToMove()) |
@@ -1062,7 +1062,7 @@ struct engine
                     // auto moved_sq = chess::Bitboard(1ull << move.from().index());
                     // if (alpha >= param::VALUE_DRAW || non_pawn_pieces_sqs != moved_sq)
                     // {
-                    //     int32_t margin = 300 * depth;
+                    //     int32_t margin = 600 + 200 * depth;
                     //     if (see::test(m_position, move) < -margin)
                     //         goto lazy_move_gen;
                     // }
@@ -1070,20 +1070,23 @@ struct engine
                 else
                 {
                     // [fut prune for general]
-                    int32_t fut_value = ss->static_eval + 400 + 300 * lmr_depth;
 
-                    if (!ss->in_check && lmr_depth < 14 && fut_value <= alpha &&
-                        param::IS_VALID(ss->static_eval))
+                    if (!ss->in_check && lmr_depth < 12 && param::IS_VALID(ss->static_eval))
                     {
-                        // shift best_score to fut value
-                        // if (best_score < fut_value && !param::IS_DECISIVE(best_score) &&
-                        // !param::IS_WIN(fut_value))
-                        // best_score = fut_value;
+                        int32_t fut_value = ss->static_eval + 200 + 300 * lmr_depth;
+                        if (fut_value <= alpha)
+                        {
+                            // shift best_score to fut value
+                            // if (best_score < fut_value && !param::IS_DECISIVE(best_score) &&
+                            // !param::IS_WIN(fut_value))
+                            // best_score = fut_value;
 
-                        goto lazy_move_gen;
+                            goto lazy_move_gen;
+                        }
                     }
 
                     // [see general pruning]
+                    // TODO: fix this slow down by negamax see
                     // lmr_depth = std::max(0, lmr_depth);
                     // int32_t margin = 100 * lmr_depth * lmr_depth;
                     // if (see::test(m_position, move) < -margin)
