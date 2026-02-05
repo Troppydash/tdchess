@@ -666,9 +666,19 @@ struct engine
         }
 
         // [mate check]
-        if (ss->in_check && moves.size() == 0)
+        if (ss->in_check && moves.empty())
         {
             return param::MATED_IN(ply);
+        }
+
+        // [draw check]
+        if (moves.empty())
+        {
+            chess::movegen::legalmoves(moves, m_position);
+            if (moves.empty())
+            {
+                return param::VALUE_DRAW;
+            }
         }
 
         // average out the best score
@@ -922,7 +932,7 @@ struct engine
         {
             // assume a 350 shift
             int32_t probcut_beta = beta + 300;
-            if (!is_pv_node && depth >= 3 && !param::IS_DECISIVE(beta) &&
+            if (!is_root && depth >= 3 && !param::IS_DECISIVE(beta) &&
                 // also ignore when tt score is lower than expected beta
                 !(tt_result.hit && param::IS_VALID(tt_result.score) &&
                   tt_result.score < probcut_beta))
@@ -984,8 +994,6 @@ struct engine
     moves:
 
         uint8_t tt_flag = param::ALPHA_FLAG;
-        int legal_moves = 0;
-        int explored_moves = 0;
 
         // [tt-move generation]
         chess::Movelist moves{};
@@ -993,13 +1001,11 @@ struct engine
         if (lazy_move_gen)
         {
             moves.add(tt_result.move);
-            legal_moves = 1;
         }
         else
         {
             chess::movegen::legalmoves(moves, m_position);
             m_move_ordering.score_moves<false>(m_position, moves, tt_result.move, prev_move, ply);
-            legal_moves = moves.size();
         }
 
         chess::Move best_move = chess::Move::NO_MOVE;
@@ -1007,18 +1013,17 @@ struct engine
         // track quiet moves for malus
         int quiet_count = 0;
 
-        for (int i = 0; i < moves.size(); ++i)
+        for (int move_count = 0; move_count < moves.size(); ++move_count)
         {
-            m_move_ordering.sort_moves(moves, i);
-            const chess::Move &move = moves[i];
-
+            m_move_ordering.sort_moves(moves, move_count);
+            const chess::Move &move = moves[move_count];
             ss->move = move;
-            explored_moves += 1;
+
 
             // [late move reduction]
             int32_t reduction = 0;
             if (depth >= 2)
-                reduction += m_param.lmr[depth][explored_moves] * 1024;
+                reduction += m_param.lmr[depth][move_count] * 1024;
 
             // reduce on cut node
             if (cut_node)
@@ -1048,7 +1053,7 @@ struct engine
             //     reduction -= 700;
 
             // no reductions on pv move
-            if (explored_moves == 1 && lazy_move_gen)
+            if (move_count == 0 && lazy_move_gen)
                 reduction = 0;
 
             int32_t reduced_depth = std::min(depth - 1 - reduction / 1024, depth);
@@ -1059,7 +1064,7 @@ struct engine
             if (is_pv_node)
             {
                 // PV-NODE, goal is to full search to get exact score
-                if (explored_moves == 1)
+                if (move_count == 0)
                 {
                     score = -negamax<PV>(-beta, -alpha, depth - 1, ss + 1, false);
                 }
@@ -1144,18 +1149,17 @@ struct engine
                 m_line.update(ply, move);
             }
 
-            if (lazy_move_gen && explored_moves == 1)
+            if (lazy_move_gen && move_count == 0)
             {
                 chess::movegen::legalmoves(moves, m_position);
                 m_move_ordering.score_moves<false>(m_position, moves, tt_result.move, prev_move,
                                                    ply);
                 m_move_ordering.sort_moves(moves, 0);
-                legal_moves = moves.size();
             }
         }
 
         // checkmate or draw
-        if (legal_moves == 0)
+        if (moves.empty())
         {
             if (m_position.inCheck())
                 return param::MATED_IN(ply);

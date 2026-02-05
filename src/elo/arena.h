@@ -148,6 +148,9 @@ template <typename Result = gsprt_results> class arena
 
     void loop(int repeats, int iterations)
     {
+        // ignore printf sync
+        std::ios::sync_with_stdio(false);
+
         int total = 0;
         for (size_t i = 0; total < iterations; i++)
         {
