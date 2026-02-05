@@ -621,9 +621,10 @@ struct engine
                     if (move_count > 3)
                         continue;
 
-                    auto captured = move.typeOf() == chess::Move::ENPASSANT ? chess::PieceType::PAWN : m_position.at(move.to()).type();
-                    int32_t futility_value =
-                        futility_base + see::PIECE_VALUES[captured];
+                    auto captured = move.typeOf() == chess::Move::ENPASSANT
+                                        ? chess::PieceType::PAWN
+                                        : m_position.at(move.to()).type();
+                    int32_t futility_value = futility_base + see::PIECE_VALUES[captured];
                     if (futility_value <= alpha)
                     {
                         best_score = std::max(best_score, futility_value);
@@ -1318,6 +1319,7 @@ struct engine
             m_stack[i + SEARCH_STACK_PREFIX] = {.ply = i};
         }
 
+        int delta = m_param.window_size;
         while (depth <= control.depth)
         {
             int32_t score = negamax(alpha, beta, depth, &m_stack[SEARCH_STACK_PREFIX]);
@@ -1330,15 +1332,16 @@ struct engine
             // [asp window]
             if (score <= alpha || score >= beta)
             {
-                alpha = -param::VALUE_INF;
-                beta = param::VALUE_INF;
+                delta *= 2;
+                alpha = score - delta;
+                beta = score + delta;
                 continue;
             }
 
-            if (!param::IS_DECISIVE(score))
+            if (depth >= 6 && !param::IS_DECISIVE(score))
             {
-                alpha = score - m_param.window_size;
-                beta = score + m_param.window_size;
+                alpha = score - delta;
+                beta = score + delta;
             }
 
             result.score = score;

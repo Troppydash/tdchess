@@ -62,7 +62,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.11-alpha", "1.0.11-beta", true);
+    improvement_test("1.0.11-beta", "1.0.11-charlie", true);
 
     return 0;
 }
@@ -156,10 +156,20 @@ int main()
     nnue nnue{};
     nnue.load_network("../nets/1.0.10-delta.bin");
     // chess::Board start;
-    // chess::Board start{"8/3q4/8/1kpr2PP/p4Q2/4Q1K1/8/8 w - - 3 59"};
-    chess::Board start{"5B2/2b3p1/2k2pP1/4pP2/2P1P3/prPR1K2/8/8 w - - 0 57"};
+    chess::Board start{"8/3q4/8/1kpr2PP/p4Q2/4Q1K1/8/8 w - - 3 59"};
+    // chess::Board start{"5B2/2b3p1/2k2pP1/4pP2/2P1P3/prPR1K2/8/8 w - - 0 57"};
     // chess::Board start{"8/8/4Bb1p/2k2PpP/1p2K1P1/8/8/8 b - - 1 89"};
     // should be e3e2
+
+    nnue.initialize(start);
+    constexpr int n = 8;
+    constexpr int divisor = 32 / n;
+    int bucket= (start.occ().count() - 2) / divisor;
+
+    std::cout << nnue.evaluate(start.sideToMove(), bucket) << std::endl;
+    exit(0);
+
+
     endgame_table etable{};
     etable.load_file("../syzygy");
     table tt{256};
