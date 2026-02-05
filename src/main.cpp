@@ -25,22 +25,22 @@ int main()
 
 void improvement_test(const std::string &baseline, const std::string &latest, bool is_short)
 {
-    openbook book{"../book/Book.bin"};
+    openbook book{"../book/baron30.bin"};
     std::string baseline_prefix = "../builds/" + baseline;
     std::string latest_prefix = "../builds/" + latest;
     const agent_settings base{
-        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 128,
+        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 256,
         false};
     const agent_settings late{
-        latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 128};
+        latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 256};
     std::vector<agent_settings> agents{late, base};
 
     arena_settings settings;
     if (is_short)
-        settings = arena_settings{latest + "_against_" + baseline, 11, 10 * 1000,
+        settings = arena_settings{latest + "_against_" + baseline, 16, 20 * 1000,
                                   static_cast<int>(0.1 * 1000)};
     else
-        settings = arena_settings{latest + "_against_" + baseline, 11, 60 * 1000,
+        settings = arena_settings{latest + "_against_" + baseline, 16 , 60 * 1000,
                                   static_cast<int>(0.6 * 1000)};
 
     std::vector<int> cores;
@@ -62,7 +62,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.10-beta", "1.0.10-charlie", true);
+    improvement_test("1.0.10-charlie", "1.0.10-delta", true);
 
     return 0;
 }
@@ -81,7 +81,7 @@ int main()
         table.load_file("../syzygy");
         engine engine{&table, &nnue, 256};
         search_param param;
-        param.movetime = 10000;
+        param.movetime = 50000;
         engine.search(start, param, true, true);
         std::cout << "done\n";
     }
@@ -154,8 +154,9 @@ int main()
     // }
 
     nnue nnue{};
-    nnue.load_network("../nets/1.0.9.bin");
-    chess::Board start{"8/3q4/8/1kpr2PP/p4Q2/4Q1K1/8/8 w - - 3 59"};
+    nnue.load_network("../nets/1.0.10-delta.bin");
+    // chess::Board start{"8/3q4/8/1kpr2PP/p4Q2/4Q1K1/8/8 w - - 3 59"};
+    chess::Board start{"5B2/2b3p1/2k2pP1/4pP2/2P1P3/prPR1K2/8/8 w - - 0 57"};
     // should be e3e2
     endgame_table etable{};
     etable.load_file("../syzygy");

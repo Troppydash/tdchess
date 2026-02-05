@@ -8,7 +8,7 @@
 #define TDCHESS_NNUE_SIMD
 #endif
 
-constexpr size_t HIDDEN_SIZE = 1024;
+constexpr size_t HIDDEN_SIZE = 1568;
 constexpr int16_t QA = 255;
 constexpr int16_t QB = 64;
 constexpr int32_t SCALE = 400;

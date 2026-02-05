@@ -10,174 +10,154 @@ struct see
         100, 320, 330, 500, 900, 1000, 0,
     };
 
+    static constexpr int32_t PAWN_VALUE = 208;
+    static constexpr int32_t KNIGHT_VALUE = 781;
+    static constexpr int32_t BISHOP_VALUE = 825;
+    static constexpr int32_t ROOK_VALUE = 1276;
+    static constexpr int32_t QUEEN_VALUE = 2538;
+
     constexpr static std::array<int32_t, 7> PIECE_VALUES = {
         // pawn, knight, bishop, rook, queen, king, none
-        200, 781, 825, 1276, 2538, 100000000, 0,
+        PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, 0, 0
     };
 
-    constexpr static std::array<int32_t, 7> PROMOTE_PIECE_VALUES = {
-        // pawn, knight, bishop, rook, queen, king, none
-        2700, 781, 825, 1276, 2538, 100000000, 0,
-    };
-
-    static int32_t test(const chess::Board &position, const chess::Move &move)
+    template <chess::Color::underlying Pinner>
+    static chess::Bitboard remove_pinned(const chess::Board &board, chess::Bitboard occ_pinner,
+                                         chess::Bitboard occ_king, chess::Bitboard attackers)
     {
-        if (move.to().rank() == chess::Rank::RANK_1 || move.to().rank() == chess::Rank::RANK_8)
+        const chess::Color king_side = ~Pinner;
+        chess::Square king_sq = board.kingSq(king_side);
+
+        // generates all squares within (pinner, king)
+        auto vpin = chess::movegen::pinMask<Pinner, chess::PieceType::ROOK>(board, king_sq,
+                                                                            occ_pinner, occ_king);
+
+        auto dpin = chess::movegen::pinMask<Pinner, chess::PieceType::BISHOP>(board, king_sq,
+                                                                              occ_pinner, occ_king);
+
+        auto all_pin = (vpin | dpin);
+
+        if (all_pin)
         {
-            return promote_test(position, move);
+            assert(!(all_pin.getBits() & (1ull << king_sq.index())));
         }
 
-        chess::PieceType target = position.at(move.to()).type();
-        chess::PieceType attacker = position.at(move.from()).type();
-
-        // gain[depth] is the perspective value of the static exchange at depth
-        static thread_local int32_t gain[32]{};
-        int32_t depth = 0;
-        int side = position.sideToMove() ^ 1;
-
-        chess::Bitboard seenBB = 0;
-        chess::Bitboard occBB = position.occ();
-        chess::Bitboard attackerBB = chess::Bitboard(1ull << move.from().index());
-
-        chess::Bitboard attack_def =
-            chess::attacks::attackers(position, chess::Color::WHITE, move.to()) |
-            chess::attacks::attackers(position, chess::Color::BLACK, move.to());
-        chess::Bitboard max_xray =
-            occBB & ~(position.pieces(chess::PieceType::KNIGHT, chess::PieceType::KING));
-
-        gain[depth] = PIECE_VALUES[target];
-
-        // loop while attackerBB != 0, with one extra at end
-        for (bool ok = true; ok; ok = attackerBB != 0)
-        {
-            depth++;
-
-            // update value
-            gain[depth] = PIECE_VALUES[attacker] - gain[depth - 1];
-
-            // if re-capture is still negative value
-            if (gain[depth] < 0)
-                break;
-
-            // remove attackers
-            attack_def &= ~attackerBB;
-            occBB &= ~attackerBB;
-            seenBB |= attackerBB;
-
-            // add (new) xray attackers
-            if ((attackerBB & max_xray) != 0)
-            {
-                attack_def |= (chess::attacks::bishop(move.to(), occBB) |
-                               chess::attacks::rook(move.to(), occBB) |
-                               chess::attacks::queen(move.to(), occBB)) &
-                              ~seenBB;
-            }
-
-            // pick the new min attacker
-            attackerBB = 0;
-            for (const auto &att : std::array<chess::PieceType, 6>{
-                     chess::PieceType::PAWN, chess::PieceType::KNIGHT, chess::PieceType::BISHOP,
-                     chess::PieceType::ROOK, chess::PieceType::QUEEN, chess::PieceType::KING})
-            {
-                auto subset = attack_def & position.pieces(att, side);
-                if (subset != 0)
-                {
-                    // pick one
-                    attackerBB = 1ull << subset.lsb();
-                    attacker = att;
-                    break;
-                }
-            }
-
-            side ^= 1;
-        }
-
-        // skip the last uninteresting capture
-        depth -= 1;
-        while (depth > 0)
-        {
-            gain[depth - 1] = -std::max(-gain[depth - 1], gain[depth]);
-            depth -= 1;
-        }
-
-        return gain[0];
+        // remove attackers in pin
+        return attackers & ~all_pin;
     }
 
-    static int32_t promote_test(const chess::Board &position, const chess::Move &move)
+    /**
+     * Recursive pruning static exchange tester
+     * @param position
+     * @param move
+     * @param threshold
+     * @return
+     */
+    static bool test_ge(const chess::Board &position, const chess::Move &move, int32_t threshold)
     {
-        chess::PieceType target = position.at(move.to()).type();
-        chess::PieceType attacker = position.at(move.from()).type();
-
-        // gain[depth] is the perspective value of the static exchange at depth
-        static thread_local int32_t gain[32]{};
-        int32_t depth = 0;
-        int side = position.sideToMove() ^ 1;
-
-        chess::Bitboard seenBB = 0;
-        chess::Bitboard occBB = position.occ();
-        chess::Bitboard attackerBB = chess::Bitboard(1ull << move.from().index());
-
-        chess::Bitboard attack_def =
-            chess::attacks::attackers(position, chess::Color::WHITE, move.to()) |
-            chess::attacks::attackers(position, chess::Color::BLACK, move.to());
-        chess::Bitboard max_xray =
-            occBB & ~(position.pieces(chess::PieceType::KNIGHT, chess::PieceType::KING));
-
-        gain[depth] = PROMOTE_PIECE_VALUES[target];
-
-        // loop while attackerBB != 0, with one extra at end
-        for (bool ok = true; ok; ok = attackerBB != 0)
+        if (move.typeOf() != chess::Move::NORMAL)
         {
-            depth++;
+            return 0 >= threshold;
+        }
 
-            // update value
-            gain[depth] = PROMOTE_PIECE_VALUES[attacker] - gain[depth - 1];
+        chess::Square from = move.from();
+        chess::Square to = move.to();
 
-            // if re-capture is still negative value
-            if (gain[depth] < 0)
+        int32_t swap = PIECE_VALUES[position.at(to).type()] - threshold;
+        if (swap < 0)
+            return false;
+
+        swap = PIECE_VALUES[position.at(from).type()] - swap;
+        if (swap <= 0)
+            return true;
+
+        chess::Bitboard fil = chess::Bitboard::fromSquare(from) | chess::Bitboard::fromSquare(to);
+        chess::Bitboard occ = position.occ() ^ fil;
+        chess::Color stm = position.sideToMove();
+        chess::Bitboard attackers = (chess::attacks::attackers(position, chess::Color::WHITE, to) |
+                                     chess::attacks::attackers(position, chess::Color::BLACK, to));
+
+        chess::Bitboard stm_attackers;
+        chess::Bitboard bb;
+        int res = 1;
+
+        while (true)
+        {
+            stm = ~stm;
+            attackers &= occ;
+
+            stm_attackers = attackers & position.us(stm);
+            if (!stm_attackers)
                 break;
 
-            // remove attackers
-            attack_def &= ~attackerBB;
-            occBB &= ~attackerBB;
-            seenBB |= attackerBB;
+            // remove opp pinned pieces
+            if (stm == chess::Color::WHITE)
+                stm_attackers = remove_pinned<chess::Color::BLACK>(
+                    position, occ & position.us(~stm), occ & position.us(stm), stm_attackers);
+            else
+                stm_attackers = remove_pinned<chess::Color::WHITE>(
+                    position, occ & position.us(~stm), occ & position.us(stm), stm_attackers);
 
-            // add (new) xray attackers
-            if ((attackerBB & max_xray) != 0)
-            {
-                attack_def |= (chess::attacks::bishop(move.to(), occBB) |
-                               chess::attacks::rook(move.to(), occBB) |
-                               chess::attacks::queen(move.to(), occBB)) &
-                              ~seenBB;
-            }
+            if (!stm_attackers)
+                break;
 
-            // pick the new min attacker
-            attackerBB = 0;
-            for (const auto &att : std::array<chess::PieceType, 6>{
-                     chess::PieceType::KNIGHT, chess::PieceType::BISHOP, chess::PieceType::ROOK,
-                     chess::PieceType::QUEEN, chess::PieceType::PAWN, chess::PieceType::KING})
+            res ^= 1;
+
+            if ((bb = stm_attackers & position.pieces(chess::PieceType::PAWN)))
             {
-                auto subset = attack_def & position.pieces(att, side);
-                if (subset != 0)
-                {
-                    // pick one
-                    attackerBB = 1ull << subset.lsb();
-                    attacker = att;
+                if ((swap = PAWN_VALUE - swap) < res)
                     break;
-                }
+
+                occ.clear(bb.lsb());
+                attackers |=
+                    chess::attacks::bishop(to, occ) & (position.pieces(chess::PieceType::BISHOP) |
+                                                       position.pieces(chess::PieceType::QUEEN));
             }
+            else if ((bb = stm_attackers & position.pieces(chess::PieceType::KNIGHT)))
+            {
+                if ((swap = KNIGHT_VALUE - swap) < res)
+                    break;
 
-            side ^= 1;
+                occ.clear(bb.lsb());
+            }
+            else if ((bb = stm_attackers & position.pieces(chess::PieceType::BISHOP)))
+            {
+                if ((swap = BISHOP_VALUE - swap) < res)
+                    break;
+
+                occ.clear(bb.lsb());
+                attackers |=
+                    chess::attacks::bishop(to, occ) & (position.pieces(chess::PieceType::BISHOP) |
+                                                       position.pieces(chess::PieceType::QUEEN));
+            }
+            else if ((bb = stm_attackers & position.pieces(chess::PieceType::ROOK)))
+            {
+                if ((swap = ROOK_VALUE - swap) < res)
+                    break;
+
+                occ.clear(bb.lsb());
+                attackers |=
+                    chess::attacks::rook(to, occ) & (position.pieces(chess::PieceType::ROOK) |
+                                                     position.pieces(chess::PieceType::QUEEN));
+            }
+            else if ((bb = stm_attackers & position.pieces(chess::PieceType::QUEEN)))
+            {
+                swap = QUEEN_VALUE - swap;
+                occ.clear(bb.lsb());
+
+                attackers |=
+                    (chess::attacks::bishop(to, occ) & (position.pieces(chess::PieceType::BISHOP) |
+                                                        position.pieces(chess::PieceType::QUEEN))) |
+                    (chess::attacks::rook(to, occ) & (position.pieces(chess::PieceType::ROOK) |
+                                                      position.pieces(chess::PieceType::QUEEN)));
+            }
+            else
+            {
+                // king
+                return (attackers & position.them(stm)) ? res ^ 1 : res;
+            }
         }
 
-        // skip the last uninteresting capture
-        depth -= 1;
-        while (depth > 0)
-        {
-            gain[depth - 1] = -std::max(-gain[depth - 1], gain[depth]);
-            depth -= 1;
-        }
-
-        return gain[0];
+        return static_cast<bool>(res);
     }
 };
