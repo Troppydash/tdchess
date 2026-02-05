@@ -49,7 +49,7 @@ class timer
             return;
 
         auto current = now();
-        if (current > m_target)
+        if (current >= m_target)
         {
             m_is_stopped = true;
         }

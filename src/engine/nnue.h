@@ -51,7 +51,7 @@ class nnue
 {
   private:
     network m_network{};
-    accumulator m_sides[2][param::MAX_DEPTH]{};
+    alignas(64) accumulator m_sides[2][param::MAX_DEPTH]{};
 
     std::array<dirty_entry, param::MAX_DEPTH> m_entries{};
     int m_ply{0};
@@ -99,7 +99,7 @@ class nnue
     {
         m_ply = 0;
 
-        for (int i = 0; i < m_entries.size(); ++i)
+        for (size_t i = 0; i < m_entries.size(); ++i)
             m_entries[i].is_clean = false;
 
         m_entries[0].is_clean = true;
@@ -201,14 +201,32 @@ class nnue
   private:
     void catchup()
     {
-        int current_ply = m_ply;
-
         // scan back til clean entry
-        int clean_index = current_ply;
+        int clean_index = m_ply;
         while (!m_entries[clean_index].is_clean)
         {
             clean_index -= 1;
         }
+
+        // int ply_diff = m_ply - clean_index;
+        // int lazy_ply_diff = 15;
+        // if (ply_diff >= lazy_ply_diff)
+        // {
+        //     // copy state to current
+        //     clone_ply(clean_index, m_ply);
+        //
+        //     // apply updates
+        //     clean_index += 1;
+        //     for (; clean_index <= m_ply; ++clean_index)
+        //     {
+        //         apply_move(m_entries[clean_index]);
+        //     }
+        //
+        //     m_entries[m_ply].is_clean = true;
+        // }
+        // else
+        // {
+        int current_ply = m_ply;
         clean_index += 1;
 
         // apply update
@@ -219,6 +237,7 @@ class nnue
             apply_move(m_entries[clean_index]);
             m_entries[clean_index].is_clean = true;
         }
+        // }
 
         assert(current_ply == m_ply);
     }
@@ -229,12 +248,15 @@ class nnue
         {
         case chess::Move::NORMAL: {
             const chess::Piece piece = entry.piece;
-            move_piece(piece, entry.move.from(), entry.move.to());
 
             // handle capture
             const chess::Piece captured_piece = entry.captured;
             if (captured_piece != chess::Piece::NONE)
-                remove_piece(captured_piece, entry.move.to());
+                move_piece_remove_piece(piece, entry.move.from(), entry.move.to(), captured_piece,
+                                        entry.move.to());
+            else
+                move_piece(piece, entry.move.from(), entry.move.to());
+
             break;
         }
         case chess::Move::PROMOTION: {
@@ -252,11 +274,10 @@ class nnue
         }
         case chess::Move::ENPASSANT: {
             const chess::Piece piece = entry.piece;
-            move_piece(piece, entry.move.from(), entry.move.to());
-
             // captured pawn
             const chess::Piece enp_piece = entry.captured;
-            remove_piece(enp_piece, entry.move.to().ep_square());
+            move_piece_remove_piece(piece, entry.move.from(), entry.move.to(), enp_piece,
+                                    entry.move.to().ep_square());
             break;
         }
         case chess::Move::CASTLING: {
@@ -372,6 +393,44 @@ class nnue
 #else
         remove_piece(piece, start);
         add_piece(piece, end);
+#endif
+    }
+
+    void move_piece_remove_piece(const chess::Piece &moved_piece, const chess::Square &start,
+                                 const chess::Square &end, const chess::Piece &removed_piece,
+                                 const chess::Square removed)
+    {
+#ifdef TDCHESS_NNUE_SIMD
+        // MOVE PIECE
+        int white_remove_feature_idx = translate(chess::Color::WHITE, moved_piece, start);
+        int black_remove_feature_idx = translate(chess::Color::BLACK, moved_piece, start);
+        int white_add_feature_idx = translate(chess::Color::WHITE, moved_piece, end);
+        int black_add_feature_idx = translate(chess::Color::BLACK, moved_piece, end);
+        const int16_t *__restrict white_remove_weights =
+            m_network.feature_weights[white_remove_feature_idx].vals;
+        const int16_t *__restrict white_add_weights =
+            m_network.feature_weights[white_add_feature_idx].vals;
+        const int16_t *__restrict black_remove_weights =
+            m_network.feature_weights[black_remove_feature_idx].vals;
+        const int16_t *__restrict black_add_weights =
+            m_network.feature_weights[black_add_feature_idx].vals;
+
+        // REMOVE PIECE
+        int white_feature_idx = translate(chess::Color::WHITE, removed_piece, removed);
+        int black_feature_idx = translate(chess::Color::BLACK, removed_piece, removed);
+        const int16_t *__restrict white_weights = m_network.feature_weights[white_feature_idx].vals;
+        const int16_t *__restrict black_weights = m_network.feature_weights[black_feature_idx].vals;
+
+        int16_t *__restrict white_values = m_sides[0][m_ply].vals;
+        int16_t *__restrict black_values = m_sides[1][m_ply].vals;
+        for (size_t i = 0; i < HIDDEN_SIZE; ++i)
+        {
+            white_values[i] += white_add_weights[i] - white_remove_weights[i] - white_weights[i];
+            black_values[i] += black_add_weights[i] - black_remove_weights[i] - black_weights[i];
+        }
+#else
+        move_piece(moved_piece, start, end);
+        remove_piece(removed_piece, removed);
 #endif
     }
 

@@ -109,7 +109,7 @@ struct engine_param
     std::array<int, 6> lmp_margins;
     int lmr_depth_ration = 4;
     int lmr_move_ratio = 12;
-    int window_size = 35;
+    int window_size = 50;
     int32_t static_null_base_margin = 125;
     int16_t nmp_depth_limit = 2;
     int16_t nmp_piece_count = 7;
@@ -1199,7 +1199,7 @@ struct engine
             best_score = std::min(best_score, max_score);
 
         // if no good move found, last move good so add this one too
-        if (best_score < alpha)
+        if (best_score <= alpha)
             ss->tt_pv = ss->tt_pv || (ss - 1)->tt_pv;
 
         // hack to make a move in root
@@ -1321,6 +1321,7 @@ struct engine
         while (depth <= control.depth)
         {
             int32_t score = negamax(alpha, beta, depth, &m_stack[SEARCH_STACK_PREFIX]);
+            m_timer.check();
             if (m_timer.is_stopped())
             {
                 break;
@@ -1334,7 +1335,7 @@ struct engine
                 continue;
             }
 
-            if (std::abs(score) < param::CHECKMATE)
+            if (!param::IS_DECISIVE(score))
             {
                 alpha = score - m_param.window_size;
                 beta = score + m_param.window_size;

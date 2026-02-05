@@ -62,7 +62,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.11", "1.0.11-alpha", true);
+    improvement_test("1.0.11-alpha", "1.0.11-beta", true);
 
     return 0;
 }
@@ -155,6 +155,7 @@ int main()
 
     nnue nnue{};
     nnue.load_network("../nets/1.0.10-delta.bin");
+    // chess::Board start;
     // chess::Board start{"8/3q4/8/1kpr2PP/p4Q2/4Q1K1/8/8 w - - 3 59"};
     chess::Board start{"5B2/2b3p1/2k2pP1/4pP2/2P1P3/prPR1K2/8/8 w - - 0 57"};
     // chess::Board start{"8/8/4Bb1p/2k2PpP/1p2K1P1/8/8/8 b - - 1 89"};

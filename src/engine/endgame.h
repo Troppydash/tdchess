@@ -51,12 +51,16 @@ struct endgame_table
             position.makeMove(move);
 
             // timer check in case long position, here to ensure that at least one pv is found
-            if (ply % 16 == 0)
+            if (ply % 2 == 0)
             {
                 timer.check();
                 if (timer.is_stopped())
                     break;
             }
+
+            // hack to prevent timer overrun
+            if (ply > 4)
+                break;
         }
 
         int32_t score = 0;
