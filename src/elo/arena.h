@@ -260,6 +260,9 @@ template <typename Result = gsprt_results> class arena
      */
     match_output matchup(const match_input &input)
     {
+        // use the second core for io
+        pin_thread_to_processor(input.core + 1);
+
         auto [moves, position] = m_book.generate_game(m_settings.book_depth);
 
         std::cout << "[matchup] core " << input.core << " " << input.agent0.m_alias << " vs "

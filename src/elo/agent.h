@@ -3,9 +3,10 @@
 #include "../engine/engine.h"
 #include "../hpplib/chess.h"
 
-#include <boost/process.hpp>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <utility>
-namespace bp = boost::process;
 
 struct agent_settings
 {
@@ -27,10 +28,8 @@ struct agent_settings
 namespace pipe_helpers
 {
 
-inline bool read_line(const bp::pipe &out, std::string &buffer, std::string &line)
+inline bool read_line(int fd, std::string &buffer, std::string &line)
 {
-    int fd = out.native_source();
-
     char temp[4096];
 
     while (true)
@@ -66,10 +65,8 @@ inline bool read_line(const bp::pipe &out, std::string &buffer, std::string &lin
     }
 }
 
-inline bool write_line(const bp::pipe &in, const std::string &line)
+inline bool write_line(int fd, const std::string &line)
 {
-    int fd = in.native_sink();
-
     const char *data = line.data();
     size_t remaining = line.size();
 
@@ -96,8 +93,99 @@ inline bool write_line(const bp::pipe &in, const std::string &line)
 
 inline void set_nonblocking(int fd)
 {
-    int flags = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    // set nonblocking, ONLY ENABLE IF SPARE CPU SINCE IT REACHED 100% USAGE
+    // int flags = fcntl(fd, F_GETFL, 0);
+    // fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+
+    // set pipe buffer size high to prevent excessive blocking
+    int buffer_size = 128 * 1024;
+    int new_buffer = fcntl(fd, F_SETPIPE_SZ, buffer_size);
+    if (new_buffer == -1)
+    {
+        perror("fcntl F_SETPIPE_SZ");
+    }
+
+    if (new_buffer < buffer_size)
+    {
+        std::cout << "[warning] tried setting " << buffer_size << "b, got only " << new_buffer
+                  << "b\n";
+    }
+}
+
+inline pid_t spawn_process(const char *path, int stdin_fd, int stdout_fd)
+{
+    pid_t pid = fork();
+    if (pid < 0)
+    {
+        // Fork failed
+        perror("fork");
+        return -1;
+    }
+
+    if (pid == 0)
+    {
+        // Child process
+
+        // Redirect stdin
+        if (dup2(stdin_fd, STDIN_FILENO) < 0)
+        {
+            perror("dup2 stdin");
+            _exit(1);
+        }
+
+        // Redirect stdout
+        if (dup2(stdout_fd, STDOUT_FILENO) < 0)
+        {
+            perror("dup2 stdout");
+            _exit(1);
+        }
+
+        // Close fds that are no longer needed
+        if (stdin_fd != STDIN_FILENO)
+            close(stdin_fd);
+        if (stdout_fd != STDOUT_FILENO)
+            close(stdout_fd);
+
+        // Execute the program
+        execlp(path, path, static_cast<char *>(nullptr));
+
+        // If execlp returns, it's an error
+        perror("execlp");
+        _exit(1);
+    }
+
+    return pid;
+}
+
+inline int wait_for_child(pid_t child_pid)
+{
+    int status = 0;
+    pid_t ret;
+
+    do
+    {
+        ret = waitpid(child_pid, &status, 0);
+    } while (ret == -1 && errno == EINTR); // Retry if interrupted by signal
+
+    if (ret == -1)
+    {
+        perror("waitpid");
+        return -1;
+    }
+
+    if (WIFEXITED(status))
+    {
+        // Normal exit, return exit code
+        return WEXITSTATUS(status);
+    }
+
+    if (WIFSIGNALED(status))
+    {
+        // Killed by signal, return negative signal number
+        return -WTERMSIG(status);
+    }
+
+    return -1; // Should not normally reach here
 }
 
 } // namespace pipe_helpers
@@ -114,18 +202,33 @@ class agent
     std::string m_name;
 
     // process info
-    bp::pipe m_out;
-    bp::pipe m_in;
-    bp::child m_process;
+    int m_out;
+    int m_in;
+    pid_t m_process;
 
   public:
     explicit agent(const agent_settings &settings)
         : m_settings(settings), m_verbose(settings.m_verbose)
     {
-        m_process = bp::child{settings.m_file, bp::std_out > m_out, bp::std_in < m_in};
+        int pipe_in[2];
+        int pipe_out[2];
+        int in_ok = pipe(pipe_in);
+        if (in_ok == -1)
+            perror("pipe_in failed");
+        int out_ok = pipe(pipe_out);
+        if (out_ok == -1)
+            perror("pipe_out failed");
 
-        pipe_helpers::set_nonblocking(m_in.native_sink());
-        pipe_helpers::set_nonblocking(m_out.native_source());
+        m_process = pipe_helpers::spawn_process(settings.m_file.c_str(), pipe_in[0], pipe_out[1]);
+
+        close(pipe_in[0]);  // close child stdin
+        close(pipe_out[1]); // close child stdout
+
+        m_in = pipe_in[1];
+        m_out = pipe_out[0];
+
+        pipe_helpers::set_nonblocking(m_in);
+        pipe_helpers::set_nonblocking(m_out);
 
         // read uci
         pipe_helpers::write_line(m_in, "uci\n");
@@ -161,13 +264,15 @@ class agent
     ~agent()
     {
         pipe_helpers::write_line(m_in, "quit\n");
-        m_in.close();
-        m_process.wait();
+
+        close(m_in);
+        close(m_out);
+
+        int exit_code = pipe_helpers::wait_for_child(m_process);
 
         if (m_verbose)
         {
-            int result = m_process.exit_code();
-            std::cout << prefix() << "exited with " << result << std::endl;
+            std::cout << prefix() << "exited with " << exit_code << std::endl;
         }
     }
 
@@ -176,7 +281,7 @@ class agent
         return m_name;
     }
 
-    void new_game()
+    void new_game() const
     {
         pipe_helpers::write_line(m_in, "ucinewgame\n");
     }
@@ -190,13 +295,13 @@ class agent
 
         // load position
         chess::Board board;
-        pipe_helpers::write_line(m_in, "position startpos moves");
+        std::string position_string = "position startpos moves";
         for (const auto &move : moves)
         {
-            pipe_helpers::write_line(m_in, " " + chess::uci::moveToUci(move));
+            position_string += " " + chess::uci::moveToUci(move);
             board.makeMove(move);
         }
-        pipe_helpers::write_line(m_in, "\n");
+        pipe_helpers::write_line(m_in, position_string + "\n");
 
         // search
         std::string search_string =
