@@ -211,9 +211,12 @@ struct move_ordering
             if (position.isCapture(move))
             {
                 // mvv lva, victim * 16 - attacker, [15000, 700] max 15000, scaled to [-200, 200]
-                double mvv_lva =
-                    (see::TRADITIONAL_PIECE_VALUES[position.at(move.to()).type()] * 16 -
-                     see::TRADITIONAL_PIECE_VALUES[position.at(move.from()).type()]);
+                auto captured = move.typeOf() == chess::Move::ENPASSANT
+                                    ? chess::PieceType::PAWN
+                                    : position.at(move.to()).type();
+                auto attacker = position.at(move.from()).type();
+                double mvv_lva = (see::TRADITIONAL_PIECE_VALUES[captured] * 16 -
+                                  see::TRADITIONAL_PIECE_VALUES[attacker]);
 
                 constexpr double KVALUE =
                     see::TRADITIONAL_PIECE_VALUES[static_cast<uint8_t>(chess::PieceType::KING)];
@@ -227,24 +230,26 @@ struct move_ordering
                 constexpr double SCALE = (MAX - MIN);
 
                 // from [-0.5, 0.5] to [-200, 200]
-                mvv_lva = (mvv_lva - MID) / SCALE * 2.0 * 200.0;
-                assert(mvv_lva <= 200.0 && mvv_lva >= -200.0);
+                double scaled_mvv_lva = (mvv_lva - MID) / SCALE * 2.0 * 200.0;
+                assert(scaled_mvv_lva <= 200.0 && scaled_mvv_lva >= -200.0);
                 if (IN_Q)
                 {
                     // ignore fancy in qsearch
-                    score += param::GOOD_CAPTURE_OFFSET + std::round((mvv_lva / 2.0) + 100.0);
+                    score +=
+                        param::GOOD_CAPTURE_OFFSET + std::round((scaled_mvv_lva / 2.0) + 100.0);
                     assert(score >= param::GOOD_CAPTURE_OFFSET && score < param::PV_OFFSET);
                     goto done;
                 }
 
                 if (see::test_ge(position, move, -500))
                 {
-                    score += param::GOOD_CAPTURE_OFFSET + std::round((mvv_lva / 2.0) + 100.0);
+                    score +=
+                        param::GOOD_CAPTURE_OFFSET + std::round((scaled_mvv_lva / 2.0) + 100.0);
                     goto done;
                 }
                 else
                 {
-                    score += param::BAD_CAPTURE_OFFSET + std::round((mvv_lva / 2.0) + 100.0);
+                    score += param::BAD_CAPTURE_OFFSET + std::round((scaled_mvv_lva / 2.0) + 100.0);
                     goto done;
                 }
 
@@ -489,7 +494,6 @@ struct engine
             m_nnue->unmake_move();
     }
 
-    template <search_node_type node_type>
     int32_t qsearch(int32_t alpha, int32_t beta, search_stack *ss)
     {
         const int32_t ply = ss->ply;
@@ -617,8 +621,9 @@ struct engine
                     if (move_count > 3)
                         continue;
 
+                    auto captured = move.typeOf() == chess::Move::ENPASSANT ? chess::PieceType::PAWN : m_position.at(move.to()).type();
                     int32_t futility_value =
-                        futility_base + see::PIECE_VALUES[m_position.at(move.to()).type()];
+                        futility_base + see::PIECE_VALUES[captured];
                     if (futility_value <= alpha)
                     {
                         best_score = std::max(best_score, futility_value);
@@ -639,7 +644,7 @@ struct engine
 
             ss->move = move;
             make_move(move);
-            score = -qsearch<node_type>(-beta, -alpha, ss + 1);
+            score = -qsearch(-beta, -alpha, ss + 1);
             unmake_move(move);
 
             if (m_timer.is_stopped())
@@ -702,7 +707,6 @@ struct engine
         return best_score;
     }
 
-    template <search_node_type node_type>
     int32_t negamax(int32_t alpha, int32_t beta, int32_t depth, search_stack *ss)
     {
         // constants
@@ -720,9 +724,9 @@ struct engine
         if (ply >= param::MAX_DEPTH)
             return evaluate();
 
-        constexpr bool is_root = node_type == Root;
-        constexpr bool is_pv_node = (node_type == PV || node_type == Root);
+        const bool is_root = ply == 0;
         const bool cut_node = beta - alpha == 1;
+        const bool is_pv_node = !cut_node;
         assert(!(is_pv_node && cut_node));
         assert(alpha < beta);
 
@@ -764,7 +768,7 @@ struct engine
         if (depth <= 0)
         {
             m_stats.nodes_searched -= 1;
-            return qsearch<is_pv_node ? PV : NonPV>(alpha, beta, ss);
+            return qsearch(alpha, beta, ss);
         }
 
         // [tt lookup]
@@ -865,7 +869,6 @@ struct engine
                     max_score = score;
                 }
             }
-
         }
 
         if (ss->in_check)
@@ -898,7 +901,7 @@ struct engine
 
                 (ss + 1)->is_null = true;
                 m_position.makeNullMove();
-                int32_t null_score = -negamax<NonPV>(-beta, -beta + 1, depth - reduction, ss + 1);
+                int32_t null_score = -negamax(-beta, -beta + 1, depth - reduction, ss + 1);
                 m_position.unmakeNullMove();
                 (ss + 1)->is_null = false;
 
@@ -955,12 +958,11 @@ struct engine
                     make_move(move);
 
                     // check if move exceeds beta first
-                    int32_t score = -qsearch<NonPV>(-probcut_beta, -probcut_beta + 1, ss + 1);
+                    int32_t score = -qsearch(-probcut_beta, -probcut_beta + 1, ss + 1);
                     // full search if qsearch null window worked
                     if (score >= probcut_beta && probcut_depth > 0)
                     {
-                        score = -negamax<NonPV>(-probcut_beta, -probcut_beta + 1, probcut_depth,
-                                                ss + 1);
+                        score = -negamax(-probcut_beta, -probcut_beta + 1, probcut_depth, ss + 1);
                     }
 
                     unmake_move(move);
@@ -1035,7 +1037,9 @@ struct engine
 
                 if (is_capture || is_check)
                 {
-                    auto captured = m_position.at(move.to()).type();
+                    auto captured = move.typeOf() == chess::Move::ENPASSANT
+                                        ? chess::PieceType::PAWN
+                                        : m_position.at(move.to()).type();
 
                     // [fut prune for captures]
                     if (!is_check && lmr_depth < 7 && param::IS_VALID(ss->static_eval))
@@ -1101,20 +1105,20 @@ struct engine
 
             if (move_count == 0)
             {
-                score = -negamax<PV>(-beta, -alpha, depth - 1, ss + 1);
+                score = -negamax(-beta, -alpha, depth - 1, ss + 1);
             }
             else
             {
-                score = -negamax<NonPV>(-(alpha + 1), -alpha, reduced_depth, ss + 1);
+                score = -negamax(-(alpha + 1), -alpha, reduced_depth, ss + 1);
 
                 if (score > alpha && reduced_depth < depth - 1)
                 {
-                    score = -negamax<NonPV>(-(alpha + 1), -alpha, depth - 1, ss + 1);
+                    score = -negamax(-(alpha + 1), -alpha, depth - 1, ss + 1);
                 }
 
                 if (score > alpha && is_pv_node && score < beta)
                 {
-                    score = -negamax<PV>(-beta, -alpha, depth - 1, ss + 1);
+                    score = -negamax(-beta, -alpha, depth - 1, ss + 1);
                 }
             }
 
@@ -1211,8 +1215,6 @@ struct engine
             entry.set(m_position.hash(), tt_flag, best_score, ply, depth, best_move,
                       unadjusted_static_eval, ss->tt_pv, m_table->m_generation);
         }
-
-
 
         return best_score;
     }
@@ -1318,7 +1320,7 @@ struct engine
 
         while (depth <= control.depth)
         {
-            int32_t score = negamax<Root>(alpha, beta, depth, &m_stack[SEARCH_STACK_PREFIX]);
+            int32_t score = negamax(alpha, beta, depth, &m_stack[SEARCH_STACK_PREFIX]);
             if (m_timer.is_stopped())
             {
                 break;

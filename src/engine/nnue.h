@@ -38,20 +38,22 @@ inline int32_t screlu(int16_t x)
     return val * val;
 }
 
-
 struct dirty_entry
 {
     chess::Move move;
-
+    chess::Piece piece;
+    chess::Piece captured;
+    chess::Color stm;
+    bool is_clean = false;
 };
 
 class nnue
 {
   private:
     network m_network{};
-    // alignas(64)
-
     accumulator m_sides[2][param::MAX_DEPTH]{};
+
+    std::array<dirty_entry, param::MAX_DEPTH> m_entries{};
     int m_ply{0};
 
   public:
@@ -97,6 +99,11 @@ class nnue
     {
         m_ply = 0;
 
+        for (int i = 0; i < m_entries.size(); ++i)
+            m_entries[i].is_clean = false;
+
+        m_entries[0].is_clean = true;
+
         // clear all entries
         for (size_t i = 0; i < HIDDEN_SIZE; ++i)
             m_sides[0][0].vals[i] = m_sides[1][0].vals[i] = m_network.feature_bias.vals[i];
@@ -111,8 +118,10 @@ class nnue
         }
     }
 
-    [[nodiscard]] int32_t evaluate(int side2move, int bucket) const
+    [[nodiscard]] int32_t evaluate(int side2move, int bucket)
     {
+        catchup();
+
         int32_t output = 0;
 
 #ifdef TDCHESS_NNUE_SIMD
@@ -174,53 +183,92 @@ class nnue
 
     void make_move(const chess::Board &board, const chess::Move &move)
     {
-        clone_ply();
+        m_ply += 1;
+        m_entries[m_ply] = {.move = move,
+                            .piece = board.at(move.from()),
+                            .captured = move.typeOf() == chess::Move::ENPASSANT
+                                            ? board.at(move.to().ep_square())
+                                            : board.at(move.to()),
+                            .stm = board.sideToMove(),
+                            .is_clean = false};
+    }
 
-        switch (move.typeOf())
+    void unmake_move()
+    {
+        m_ply -= 1;
+    }
+
+  private:
+    void catchup()
+    {
+        int current_ply = m_ply;
+
+        // scan back til clean entry
+        int clean_index = current_ply;
+        while (!m_entries[clean_index].is_clean)
+        {
+            clean_index -= 1;
+        }
+        clean_index += 1;
+
+        // apply update
+        for (; clean_index <= current_ply; ++clean_index)
+        {
+            clone_ply(clean_index - 1, clean_index);
+            m_ply = clean_index;
+            apply_move(m_entries[clean_index]);
+            m_entries[clean_index].is_clean = true;
+        }
+
+        assert(current_ply == m_ply);
+    }
+
+    void apply_move(const dirty_entry &entry)
+    {
+        switch (entry.move.typeOf())
         {
         case chess::Move::NORMAL: {
-            const chess::Piece piece = board.at(move.from());
-            move_piece(piece, move.from(), move.to());
+            const chess::Piece piece = entry.piece;
+            move_piece(piece, entry.move.from(), entry.move.to());
 
             // handle capture
-            const chess::Piece captured_piece = board.at(move.to());
+            const chess::Piece captured_piece = entry.captured;
             if (captured_piece != chess::Piece::NONE)
-                remove_piece(captured_piece, move.to());
+                remove_piece(captured_piece, entry.move.to());
             break;
         }
         case chess::Move::PROMOTION: {
-            const chess::Piece piece = board.at(move.from());
-            const chess::Piece promote_piece = chess::Piece{piece.color(), move.promotionType()};
-            remove_piece(piece, move.from());
-            add_piece(promote_piece, move.to());
+            const chess::Piece piece = entry.piece;
+            const chess::Piece promote_piece =
+                chess::Piece{piece.color(), entry.move.promotionType()};
+            remove_piece(piece, entry.move.from());
+            add_piece(promote_piece, entry.move.to());
 
             // handle capture
-            const chess::Piece captured_piece = board.at(move.to());
+            const chess::Piece captured_piece = entry.captured;
             if (captured_piece != chess::Piece::NONE)
-                remove_piece(captured_piece, move.to());
+                remove_piece(captured_piece, entry.move.to());
             break;
         }
         case chess::Move::ENPASSANT: {
-            const chess::Piece piece = board.at(move.from());
-            move_piece(piece, move.from(), move.to());
+            const chess::Piece piece = entry.piece;
+            move_piece(piece, entry.move.from(), entry.move.to());
 
             // captured pawn
-            const chess::Piece enp_piece = board.at(move.to().ep_square());
-            remove_piece(enp_piece, move.to().ep_square());
+            const chess::Piece enp_piece = entry.captured;
+            remove_piece(enp_piece, entry.move.to().ep_square());
             break;
         }
         case chess::Move::CASTLING: {
-            const chess::Square king_sq = move.from();
-            const chess::Square rook_sq = move.to();
+            const chess::Square king_sq = entry.move.from();
+            const chess::Square rook_sq = entry.move.to();
 
-            const bool king_side = move.to() > move.from();
-            const chess::Square rook_to =
-                chess::Square::castling_rook_square(king_side, board.sideToMove());
-            const chess::Square king_to =
-                chess::Square::castling_king_square(king_side, board.sideToMove());
+            const bool king_side = entry.move.to() > entry.move.from();
+            const chess::Square rook_to = chess::Square::castling_rook_square(king_side, entry.stm);
+            const chess::Square king_to = chess::Square::castling_king_square(king_side, entry.stm);
 
-            const chess::Piece king_piece = board.at(king_sq);
-            const chess::Piece rook_piece = board.at(rook_sq);
+            const chess::Piece king_piece = entry.piece;
+            const chess::Piece rook_piece = entry.captured;
             move_piece(king_piece, king_sq, king_to);
             move_piece(rook_piece, rook_sq, rook_to);
             break;
@@ -231,12 +279,6 @@ class nnue
         }
     }
 
-    void unmake_move()
-    {
-        m_ply -= 1;
-    }
-
-  private:
     void add_feature(int side, int feature_idx)
     {
         const int16_t *__restrict weight = m_network.feature_weights[feature_idx].vals;
@@ -333,14 +375,12 @@ class nnue
 #endif
     }
 
-    void clone_ply()
+    void clone_ply(int a, int b)
     {
         for (size_t i = 0; i < HIDDEN_SIZE; ++i)
         {
-            m_sides[0][m_ply + 1].vals[i] = m_sides[0][m_ply].vals[i];
-            m_sides[1][m_ply + 1].vals[i] = m_sides[1][m_ply].vals[i];
+            m_sides[0][b].vals[i] = m_sides[0][a].vals[i];
+            m_sides[1][b].vals[i] = m_sides[1][a].vals[i];
         }
-
-        m_ply += 1;
     }
 };
