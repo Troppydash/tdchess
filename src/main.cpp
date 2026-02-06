@@ -157,8 +157,8 @@ int main()
     nnue.load_network("../nets/1.0.11-echo.bin");
     // chess::Board start;
     // chess::Board start{"8/3q4/8/1kpr2PP/p4Q2/4Q1K1/8/8 w - - 3 59"};
-    chess::Board start{"5B2/2b3p1/2k2pP1/4pP2/2P1P3/prPR1K2/8/8 w - - 0 57"};
-    // chess::Board start{"8/4B3/p7/1p3p1p/1P2k1b1/P3P3/5K2/8 w - - 4 57"};
+    // chess::Board start{"5B2/2b3p1/2k2pP1/4pP2/2P1P3/prPR1K2/8/8 w - - 0 57"};
+    chess::Board start{"8/4B3/p7/1p3p1p/1P2k1b1/P3P3/5K2/8 w - - 4 57"};
     // chess::Board start{"8/8/4Bb1p/2k2PpP/1p2K1P1/8/8/8 b - - 1 89"};
     // should be e3e2
 

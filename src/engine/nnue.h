@@ -118,7 +118,7 @@ class nnue
         }
     }
 
-    [[nodiscard]] int32_t evaluate(int side2move, int bucket)
+    [[nodiscard]] int16_t evaluate(int side2move, int bucket)
     {
         catchup();
 
@@ -178,7 +178,13 @@ class nnue
         output *= SCALE;
         output /= static_cast<int32_t>(QA) * static_cast<int32_t>(QB);
 
-        return std::clamp(output, -param::NNUE_MAX, param::NNUE_MAX);
+        if (output <= -param::NNUE_MAX)
+            return -param::NNUE_MAX;
+
+        if (output >= param::NNUE_MAX)
+            return param::NNUE_MAX;
+
+        return output;
     }
 
     void make_move(const chess::Board &board, const chess::Move &move)

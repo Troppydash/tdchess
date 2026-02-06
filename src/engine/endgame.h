@@ -159,7 +159,7 @@ struct endgame_table
         throw std::runtime_error{"impossible"};
     }
 
-    int32_t probe_wdl(const chess::Board &position)
+    int16_t probe_wdl(const chess::Board &position)
     {
         unsigned ep =
             position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();

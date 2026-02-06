@@ -10,10 +10,10 @@ struct table_entry_result
 {
     bool hit;
     bool can_use;
-    int32_t score;
+    int16_t score;
     int32_t depth;
     chess::Move move;
-    int32_t static_eval;
+    int16_t static_eval;
     bool is_pv;
     uint8_t flag;
 };
@@ -44,7 +44,7 @@ constexpr uint8_t SET_FLAG(uint8_t flag)
 
 constexpr uint8_t SET_PV(bool is_pv)
 {
-    return static_cast<uint8_t>(is_pv) << 4;
+    return static_cast<uint8_t>(is_pv) << 5;
 }
 
 constexpr uint8_t SET_AGE(uint8_t age)
@@ -53,21 +53,20 @@ constexpr uint8_t SET_AGE(uint8_t age)
 }
 
 
-
 class table_entry
 {
   public:
     uint64_t m_hash = 0;
-    int32_t m_score = param::VALUE_NONE;
+    int16_t m_score = param::VALUE_NONE;
     int32_t m_depth = param::UNSEARCHED_DEPTH;
-    int32_t m_static_eval = param::VALUE_NONE;
-    uint8_t m_mask = 0;
+    int16_t m_static_eval = param::VALUE_NONE;
+    uint8_t m_mask = 1;
     chess::Move m_best_move = chess::Move::NO_MOVE;
 
-    [[nodiscard]] table_entry_result get(uint64_t hash, int32_t ply, int32_t depth, int32_t alpha,
-                                         int32_t beta) const
+    [[nodiscard]] table_entry_result get(uint64_t hash, int32_t ply, int32_t depth, int16_t alpha,
+                                         int16_t beta) const
     {
-        int32_t adj_score = param::VALUE_NONE;
+        int16_t adj_score = param::VALUE_NONE;
         bool can_use = false;
         bool is_hit = false;
         if (m_hash == hash)
@@ -78,7 +77,7 @@ class table_entry
             {
                 if (param::IS_VALID(m_score))
                 {
-                    int32_t score = m_score;
+                    int16_t score = m_score;
 
                     // normalize for depth
                     if (score > param::CHECKMATE)
@@ -116,8 +115,8 @@ class table_entry
                 .flag = GET_FLAG(m_mask)};
     }
 
-    void set(uint64_t hash, uint8_t flag, int32_t score, int32_t ply, int32_t depth,
-             const chess::Move &best_move, int32_t static_eval, bool is_pv, uint8_t age)
+    void set(uint64_t hash, uint8_t flag, int16_t score, int32_t ply, int32_t depth,
+             const chess::Move &best_move, int16_t static_eval, bool is_pv, uint8_t age)
     {
         m_hash = hash;
         m_depth = depth;
@@ -147,7 +146,7 @@ class table_entry
 
 constexpr int NUM_BUCKETS = 4;
 
-struct alignas(128) bucket
+struct bucket
 {
     std::array<table_entry, NUM_BUCKETS> m_entries;
 
@@ -183,11 +182,11 @@ struct alignas(128) bucket
         return m_entries[0];
     }
 
-    void store(uint64_t hash, uint8_t flag, int32_t score, int32_t ply, int32_t depth,
-               const chess::Move &best_move, int32_t static_eval, bool is_pv, uint8_t age)
+    void store(uint64_t hash, uint8_t flag, int16_t score, int32_t ply, int32_t depth,
+               const chess::Move &best_move, int16_t static_eval, bool is_pv, uint8_t age)
     {
         int best_slot = -1;
-        int32_t worst_score = param::INF;
+        int32_t worst_score = std::numeric_limits<int32_t>::max();
 
         for (int i = 0; i < NUM_BUCKETS; ++i)
         {
@@ -200,7 +199,7 @@ struct alignas(128) bucket
 
             uint8_t entry_age = GET_AGE(entry.m_mask);
             uint8_t age_diff = (age - entry_age) & AGE_MASK;
-            int32_t replacement_score = entry.m_depth - age_diff * 4;
+            int32_t replacement_score = entry.m_depth - age_diff * 2;
 
             if (replacement_score < worst_score)
             {
@@ -267,7 +266,6 @@ class table
 
     bucket &probe(const uint64_t hash)
     {
-        __builtin_prefetch(&m_buckets[hash & m_mask]);
         return m_buckets[hash & m_mask];
     }
 
