@@ -495,6 +495,7 @@ struct engine
             m_nnue->unmake_move();
     }
 
+    template <bool is_pv_node>
     int16_t qsearch(int16_t alpha, int16_t beta, search_stack *ss)
     {
         const int32_t ply = ss->ply;
@@ -529,7 +530,7 @@ struct engine
         auto tt_result = entry.get(m_position.hash(), ply, param::QDEPTH, alpha, beta);
         ss->tt_hit = tt_result.hit;
         tt_result.move = tt_result.hit ? tt_result.move : chess::Move::NO_MOVE;
-        if (tt_result.can_use)
+        if (!is_pv_node && tt_result.can_use)
         {
             return tt_result.score;
         }
@@ -647,7 +648,7 @@ struct engine
 
             ss->move = move;
             make_move(move);
-            score = -qsearch(-beta, -alpha, ss + 1);
+            score = -qsearch<is_pv_node>(-beta, -alpha, ss + 1);
             unmake_move(move);
 
             if (m_timer.is_stopped())
@@ -737,7 +738,7 @@ struct engine
         if (depth <= 0)
         {
             m_stats.nodes_searched -= 1;
-            return qsearch(alpha, beta, ss);
+            return qsearch<is_pv_node>(alpha, beta, ss);
         }
 
         // check draw
@@ -945,7 +946,7 @@ struct engine
                     make_move(move);
 
                     // check if move exceeds beta first
-                    int16_t score = -qsearch(-probcut_beta, -probcut_beta + 1, ss + 1);
+                    int16_t score = -qsearch<false>(-probcut_beta, -probcut_beta + 1, ss + 1);
                     // full search if qsearch null window worked
                     if (score >= probcut_beta && probcut_depth > 0)
                     {

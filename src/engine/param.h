@@ -7,6 +7,7 @@ namespace param
 constexpr int32_t MAX_DEPTH = 255;
 constexpr int32_t TB_DEPTH = 254;
 constexpr int32_t UNSEARCHED_DEPTH = -1;
+constexpr int32_t UNINIT_DEPTH = -2;
 constexpr int32_t QDEPTH = 0;
 
 constexpr int16_t INF = 31000;

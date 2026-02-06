@@ -52,16 +52,15 @@ constexpr uint8_t SET_AGE(uint8_t age)
     return age & AGE_MASK;
 }
 
-
 class table_entry
 {
   public:
-    uint64_t m_hash = 0;
-    int16_t m_score = param::VALUE_NONE;
-    int32_t m_depth = param::UNSEARCHED_DEPTH;
-    int16_t m_static_eval = param::VALUE_NONE;
+    uint64_t m_hash;
+    int16_t m_score;
+    int32_t m_depth;
+    int16_t m_static_eval;
     uint8_t m_mask = 1;
-    chess::Move m_best_move = chess::Move::NO_MOVE;
+    chess::Move m_best_move;
 
     [[nodiscard]] table_entry_result get(uint64_t hash, int32_t ply, int32_t depth, int16_t alpha,
                                          int16_t beta) const
@@ -155,7 +154,7 @@ struct bucket
         for (size_t i = 0; i < NUM_BUCKETS; ++i)
         {
             m_entries[i].m_hash = 0;
-            m_entries[i].m_depth = param::UNSEARCHED_DEPTH;
+            m_entries[i].m_depth = param::UNINIT_DEPTH;
             m_entries[i].m_static_eval = param::VALUE_NONE;
             m_entries[i].m_score = param::VALUE_NONE;
             m_entries[i].m_best_move = chess::Move::NO_MOVE;
@@ -210,16 +209,6 @@ struct bucket
 
         m_entries[best_slot].set(hash, flag, score, ply, depth, best_move, static_eval, is_pv, age);
     }
-
-    size_t occ() const
-    {
-        size_t count = 0;
-        for (size_t i = 0; i < NUM_BUCKETS; ++i)
-        {
-            count += m_entries[i].m_hash != 0;
-        }
-        return count;
-    }
 };
 
 class table
@@ -272,11 +261,16 @@ class table
     int16_t occupied() const
     {
         size_t count = 0;
-        for (size_t i = 0; i < m_size; ++i)
+        for (int i = 0; i < 1000; ++i)
         {
-            count += m_buckets[i].occ();
+            for (int j = 0; j < NUM_BUCKETS; ++j)
+            {
+                // only care about ages in the current gen
+                count += (m_buckets[i].m_entries[j].m_depth != param::UNINIT_DEPTH &&
+                          GET_AGE(m_buckets[i].m_entries[j].m_mask) == m_generation);
+            }
         }
 
-        return static_cast<int16_t>(count * 1000 / (m_size * BUCKET_SIZE));
+        return count / NUM_BUCKETS;
     }
 };
