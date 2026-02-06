@@ -524,7 +524,8 @@ struct engine
         }
 
         // [tt lookup]
-        auto &entry = m_table->probe(m_position.hash());
+        auto &bucket = m_table->probe(m_position.hash());
+        auto &entry = bucket.probe(m_position.hash());
         auto tt_result = entry.get(m_position.hash(), ply, param::QDEPTH, alpha, beta);
         ss->tt_hit = tt_result.hit;
         tt_result.move = tt_result.hit ? tt_result.move : chess::Move::NO_MOVE;
@@ -574,11 +575,11 @@ struct engine
                 if (!param::IS_DECISIVE(best_score))
                     best_score = (best_score + beta) / 2;
 
-                if (!ss->tt_hit && entry.can_write(param::UNSEARCHED_DEPTH, m_table->m_generation))
+                if (!ss->tt_hit)
                 {
-                    entry.set(m_position.hash(), param::BETA_FLAG, best_score, ply,
-                              param::UNSEARCHED_DEPTH, chess::Move::NO_MOVE, unadjusted_static_eval,
-                              false, m_table->m_generation);
+                    bucket.store(m_position.hash(), param::BETA_FLAG, best_score, ply,
+                                 param::UNSEARCHED_DEPTH, chess::Move::NO_MOVE,
+                                 unadjusted_static_eval, false, m_table->m_generation);
                 }
 
                 return best_score;
@@ -699,11 +700,12 @@ struct engine
         if (!param::IS_DECISIVE(best_score) && best_score > beta)
             best_score = (best_score + beta) / 2;
 
-        if (!m_timer.is_stopped() && entry.can_write(param::QDEPTH, m_table->m_generation))
+        if (!m_timer.is_stopped())
         {
-            entry.set(m_position.hash(), best_score >= beta ? param::BETA_FLAG : param::ALPHA_FLAG,
-                      best_score, ply, param::QDEPTH, best_move, unadjusted_static_eval,
-                      ss->tt_hit && ss->tt_pv, m_table->m_generation);
+            bucket.store(m_position.hash(),
+                         best_score >= beta ? param::BETA_FLAG : param::ALPHA_FLAG, best_score, ply,
+                         param::QDEPTH, best_move, unadjusted_static_eval, ss->tt_hit && ss->tt_pv,
+                         m_table->m_generation);
         }
 
         return best_score;
@@ -762,7 +764,8 @@ struct engine
         }
 
         // [tt lookup]
-        auto &entry = m_table->probe(m_position.hash());
+        auto &bucket = m_table->probe(m_position.hash());
+        auto &entry = bucket.probe(m_position.hash());
         auto tt_result = entry.get(m_position.hash(), ply, depth, alpha, beta);
         ss->tt_hit = tt_result.hit;
         ss->tt_pv = is_pv_node || (tt_result.hit && tt_result.is_pv);
@@ -807,12 +810,9 @@ struct engine
             unadjusted_static_eval = evaluate();
             ss->static_eval = adjusted_static_eval = unadjusted_static_eval;
 
-            if (entry.can_write(param::UNSEARCHED_DEPTH, m_table->m_generation))
-            {
-                entry.set(m_position.hash(), param::NO_FLAG, param::VALUE_NONE, ply,
-                          param::UNSEARCHED_DEPTH, chess::Move::NO_MOVE, unadjusted_static_eval,
-                          ss->tt_pv, m_table->m_generation);
-            }
+            bucket.store(m_position.hash(), param::NO_FLAG, param::VALUE_NONE, ply,
+                         param::UNSEARCHED_DEPTH, chess::Move::NO_MOVE, unadjusted_static_eval,
+                         ss->tt_pv, m_table->m_generation);
         }
 
         // [check syzygy endgame table]
@@ -837,12 +837,8 @@ struct engine
                 (flag == param::BETA_FLAG ? score >= beta : score <= alpha))
             {
                 int32_t new_depth = param::TB_DEPTH;
-                if (entry.can_write(new_depth, m_table->m_generation))
-                {
-                    entry.set(m_position.hash(), flag, score, ply, new_depth, chess::Move::NO_MOVE,
-                              unadjusted_static_eval, ss->tt_pv, m_table->m_generation);
-                }
-
+                bucket.store(m_position.hash(), flag, score, ply, new_depth, chess::Move::NO_MOVE,
+                             unadjusted_static_eval, ss->tt_pv, m_table->m_generation);
                 return score;
             }
 
@@ -913,9 +909,7 @@ struct engine
         {
             // assume a 350 shift
             int32_t probcut_beta = beta + 300;
-            if (
-                !is_root &&
-                depth >= 3 && !param::IS_DECISIVE(beta) &&
+            if (!is_root && depth >= 3 && !param::IS_DECISIVE(beta) &&
                 // also ignore when tt score is lower than expected beta
                 !(tt_result.hit && param::IS_VALID(tt_result.score) &&
                   tt_result.score < probcut_beta))
@@ -967,12 +961,9 @@ struct engine
                     // check if can cut at lower depth
                     if (score >= probcut_beta)
                     {
-                        if (entry.can_write(probcut_depth + 1, m_table->m_generation))
-                        {
-                            entry.set(m_position.hash(), param::BETA_FLAG, score, ply,
-                                      probcut_depth + 1, move, unadjusted_static_eval, ss->tt_pv,
-                                      m_table->m_generation);
-                        }
+                        bucket.store(m_position.hash(), param::BETA_FLAG, score, ply,
+                                     probcut_depth + 1, move, unadjusted_static_eval, ss->tt_pv,
+                                     m_table->m_generation);
 
                         if (!param::IS_DECISIVE(score))
                         {
@@ -1197,9 +1188,9 @@ struct engine
             best_move = moves[0];
         }
 
-        if (entry.can_write(depth, m_table->m_generation) && !m_timer.is_stopped())
+        if (!m_timer.is_stopped())
         {
-            entry.set(m_position.hash(), tt_flag, best_score, ply, depth, best_move,
+            bucket.store(m_position.hash(), tt_flag, best_score, ply, depth, best_move,
                       unadjusted_static_eval, ss->tt_pv, m_table->m_generation);
         }
 
@@ -1260,7 +1251,7 @@ struct engine
 
         // update age
         assert(m_table != nullptr);
-        m_table->m_generation += 1;
+        m_table->inc_generation();
 
         m_position = reference;
 
