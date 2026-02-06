@@ -43,9 +43,9 @@ target_link_libraries(tdchess_test PRIVATE fathom)
 #        -fsanitize=undefined
 #)
 target_compile_options(tdchess_test PRIVATE
-        "-O3"
-        "-march=native"
-        "-Wall"
+#        "-O3"
+#        "-march=native"
+#        "-Wall"
 #        -fsanitize=undefined
 #        -g
 #        "-ftrapv"

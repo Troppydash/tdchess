@@ -495,8 +495,7 @@ struct engine
             m_nnue->unmake_move();
     }
 
-    template <bool is_pv_node>
-    int16_t qsearch(int16_t alpha, int16_t beta, search_stack *ss)
+    template <bool is_pv_node> int16_t qsearch(int16_t alpha, int16_t beta, search_stack *ss)
     {
         const int32_t ply = ss->ply;
         m_stats.sel_depth = std::max(m_stats.sel_depth, ply + 1);
@@ -526,10 +525,11 @@ struct engine
 
         // [tt lookup]
         auto &bucket = m_table->probe(m_position.hash());
-        auto &entry = bucket.probe(m_position.hash());
-        auto tt_result = entry.get(m_position.hash(), ply, param::QDEPTH, alpha, beta);
+        auto [bucket_hit, entry] = bucket.probe(m_position.hash());
+        auto tt_result = entry.get(m_position.hash(), ply, param::QDEPTH, alpha, beta, bucket_hit);
         ss->tt_hit = tt_result.hit;
-        tt_result.move = tt_result.hit ? tt_result.move : chess::Move::NO_MOVE;
+        tt_result.move =
+            tt_result.hit && is_kinda_legal(tt_result.move) ? tt_result.move : chess::Move::NO_MOVE;
         if (!is_pv_node && tt_result.can_use)
         {
             return tt_result.score;
@@ -712,6 +712,51 @@ struct engine
         return best_score;
     }
 
+    bool is_kinda_legal(const chess::Move &move) const
+    {
+        if (move.typeOf() == chess::Move::NO_MOVE)
+            return true;
+
+        auto moved_piece = m_position.at(move.from());
+
+        // from square check
+        if (moved_piece == chess::Piece::NONE || moved_piece.color() != m_position.sideToMove())
+            return false;
+
+        if (move.typeOf() != chess::Move::NORMAL)
+        {
+            // uncommon harder types just guess that it is fine
+            return true;
+
+            // chess::PieceGenType moved_piece_gen;
+            // if (moved_piece.type() == chess::PieceType::PAWN)
+            //     moved_piece_gen = chess::PieceGenType::PAWN;
+            // else if (moved_piece.type() == chess::PieceType::KNIGHT)
+            //     moved_piece_gen = chess::PieceGenType::KNIGHT;
+            // else if (moved_piece.type() == chess::PieceType::BISHOP)
+            //     moved_piece_gen = chess::PieceGenType::BISHOP;
+            // else if (moved_piece.type() == chess::PieceType::ROOK)
+            //     moved_piece_gen = chess::PieceGenType::ROOK;
+            // else if (moved_piece.type() == chess::PieceType::QUEEN)
+            //     moved_piece_gen = chess::PieceGenType::QUEEN;
+            // else if (moved_piece.type() == chess::PieceType::KING)
+            //     moved_piece_gen = chess::PieceGenType::KING;
+            // else
+            //     throw std::runtime_error{"impossible moved piece"};
+            //
+            // chess::Movelist moves;
+            // chess::movegen::legalmoves(moves, m_position, moved_piece_gen);
+            // return std::find(moves.begin(), moves.end(), move) != moves.end();
+        }
+
+        // end friendly piece check
+        if (m_position.at(move.to()).color() == m_position.sideToMove())
+            return false;
+
+        // guess that it is fine
+        return true;
+    }
+
     template <bool is_pv_node>
     int16_t negamax(int16_t alpha, int16_t beta, int32_t depth, search_stack *ss, bool cut_node)
     {
@@ -766,16 +811,18 @@ struct engine
 
         // [tt lookup]
         auto &bucket = m_table->probe(m_position.hash());
-        auto &entry = bucket.probe(m_position.hash());
-        auto tt_result = entry.get(m_position.hash(), ply, depth, alpha, beta);
+        auto [bucket_hit, entry] = bucket.probe(m_position.hash());
+        auto tt_result = entry.get(m_position.hash(), ply, depth, alpha, beta, bucket_hit);
         ss->tt_hit = tt_result.hit;
         ss->tt_pv = is_pv_node || (tt_result.hit && tt_result.is_pv);
-        tt_result.move = tt_result.hit ? tt_result.move : chess::Move::NO_MOVE;
+        tt_result.move =
+            tt_result.hit && is_kinda_legal(tt_result.move) ? tt_result.move : chess::Move::NO_MOVE;
         bool is_tt_capture =
             tt_result.move != chess::Move::NO_MOVE && m_position.isCapture(tt_result.move);
 
         // [tt early return]
-        if (!is_root && !is_pv_node && tt_result.can_use && (cut_node == (tt_result.score >= beta) || depth > 5))
+        if (!is_root && !is_pv_node && tt_result.can_use &&
+            (cut_node == (tt_result.score >= beta) || depth > 5))
         {
             return tt_result.score;
         }
@@ -1192,7 +1239,7 @@ struct engine
         if (!m_timer.is_stopped())
         {
             bucket.store(m_position.hash(), tt_flag, best_score, ply, depth, best_move,
-                      unadjusted_static_eval, ss->tt_pv, m_table->m_generation);
+                         unadjusted_static_eval, ss->tt_pv, m_table->m_generation);
         }
 
         return best_score;

@@ -11,7 +11,7 @@ struct table_entry_result
     bool hit;
     bool can_use;
     int16_t score;
-    int32_t depth;
+    int16_t depth;
     chess::Move move;
     int16_t static_eval;
     bool is_pv;
@@ -52,23 +52,28 @@ constexpr uint8_t SET_AGE(uint8_t age)
     return age & AGE_MASK;
 }
 
+constexpr bool MATCHES(uint64_t hash, uint32_t partial)
+{
+    return (hash >> 32) == partial;
+}
+
 class table_entry
 {
   public:
-    uint64_t m_hash;
+    uint32_t m_hash;
+    int16_t m_depth;
     int16_t m_score;
-    int32_t m_depth;
     int16_t m_static_eval;
     uint8_t m_mask = 1;
     chess::Move m_best_move;
 
     [[nodiscard]] table_entry_result get(uint64_t hash, int32_t ply, int32_t depth, int16_t alpha,
-                                         int16_t beta) const
+                                         int16_t beta, bool bucket_hit) const
     {
         int16_t adj_score = param::VALUE_NONE;
         bool can_use = false;
         bool is_hit = false;
-        if (m_hash == hash)
+        if (bucket_hit)
         {
             is_hit = true;
 
@@ -117,7 +122,7 @@ class table_entry
     void set(uint64_t hash, uint8_t flag, int16_t score, int32_t ply, int32_t depth,
              const chess::Move &best_move, int16_t static_eval, bool is_pv, uint8_t age)
     {
-        m_hash = hash;
+        m_hash = hash >> 32;
         m_depth = depth;
         m_best_move = best_move;
         m_static_eval = static_eval;
@@ -145,7 +150,7 @@ class table_entry
 
 constexpr int NUM_BUCKETS = 4;
 
-struct bucket
+struct alignas(64) bucket
 {
     std::array<table_entry, NUM_BUCKETS> m_entries;
 
@@ -164,21 +169,21 @@ struct bucket
         }
     }
 
-    table_entry &probe(const uint64_t hash)
+    std::pair<bool, table_entry &> probe(const uint64_t hash)
     {
-        if (m_entries[0].m_hash == hash)
-            return m_entries[0];
+        if (MATCHES(hash, m_entries[0].m_hash))
+            return {m_entries[0].m_depth > param::UNINIT_DEPTH, m_entries[0]};
 
         for (int i = 1; i < NUM_BUCKETS; ++i)
         {
-            if (m_entries[i].m_hash == hash)
+            if (MATCHES(hash, m_entries[i].m_hash))
             {
                 std::swap(m_entries[i], m_entries[0]);
-                break;
+                return {m_entries[0].m_depth > param::UNINIT_DEPTH, m_entries[0]};
             }
         }
 
-        return m_entries[0];
+        return {false, m_entries[0]};
     }
 
     void store(uint64_t hash, uint8_t flag, int16_t score, int32_t ply, int32_t depth,
@@ -190,7 +195,7 @@ struct bucket
         for (int i = 0; i < NUM_BUCKETS; ++i)
         {
             auto &entry = m_entries[i];
-            if (entry.m_hash == hash)
+            if (MATCHES(hash, entry.m_hash) && entry.m_depth > param::UNINIT_DEPTH)
             {
                 best_slot = i;
                 break;
@@ -227,7 +232,7 @@ class table
         m_size = 1ull << m_power;
         m_mask = m_size - 1;
 
-        m_buckets = static_cast<bucket *>(std::malloc(m_size * sizeof(bucket)));
+        m_buckets = static_cast<bucket *>(std::aligned_alloc(64, m_size * sizeof(bucket)));
         clear();
     }
 

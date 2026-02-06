@@ -31,8 +31,8 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
     const agent_settings base{
         baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 512,
         false};
-    const agent_settings late{
-        latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 512};
+    const agent_settings late{latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin",
+                              "../syzygy", 512};
     std::vector<agent_settings> agents{late, base};
 
     arena_settings settings;
@@ -40,12 +40,12 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
         settings = arena_settings{latest + "_against_" + baseline, 16, 10 * 1000,
                                   static_cast<int>(0.1 * 1000)};
     else
-        settings = arena_settings{latest + "_against_" + baseline, 16 , 60 * 1000,
+        settings = arena_settings{latest + "_against_" + baseline, 16, 60 * 1000,
                                   static_cast<int>(0.6 * 1000)};
 
     std::vector<int> cores;
-    for (int i = 0; i < 6 ; ++i)
-        cores.push_back(2*i);
+    for (int i = 0; i < 6; ++i)
+        cores.push_back(2 * i);
 
     arena arena{settings, book, agents, cores};
     arena.loop(cores.size(), 100);
@@ -62,7 +62,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.11-echo", "1.0.11-foxtrot", true);
+    improvement_test("1.0.11-foxtrot", "1.0.12", true);
 
     return 0;
 }
@@ -111,7 +111,6 @@ int main()
     //
     // std::cout << param.time_control(5, 0).time << std::endl;
 
-
     // agent_settings settings{"test",
     //                         "../builds/1.0.8-delta/tdchess",
     //                         "../builds/1.0.8-delta/nnue.bin",
@@ -155,8 +154,8 @@ int main()
 
     nnue nnue{};
     nnue.load_network("../nets/1.0.11-echo.bin");
-    // chess::Board start;
-    chess::Board start{"8/3q4/8/1kpr2PP/p4Q2/4Q1K1/8/8 w - - 3 59"};
+    chess::Board start;
+    // chess::Board start{"8/3q4/8/1kpr2PP/p4Q2/4Q1K1/8/8 w - - 3 59"};
     // chess::Board start{"5B2/2b3p1/2k2pP1/4pP2/2P1P3/prPR1K2/8/8 w - - 0 57"};
     // chess::Board start{"8/4B3/p7/1p3p1p/1P2k1b1/P3P3/5K2/8 w - - 4 57"};
     // chess::Board start{"8/8/4Bb1p/2k2PpP/1p2K1P1/8/8/8 b - - 1 89"};
@@ -169,7 +168,6 @@ int main()
     //
     // std::cout << nnue.evaluate(start.sideToMove(), bucket) << std::endl;
     // exit(0);
-
 
     endgame_table etable{};
     etable.load_file("../syzygy");
