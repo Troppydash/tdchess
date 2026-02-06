@@ -109,7 +109,7 @@ struct engine_param
     std::array<int, 6> lmp_margins;
     int lmr_depth_ration = 4;
     int lmr_move_ratio = 12;
-    int window_size = 50;
+    int window_size = 25;
     int32_t static_null_base_margin = 125;
     int16_t nmp_depth_limit = 2;
     int16_t nmp_piece_count = 7;
@@ -410,9 +410,10 @@ struct pv_line
 struct search_stack
 {
     int32_t ply = 0;
-    chess::Move move = chess::Move::NO_MOVE;
-    bool in_check = false;
     int32_t static_eval = param::VALUE_NONE;
+    chess::Move move = chess::Move::NO_MOVE;
+    chess::Move excluded_move = chess::Move::NO_MOVE;
+    bool in_check = false;
     bool tt_pv = false;
     bool tt_hit = false;
     bool is_null = false;
@@ -708,7 +709,8 @@ struct engine
         return best_score;
     }
 
-    int32_t negamax(int32_t alpha, int32_t beta, int32_t depth, search_stack *ss)
+    template <bool is_pv_node>
+    int32_t negamax(int32_t alpha, int32_t beta, int32_t depth, search_stack *ss, bool cut_node)
     {
         // constants
         const int32_t ply = ss->ply;
@@ -725,11 +727,16 @@ struct engine
         if (ply >= param::MAX_DEPTH)
             return evaluate();
 
-        const bool is_root = ply == 0;
-        const bool cut_node = beta - alpha == 1;
-        const bool is_pv_node = !cut_node;
+        const bool is_root = ply == 0 && is_pv_node;
         assert(!(is_pv_node && cut_node));
         assert(alpha < beta);
+
+        // [qsearch]
+        if (depth <= 0)
+        {
+            m_stats.nodes_searched -= 1;
+            return qsearch(alpha, beta, ss);
+        }
 
         // check draw
         if (!is_root && (m_position.isInsufficientMaterial() || m_position.isRepetition(1)))
@@ -748,28 +755,10 @@ struct engine
         // [mate distance pruning]
         if (!is_root)
         {
-            int32_t mating_value = param::MATE_IN(ply);
-            if (mating_value < beta)
-            {
-                beta = mating_value;
-                if (alpha >= beta)
-                    return mating_value;
-            }
-
-            mating_value = param::MATED_IN(ply);
-            if (mating_value > alpha)
-            {
-                alpha = mating_value;
-                if (beta <= alpha)
-                    return mating_value;
-            }
-        }
-
-        // [qsearch]
-        if (depth <= 0)
-        {
-            m_stats.nodes_searched -= 1;
-            return qsearch(alpha, beta, ss);
+            alpha = std::max(alpha, param::MATED_IN(ply));
+            beta = std::min(beta, param::MATE_IN(ply + 1));
+            if (alpha >= beta)
+                return alpha;
         }
 
         // [tt lookup]
@@ -804,14 +793,14 @@ struct engine
             ss->static_eval = adjusted_static_eval = unadjusted_static_eval;
 
             // use tt score to adjust static eval
-            // bool bound_hit =
-            //     tt_result.flag == param::EXACT_FLAG ||
-            //     (tt_result.flag == param::BETA_FLAG && tt_result.score > adjusted_static_eval) ||
-            //     (tt_result.flag == param::ALPHA_FLAG && tt_result.score < adjusted_static_eval);
-            // if (param::IS_VALID(tt_result.score) && bound_hit)
-            // {
-            //     adjusted_static_eval = tt_result.score;
-            // }
+            bool bound_hit =
+                tt_result.flag == param::EXACT_FLAG ||
+                (tt_result.flag == param::BETA_FLAG && tt_result.score > adjusted_static_eval) ||
+                (tt_result.flag == param::ALPHA_FLAG && tt_result.score < adjusted_static_eval);
+            if (param::IS_VALID(tt_result.score) && bound_hit)
+            {
+                adjusted_static_eval = tt_result.score;
+            }
         }
         else
         {
@@ -844,7 +833,6 @@ struct engine
                           : wdl > draw_score ? param::BETA_FLAG
                                              : param::EXACT_FLAG;
 
-            // TODO: fix early return
             if (flag == param::EXACT_FLAG ||
                 (flag == param::BETA_FLAG ? score >= beta : score <= alpha))
             {
@@ -891,20 +879,18 @@ struct engine
 
         // [null move pruning]
         {
-            const bool has_non_pawns = m_position.hasNonPawnMaterial(chess::Color::WHITE) &&
-                                       m_position.hasNonPawnMaterial(chess::Color::BLACK);
-            if (cut_node && !ss->is_null && has_non_pawns && beta < param::CHECKMATE)
+            const bool has_non_pawns = m_position.hasNonPawnMaterial(m_position.sideToMove());
+            if (cut_node && (ss - 1)->move != chess::Move::NO_MOVE && has_non_pawns &&
+                adjusted_static_eval >= beta && !param::IS_LOSS(beta))
             {
                 int32_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
 
                 // since nmp uses ss+1, we fake that this move is nothing
                 ss->move = chess::Move::NO_MOVE;
-
-                (ss + 1)->is_null = true;
                 m_position.makeNullMove();
-                int32_t null_score = -negamax(-beta, -beta + 1, depth - reduction, ss + 1);
+                int32_t null_score =
+                    -negamax<false>(-beta, -beta + 1, depth - reduction, ss + 1, false);
                 m_position.unmakeNullMove();
-                (ss + 1)->is_null = false;
 
                 if (m_timer.is_stopped())
                     return 0;
@@ -916,6 +902,10 @@ struct engine
             }
         }
 
+        // iir
+        if ((is_pv_node || cut_node) && depth >= 4 && tt_result.move == chess::Move::NO_MOVE)
+            depth -= 1;
+
         // [prob cut]
         // the score of a lower depth is likely similar to a score of higher depth
         // goal is to convert beta to beta of a lower depth, and reject that
@@ -923,7 +913,9 @@ struct engine
         {
             // assume a 350 shift
             int32_t probcut_beta = beta + 300;
-            if (!is_root && depth >= 3 && !param::IS_DECISIVE(beta) &&
+            if (
+                !is_root &&
+                depth >= 3 && !param::IS_DECISIVE(beta) &&
                 // also ignore when tt score is lower than expected beta
                 !(tt_result.hit && param::IS_VALID(tt_result.score) &&
                   tt_result.score < probcut_beta))
@@ -963,7 +955,8 @@ struct engine
                     // full search if qsearch null window worked
                     if (score >= probcut_beta && probcut_depth > 0)
                     {
-                        score = -negamax(-probcut_beta, -probcut_beta + 1, probcut_depth, ss + 1);
+                        score = -negamax<false>(-probcut_beta, -probcut_beta + 1, probcut_depth,
+                                                ss + 1, !cut_node);
                     }
 
                     unmake_move(move);
@@ -1021,17 +1014,11 @@ struct engine
             bool is_capture = m_position.isCapture(move);
             bool is_check = m_position.givesCheck(move) != chess::CheckType::NO_CHECK;
 
-            // [late move reduction]
-            int32_t reduction = 0;
-            if (!is_pv_node && depth >= 3 && move_count >= 2 && !ss->in_check && !is_capture)
-                reduction += m_param.lmr[depth][move_count] * 1024;
-
-            int32_t reduced_depth;
-            int32_t score;
+            int32_t new_depth = depth - 1;
+            int32_t score = 0;
 
             // [low depth pruning]
-            bool has_non_pawn = m_position.hasNonPawnMaterial(chess::Color::WHITE) &&
-                                m_position.hasNonPawnMaterial(chess::Color::BLACK);
+            bool has_non_pawn = m_position.hasNonPawnMaterial(m_position.sideToMove());
             if (move_count > 0 && has_non_pawn && !param::IS_LOSS(best_score))
             {
                 int32_t lmr_depth = depth;
@@ -1094,34 +1081,33 @@ struct engine
 
             // [singular extension]
 
-            // [check extension]
-            if (is_check)
-            {
-                reduction -= 1100;
-            }
-
-            reduced_depth = std::min(depth - 1 - reduction / 1024, depth);
-
             make_move(move);
 
-            if (move_count == 0)
+            if (depth >= 2 && move_count >= 2 && !ss->in_check)
             {
-                score = -negamax(-beta, -alpha, depth - 1, ss + 1);
+                int32_t reduction = m_param.lmr[depth][move_count];
+
+                reduction -= m_position.inCheck();
+                // reduction -= ss->tt_pv + is_pv_node;
+                //
+                // if (cut_node)
+                //     reduction += 1 - ss->tt_pv;
+
+                int32_t reduced_depth = std::clamp(new_depth - reduction, 1, new_depth + 1);
+
+                score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
+                if (score > alpha && reduced_depth < new_depth)
+                {
+                    score = -negamax<false>(-(alpha + 1), -alpha, new_depth, ss + 1, !cut_node);
+                }
             }
-            else
+            else if (!is_pv_node || move_count > 0)
             {
-                score = -negamax(-(alpha + 1), -alpha, reduced_depth, ss + 1);
-
-                if (score > alpha && reduced_depth < depth - 1)
-                {
-                    score = -negamax(-(alpha + 1), -alpha, depth - 1, ss + 1);
-                }
-
-                if (score > alpha && is_pv_node && score < beta)
-                {
-                    score = -negamax(-beta, -alpha, depth - 1, ss + 1);
-                }
+                score = -negamax<false>(-(alpha + 1), -alpha, new_depth, ss + 1, !cut_node);
             }
+
+            if (is_pv_node && (move_count == 0 || score > alpha))
+                score = -negamax<true>(-beta, -alpha, new_depth, ss + 1, false);
 
             unmake_move(move);
 
@@ -1172,11 +1158,11 @@ struct engine
                 }
             }
 
+        lazy_move_gen:
             // malus save
             if (m_move_ordering.is_quiet(m_position, move) && quiet_count < param::QUIET_MOVES)
                 ss->quiet_moves[quiet_count++] = move;
 
-        lazy_move_gen:
             if (lazy_move_gen && move_count == 0)
             {
                 chess::movegen::legalmoves(moves, m_position);
@@ -1322,7 +1308,7 @@ struct engine
         int delta = m_param.window_size;
         while (depth <= control.depth)
         {
-            int32_t score = negamax(alpha, beta, depth, &m_stack[SEARCH_STACK_PREFIX]);
+            int32_t score = negamax<true>(alpha, beta, depth, &m_stack[SEARCH_STACK_PREFIX], false);
             m_timer.check();
             if (m_timer.is_stopped())
             {
@@ -1332,13 +1318,14 @@ struct engine
             // [asp window]
             if (score <= alpha || score >= beta)
             {
-                delta *= 2;
+                delta += delta / 2;
+                score = std::clamp(score, alpha, beta);
                 alpha = score - delta;
                 beta = score + delta;
                 continue;
             }
 
-            if (depth >= 6 && !param::IS_DECISIVE(score))
+            if (!param::IS_DECISIVE(score))
             {
                 alpha = score - delta;
                 beta = score + delta;
