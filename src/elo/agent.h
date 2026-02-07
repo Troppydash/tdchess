@@ -48,14 +48,21 @@ inline bool read_line(int fd, std::string &buffer, std::string &line)
 
         ssize_t n = read(fd, temp, sizeof(temp));
         if (n == 0)
+        {
+            if (!buffer.empty())
+            {
+                line = std::move(buffer);
+                buffer.clear();
+                return true;
+            }
             return false;
+        }
         if (n < 0)
         {
-            if (!(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
-            {
-                perror("read_line");
-                return false;
-            }
+            if (errno == EINTR)
+                continue;
+
+            perror("read_line");
         }
 
         if (n > 0)
@@ -73,19 +80,25 @@ inline bool write_line(int fd, const std::string &line)
     while (remaining > 0)
     {
         ssize_t n = write(fd, data, remaining);
-        if (n < 0)
-        {
-            if (!(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
-            {
-                perror("write_line");
-                return false;
-            }
-        }
+
         if (n > 0)
         {
             data += n;
             remaining -= n;
+            continue;
         }
+
+        if (n == 0)
+        {
+            perror("write_line_empty");
+            return false;
+        }
+
+        if (errno == EINTR)
+            continue;
+
+        perror("write_line");
+        return false;
     }
 
     return true;

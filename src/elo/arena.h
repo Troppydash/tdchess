@@ -190,7 +190,7 @@ template <typename Result = gsprt_results> class arena
         arena_clock agent0_clock{m_settings.basetime, m_settings.increment};
         arena_clock agent1_clock{m_settings.basetime, m_settings.increment};
 
-        for (int i = 0; i < 300; ++i)
+        for (int i = 0; i < 1000; ++i)
         {
             auto [_, result] = position.isGameOver();
             chess::Color side2move = position.sideToMove();
@@ -250,7 +250,8 @@ template <typename Result = gsprt_results> class arena
             position.makeMove(move);
         }
 
-        return 2;
+        std::cout << "wow 1000 moves draw\n";
+        return DRAW;
     }
 
     /**

@@ -602,7 +602,9 @@ struct engine
         else
         {
             if (ss->in_check)
+            {
                 chess::movegen::legalmoves(moves, m_position);
+            }
             else
                 chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves, m_position);
             m_move_ordering.score_moves<true>(m_position, moves, tt_result.move, (ss - 1)->move,
@@ -671,7 +673,9 @@ struct engine
             if (lazy_movegen && move_count == 0)
             {
                 if (ss->in_check)
+                {
                     chess::movegen::legalmoves(moves, m_position);
+                }
                 else
                     chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves,
                                                                                      m_position);
@@ -680,25 +684,24 @@ struct engine
             }
         }
 
+        // average out the best score
+        if (!param::IS_DECISIVE(best_score) && best_score > beta)
+            best_score = (best_score + beta) / 2;
+
         // [mate check]
         if (ss->in_check && moves.empty())
         {
-            return param::MATED_IN(ply);
+            best_score = param::MATED_IN(ply);
         }
-
         // [draw check]
-        if (moves.empty())
+        else if (moves.empty())
         {
             chess::movegen::legalmoves(moves, m_position);
             if (moves.empty())
             {
-                return param::VALUE_DRAW;
+                best_score = param::VALUE_DRAW;
             }
         }
-
-        // average out the best score
-        if (!param::IS_DECISIVE(best_score) && best_score > beta)
-            best_score = (best_score + beta) / 2;
 
         if (!m_timer.is_stopped())
         {
