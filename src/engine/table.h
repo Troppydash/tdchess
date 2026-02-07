@@ -199,21 +199,20 @@ struct alignas(64) bucket
         }
     }
 
-    std::pair<bool, table_entry &> probe(const uint64_t hash)
+    table_entry &probe(const uint64_t hash, bool &bucket_hit)
     {
-        if (MATCHES(hash, m_entries[0].m_hash))
-            return {m_entries[0].m_depth > param::UNINIT_DEPTH, m_entries[0]};
-
-        for (int i = 1; i < NUM_BUCKETS; ++i)
+        const uint32_t key = hash >> 32;
+        for (int i = 0; i < NUM_BUCKETS; ++i)
         {
-            if (MATCHES(hash, m_entries[i].m_hash))
+            if (key == m_entries[i].m_hash)
             {
-                std::swap(m_entries[i], m_entries[0]);
-                return {m_entries[0].m_depth > param::UNINIT_DEPTH, m_entries[0]};
+                bucket_hit = m_entries[i].m_depth > param::UNINIT_DEPTH;
+                return m_entries[i];
             }
         }
 
-        return {false, m_entries[0]};
+        bucket_hit = false;
+        return m_entries[0];
     }
 
     void store(uint64_t hash, uint8_t flag, int16_t score, int32_t ply, int32_t depth,
@@ -221,11 +220,11 @@ struct alignas(64) bucket
     {
         int best_slot = -1;
         int32_t worst_score = std::numeric_limits<int32_t>::max();
-
+        uint32_t key = hash >> 32;
         for (int i = 0; i < NUM_BUCKETS; ++i)
         {
-            auto &entry = m_entries[i];
-            if (MATCHES(hash, entry.m_hash) && entry.m_depth > param::UNINIT_DEPTH)
+            const auto &entry = m_entries[i];
+            if (key == entry.m_hash && entry.m_depth > param::UNINIT_DEPTH)
             {
                 best_slot = i;
                 break;

@@ -61,7 +61,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.12-charlie", "1.0.12-delta", true);
+    improvement_test("1.0.12-delta", "1.0.12-echo", true);
 
     return 0;
 }
@@ -180,7 +180,7 @@ int main()
     table tt{512};
     engine engine{&etable, &nnue, &tt};
     search_param param;
-    param.movetime = 1022000;
+    param.movetime = 10000;
     engine.search(start, param, true, true);
 
     return 0;

@@ -524,7 +524,8 @@ struct engine
 
         // [tt lookup]
         auto &bucket = m_table->probe(m_position.hash());
-        auto [bucket_hit, entry] = bucket.probe(m_position.hash());
+        bool bucket_hit = false;
+        auto &entry = bucket.probe(m_position.hash(), bucket_hit);
         auto tt_result = entry.get(m_position.hash(), ply, param::QDEPTH, alpha, beta, bucket_hit);
         ss->tt_hit = tt_result.hit;
         tt_result.move =
@@ -823,7 +824,8 @@ struct engine
         chess::Move &excluded_move = ss->excluded_move;
         bool has_excluded = excluded_move != chess::Move::NO_MOVE;
         auto &bucket = m_table->probe(m_position.hash());
-        auto [bucket_hit, entry] = bucket.probe(m_position.hash());
+        bool bucket_hit = false;
+        auto &entry = bucket.probe(m_position.hash(), bucket_hit);
         auto tt_result = entry.get(m_position.hash(), ply, depth, alpha, beta, bucket_hit);
         ss->tt_hit = tt_result.hit;
         ss->tt_pv = has_excluded ? ss->tt_pv : is_pv_node || (tt_result.hit && tt_result.is_pv);
@@ -1070,9 +1072,6 @@ struct engine
             m_move_ordering.sort_moves(moves, move_count);
             const chess::Move &move = moves[move_count];
 
-            bool is_capture = m_position.isCapture(move);
-            bool is_check = m_position.givesCheck(move) != chess::CheckType::NO_CHECK;
-
             int32_t new_depth;
             int32_t extension = 0;
             int16_t score = 0;
@@ -1085,6 +1084,8 @@ struct engine
             if (move_count > 0 && has_non_pawn && !param::IS_LOSS(best_score))
             {
                 int32_t lmr_depth = depth;
+                bool is_check = m_position.givesCheck(move) != chess::CheckType::NO_CHECK;
+                bool is_capture = m_position.isCapture(move);
 
                 if (is_capture || is_check)
                 {
