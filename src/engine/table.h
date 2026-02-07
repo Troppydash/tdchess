@@ -233,7 +233,7 @@ struct alignas(64) bucket
 
             uint8_t entry_age = GET_AGE(entry.m_mask);
             uint8_t age_diff = (age - entry_age) & AGE_MASK;
-            int32_t replacement_score = entry.m_depth - age_diff * 2;
+            int32_t replacement_score = entry.m_depth - age_diff * 4;
 
             if (replacement_score < worst_score)
             {

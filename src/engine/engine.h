@@ -684,24 +684,25 @@ struct engine
             }
         }
 
-        // average out the best score
-        if (!param::IS_DECISIVE(best_score) && best_score > beta)
-            best_score = (best_score + beta) / 2;
-
         // [mate check]
         if (ss->in_check && moves.empty())
         {
-            best_score = param::MATED_IN(ply);
+            return param::MATED_IN(ply);
         }
+
         // [draw check]
-        else if (moves.empty())
+        if (moves.empty())
         {
             chess::movegen::legalmoves(moves, m_position);
             if (moves.empty())
             {
-                best_score = param::VALUE_DRAW;
+                return param::VALUE_DRAW;
             }
         }
+
+        // average out the best score
+        if (!param::IS_DECISIVE(best_score) && best_score > beta)
+            best_score = (best_score + beta) / 2;
 
         if (!m_timer.is_stopped())
         {
@@ -728,27 +729,25 @@ struct engine
         if (move.typeOf() != chess::Move::NORMAL)
         {
             // uncommon harder types just guess that it is fine
-            return true;
+            chess::PieceGenType moved_piece_gen;
+            if (moved_piece.type() == chess::PieceType::PAWN)
+                moved_piece_gen = chess::PieceGenType::PAWN;
+            else if (moved_piece.type() == chess::PieceType::KNIGHT)
+                moved_piece_gen = chess::PieceGenType::KNIGHT;
+            else if (moved_piece.type() == chess::PieceType::BISHOP)
+                moved_piece_gen = chess::PieceGenType::BISHOP;
+            else if (moved_piece.type() == chess::PieceType::ROOK)
+                moved_piece_gen = chess::PieceGenType::ROOK;
+            else if (moved_piece.type() == chess::PieceType::QUEEN)
+                moved_piece_gen = chess::PieceGenType::QUEEN;
+            else if (moved_piece.type() == chess::PieceType::KING)
+                moved_piece_gen = chess::PieceGenType::KING;
+            else
+                throw std::runtime_error{"impossible moved piece"};
 
-            // chess::PieceGenType moved_piece_gen;
-            // if (moved_piece.type() == chess::PieceType::PAWN)
-            //     moved_piece_gen = chess::PieceGenType::PAWN;
-            // else if (moved_piece.type() == chess::PieceType::KNIGHT)
-            //     moved_piece_gen = chess::PieceGenType::KNIGHT;
-            // else if (moved_piece.type() == chess::PieceType::BISHOP)
-            //     moved_piece_gen = chess::PieceGenType::BISHOP;
-            // else if (moved_piece.type() == chess::PieceType::ROOK)
-            //     moved_piece_gen = chess::PieceGenType::ROOK;
-            // else if (moved_piece.type() == chess::PieceType::QUEEN)
-            //     moved_piece_gen = chess::PieceGenType::QUEEN;
-            // else if (moved_piece.type() == chess::PieceType::KING)
-            //     moved_piece_gen = chess::PieceGenType::KING;
-            // else
-            //     throw std::runtime_error{"impossible moved piece"};
-            //
-            // chess::Movelist moves;
-            // chess::movegen::legalmoves(moves, m_position, moved_piece_gen);
-            // return std::find(moves.begin(), moves.end(), move) != moves.end();
+            chess::Movelist moves;
+            chess::movegen::legalmoves(moves, m_position, moved_piece_gen);
+            return std::find(moves.begin(), moves.end(), move) != moves.end();
         }
 
         // end friendly piece check
