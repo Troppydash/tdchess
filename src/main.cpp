@@ -29,16 +29,15 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
     std::string baseline_prefix = "../builds/" + baseline;
     std::string latest_prefix = "../builds/" + latest;
     const agent_settings base{
-        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 512,
-        false};
+        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 512};
     const agent_settings late{latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin",
-                              "../syzygy", 512};
+                              "../syzygy", 512, false};
     std::vector<agent_settings> agents{late, base};
 
     arena_settings settings;
     if (is_short)
         settings = arena_settings{latest + "_against_" + baseline, 16, 10 * 1000,
-                                  static_cast<int>(0.1 * 1000)};
+                                  static_cast<int>(0.1 * 1000), false};
     else
         settings = arena_settings{latest + "_against_" + baseline, 16, 60 * 1000,
                                   static_cast<int>(0.6 * 1000)};
@@ -62,7 +61,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.12-beta", "1.0.12-charlie", true);
+    improvement_test("1.0.12-charlie", "1.0.12-delta", true);
 
     return 0;
 }
@@ -153,7 +152,7 @@ int main()
     // }
 
     nnue nnue{};
-    nnue.load_network("../nets/1.0.12-charlie.bin");
+    nnue.load_network("../nets/1.0.12-delta.bin");
     // chess::Board start;
     // chess::Board start{"8/3q4/8/1kpr2PP/p4Q2/4Q1K1/8/8 w - - 3 59"};
     // chess::Board start{"5B2/2b3p1/2k2pP1/4pP2/2P1P3/prPR1K2/8/8 w - - 0 57"};
@@ -172,6 +171,9 @@ int main()
     //
     // std::cout << nnue.evaluate(start.sideToMove(), bucket) << std::endl;
     // exit(0);
+
+    // chess::Board start{"8/8/p7/Bp5b/1P6/3k1pK1/8/8 w - - 52 109"};
+
 
     endgame_table etable{};
     etable.load_file("../syzygy");

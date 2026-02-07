@@ -110,7 +110,7 @@ struct engine_param
     int lmr_depth_ration = 4;
     int lmr_move_ratio = 12;
     int window_size = 25;
-    int16_t static_null_base_margin = 125;
+    int16_t static_null_base_margin = 85;
     int16_t nmp_depth_limit = 2;
     int16_t nmp_piece_count = 7;
     int16_t nmp_depth_base = 4;
@@ -531,7 +531,8 @@ struct engine
             tt_result.hit && is_kinda_legal(tt_result.move) ? tt_result.move : chess::Move::NO_MOVE;
         if (!is_pv_node && tt_result.can_use)
         {
-            return tt_result.score;
+            if (m_position.halfMoveClock() < 80)
+                return tt_result.score;
         }
 
         // [static evaluation]
@@ -754,6 +755,14 @@ struct engine
         if (m_position.at(move.to()).color() == m_position.sideToMove())
             return false;
 
+        // chess::Movelist moves;
+        // chess::movegen::legalmoves(moves, m_position, moved_piece_gen);
+        // bool is_ok = std::find(moves.begin(), moves.end(), move) != moves.end();
+        // if (!is_ok)
+        // {
+        //     std::cout << "uh oh not legal move mate\n";
+        // }
+
         // guess that it is fine
         return true;
     }
@@ -828,7 +837,9 @@ struct engine
         if (!is_pv_node && tt_result.can_use &&
             (cut_node == (tt_result.score >= beta) || depth > 5) && !has_excluded)
         {
-            return tt_result.score;
+            // ignore tt for close to half move
+            if (m_position.halfMoveClock() < 80)
+                return tt_result.score;
         }
 
         // [tt evaluation fix]
@@ -912,6 +923,13 @@ struct engine
             }
         }
 
+        // improving flag
+        bool improving = false;
+        if (param::IS_VALID((ss - 2)->static_eval))
+        {
+            improving = ss->static_eval > (ss - 2)->static_eval;
+        }
+
         if (ss->in_check)
         {
             goto moves;
@@ -965,7 +983,7 @@ struct engine
         {
             // assume a 350 shift
             int16_t probcut_beta = beta + 300;
-            if (!is_root && depth >= 3 && !param::IS_DECISIVE(beta) &&
+            if (!is_root && !has_excluded && depth >= 3 && !param::IS_DECISIVE(beta) &&
                 // also ignore when tt score is lower than expected beta
                 !(tt_result.hit && param::IS_VALID(tt_result.score) &&
                   tt_result.score < probcut_beta))
@@ -987,9 +1005,6 @@ struct engine
                 {
                     m_move_ordering.sort_moves(moves, i);
                     chess::Move &move = moves[i];
-
-                    if (move == excluded_move)
-                        continue;
 
                     if (move == tt_result.move)
                     {
@@ -1059,6 +1074,7 @@ struct engine
             bool is_check = m_position.givesCheck(move) != chess::CheckType::NO_CHECK;
 
             int32_t new_depth;
+            int32_t extension = 0;
             int16_t score = 0;
             bool has_non_pawn = m_position.hasNonPawnMaterial(m_position.sideToMove());
 
@@ -1143,27 +1159,32 @@ struct engine
                 ss->excluded_move = chess::Move::NO_MOVE;
 
                 if (next_best_score < to_beat)
-                {
-                    new_depth += 1;
-                }
-                else if (next_best_score >= beta && !param::IS_DECISIVE(next_best_score))
-                {
+                    extension = 1;
+                else if (next_best_score >= beta)
                     return next_best_score;
-                }
+                else if (param::IS_VALID(tt_result.score) && tt_result.score >= beta)
+                    // reduce if exact and tt score proved cutoff
+                    extension = -2;
+                else if (cut_node)
+                    extension = -1;
             }
 
             ss->move = move;
             make_move(move);
 
+            new_depth += extension;
+
             if (depth >= 2 && move_count >= 2 && !ss->in_check)
             {
                 int32_t reduction = m_param.lmr[depth][move_count];
 
-                reduction -= m_position.inCheck();
-                // reduction -= ss->tt_pv + is_pv_node;
-                //
-                // if (cut_node)
-                //     reduction += 1 - ss->tt_pv;
+                // reduce if not improving
+                reduction += !improving;
+                // reduce if in cut node
+                if (cut_node)
+                    reduction += 1;
+                // extend if pv
+                reduction -= ss->tt_pv + is_pv_node;
 
                 int32_t reduced_depth = std::clamp(new_depth - reduction, 1, depth);
                 score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
@@ -1244,7 +1265,9 @@ struct engine
         // checkmate or draw
         if (moves.empty())
         {
-            if (ss->in_check)
+            if (has_excluded)
+                best_score = alpha;
+            else if (ss->in_check)
                 best_score = param::MATED_IN(ply);
             else
                 // draw
@@ -1258,7 +1281,7 @@ struct engine
         if (best_score <= alpha)
             ss->tt_pv = ss->tt_pv || (ss - 1)->tt_pv;
 
-        if (!m_timer.is_stopped())
+        if (!m_timer.is_stopped() && !has_excluded)
         {
             bucket.store(m_position.hash(),
                          best_score >= beta                                ? param::BETA_FLAG
