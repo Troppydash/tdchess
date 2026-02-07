@@ -27,7 +27,7 @@ struct alignas(64) network
     accumulator feature_bias;
 
     // QB quant, 2*hidden_size -> 1
-    alignas(64) int16_t output_weights[BUCKET_SIZE][2 * HIDDEN_SIZE];
+    alignas(64) int16_t output_weights[BUCKET_SIZE * 2 * HIDDEN_SIZE];
     // QA * QB quant, 1 -> 1
     int16_t output_bias[BUCKET_SIZE];
 };
@@ -40,10 +40,11 @@ inline int32_t screlu(int16_t x)
 
 struct dirty_entry
 {
-    chess::Move move;
-    chess::Piece piece;
-    chess::Piece captured;
-    chess::Color stm;
+    // uint64_t hash = 0;
+    chess::Move move = chess::Move::NO_MOVE;
+    chess::Piece piece = chess::Piece::NONE;
+    chess::Piece captured = chess::Piece::NONE;
+    chess::Color stm = chess::Color::NONE;
     bool is_clean = false;
 };
 
@@ -51,9 +52,9 @@ class nnue
 {
   private:
     network m_network{};
-    alignas(64) accumulator m_sides[2][param::MAX_DEPTH]{};
+    accumulator m_sides[2][param::MAX_DEPTH]{};
 
-    std::array<dirty_entry, param::MAX_DEPTH> m_entries{};
+    std::array<dirty_entry, param::MAX_DEPTH + 10> m_entries{};
     int m_ply{0};
 
   public:
@@ -99,8 +100,8 @@ class nnue
     {
         m_ply = 0;
 
-        for (size_t i = 0; i < m_entries.size(); ++i)
-            m_entries[i].is_clean = false;
+        // for (size_t i = 0; i < m_entries.size(); ++i)
+        //     m_entries[i].is_clean = false;
 
         m_entries[0].is_clean = true;
 
@@ -132,8 +133,9 @@ class nnue
 
         const int16_t *__restrict us_ptr = m_sides[side2move][m_ply].vals;
         const int16_t *__restrict them_ptr = m_sides[side2move ^ 1][m_ply].vals;
-        const int16_t *__restrict weight_ptr = m_network.output_weights[bucket];
-        const int16_t *__restrict weight_ptr2 = m_network.output_weights[bucket] + HIDDEN_SIZE;
+        const int16_t *__restrict weight_ptr = m_network.output_weights + bucket * 2 * HIDDEN_SIZE;
+        const int16_t *__restrict weight_ptr2 =
+            m_network.output_weights + bucket * 2 * HIDDEN_SIZE + HIDDEN_SIZE;
 
         for (size_t i = 0; i < HIDDEN_SIZE; i += 16)
         {
@@ -190,13 +192,19 @@ class nnue
     void make_move(const chess::Board &board, const chess::Move &move)
     {
         m_ply += 1;
-        m_entries[m_ply] = {.move = move,
-                            .piece = board.at(move.from()),
-                            .captured = move.typeOf() == chess::Move::ENPASSANT
-                                            ? board.at(move.to().ep_square())
-                                            : board.at(move.to()),
-                            .stm = board.sideToMove(),
-                            .is_clean = false};
+
+        // only mark the entry dirty if incorrect position
+        // if (board.hash() != m_entries[m_ply].hash || move != m_entries[m_ply].move)
+        // {
+        // m_entries[m_ply].hash = board.hash();
+        m_entries[m_ply].move = move;
+        m_entries[m_ply].piece = board.at(move.from());
+        m_entries[m_ply].captured = move.typeOf() == chess::Move::ENPASSANT
+                                        ? board.at(move.to().ep_square())
+                                        : board.at(move.to());
+        m_entries[m_ply].stm = board.sideToMove();
+        m_entries[m_ply].is_clean = false;
+        // }
     }
 
     void unmake_move()
@@ -208,42 +216,22 @@ class nnue
     void catchup()
     {
         // scan back til clean entry
-        int clean_index = m_ply;
-        while (!m_entries[clean_index].is_clean)
+        int clean_ply = m_ply;
+        while (!m_entries[clean_ply].is_clean)
         {
-            clean_index -= 1;
+            clean_ply -= 1;
         }
-
-        // int ply_diff = m_ply - clean_index;
-        // int lazy_ply_diff = 15;
-        // if (ply_diff >= lazy_ply_diff)
-        // {
-        //     // copy state to current
-        //     clone_ply(clean_index, m_ply);
-        //
-        //     // apply updates
-        //     clean_index += 1;
-        //     for (; clean_index <= m_ply; ++clean_index)
-        //     {
-        //         apply_move(m_entries[clean_index]);
-        //     }
-        //
-        //     m_entries[m_ply].is_clean = true;
-        // }
-        // else
-        // {
-        int current_ply = m_ply;
-        clean_index += 1;
+        clean_ply += 1;
 
         // apply update
-        for (; clean_index <= current_ply; ++clean_index)
+        int current_ply = m_ply;
+        for (; clean_ply <= current_ply; ++clean_ply)
         {
-            clone_ply(clean_index - 1, clean_index);
-            m_ply = clean_index;
-            apply_move(m_entries[clean_index]);
-            m_entries[clean_index].is_clean = true;
+            clone_ply(clean_ply - 1, clean_ply);
+            m_ply = clean_ply;
+            apply_move(m_entries[clean_ply]);
+            m_entries[clean_ply].is_clean = true;
         }
-        // }
 
         assert(current_ply == m_ply);
     }

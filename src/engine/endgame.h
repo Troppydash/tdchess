@@ -5,9 +5,21 @@
 #include "param.h"
 #include "timer.h"
 
+struct tb_cache_entry
+{
+    uint64_t hash = 0;
+    int16_t score = 0;
+};
+
+constexpr int TB_MASK_BITS = 16;
+constexpr uint64_t TB_ENTRIES = 1 << TB_MASK_BITS;  // 1mb
+constexpr uint64_t TB_MASK = TB_ENTRIES - 1;
+
 struct endgame_table
 {
-    explicit endgame_table()
+    std::vector<tb_cache_entry> m_entries;
+
+    explicit endgame_table() : m_entries(TB_ENTRIES)
     {
     }
 
@@ -161,6 +173,10 @@ struct endgame_table
 
     int16_t probe_wdl(const chess::Board &position)
     {
+        tb_cache_entry &cache = m_entries[position.hash() & TB_MASK];
+        if (cache.hash == position.hash())
+            return cache.score;
+
         unsigned ep =
             position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
         unsigned result = tb_probe_wdl(position.us(chess::Color::WHITE).getBits(),
@@ -173,20 +189,6 @@ struct endgame_table
                                        position.pieces(chess::PieceType::PAWN).getBits(), 0, 0, ep,
                                        position.sideToMove() == chess::Color::WHITE);
 
-        switch (result)
-        {
-        case TB_LOSS:
-            return -2;
-        case TB_BLESSED_LOSS:
-            return -1;
-        case TB_DRAW:
-            return 0;
-        case TB_CURSED_WIN:
-            return 1;
-        case TB_WIN:
-            return 2;
-        }
-
         if (result == TB_RESULT_FAILED)
         {
             std::cout << "info failed probe";
@@ -194,7 +196,32 @@ struct endgame_table
             throw std::runtime_error("failed probe");
         }
 
-        throw std::runtime_error("impossible value");
+        int16_t ret = 0;
+        switch (result)
+        {
+        case TB_LOSS:
+            ret = -2;
+            break;
+        case TB_BLESSED_LOSS:
+            ret = -1;
+            break;
+        case TB_DRAW:
+            ret = 0;
+            break;
+        case TB_CURSED_WIN:
+            ret = 1;
+            break;
+        case TB_WIN:
+            ret = 2;
+            break;
+        default:
+            throw std::runtime_error{"impossible wdl value"};
+        }
+
+        cache.hash = position.hash();
+        cache.score = ret;
+
+        return ret;
     }
 
     virtual ~endgame_table()

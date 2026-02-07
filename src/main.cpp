@@ -61,7 +61,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.12-delta", "1.0.12-echo", true);
+    improvement_test("1.0.12-echo", "1.0.12-foxtrot", true);
 
     return 0;
 }
@@ -152,7 +152,7 @@ int main()
     // }
 
     nnue nnue{};
-    nnue.load_network("../nets/1.0.12-delta.bin");
+    nnue.load_network("../nets/2026-02-06-1400-570.bin");
     // chess::Board start;
     // chess::Board start{"8/3q4/8/1kpr2PP/p4Q2/4Q1K1/8/8 w - - 3 59"};
     // chess::Board start{"5B2/2b3p1/2k2pP1/4pP2/2P1P3/prPR1K2/8/8 w - - 0 57"};
