@@ -61,12 +61,12 @@ constexpr bool IS_VALID(int16_t value)
     return value != VALUE_NONE;
 }
 
-constexpr int16_t MATED_IN(int16_t ply)
+constexpr int16_t MATED_IN(int32_t ply)
 {
     return -INF + ply;
 }
 
-constexpr int16_t MATE_IN(int16_t ply)
+constexpr int16_t MATE_IN(int32_t ply)
 {
     return INF - ply;
 }

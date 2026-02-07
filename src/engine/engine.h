@@ -416,7 +416,6 @@ struct search_stack
     bool in_check = false;
     bool tt_pv = false;
     bool tt_hit = false;
-    bool is_null = false;
     std::array<chess::Move, param::QUIET_MOVES> quiet_moves{};
 };
 
@@ -810,19 +809,22 @@ struct engine
         }
 
         // [tt lookup]
+        chess::Move &excluded_move = ss->excluded_move;
+        bool has_excluded = excluded_move != chess::Move::NO_MOVE;
         auto &bucket = m_table->probe(m_position.hash());
         auto [bucket_hit, entry] = bucket.probe(m_position.hash());
         auto tt_result = entry.get(m_position.hash(), ply, depth, alpha, beta, bucket_hit);
         ss->tt_hit = tt_result.hit;
-        ss->tt_pv = is_pv_node || (tt_result.hit && tt_result.is_pv);
-        tt_result.move =
-            tt_result.hit && is_kinda_legal(tt_result.move) ? tt_result.move : chess::Move::NO_MOVE;
+        ss->tt_pv = has_excluded ? ss->tt_pv : is_pv_node || (tt_result.hit && tt_result.is_pv);
+        tt_result.move = tt_result.hit && is_kinda_legal(tt_result.move) && !has_excluded
+                             ? tt_result.move
+                             : chess::Move::NO_MOVE;
         bool is_tt_capture =
             tt_result.move != chess::Move::NO_MOVE && m_position.isCapture(tt_result.move);
 
         // [tt early return]
-        if (!is_root && !is_pv_node && tt_result.can_use &&
-            (cut_node == (tt_result.score >= beta) || depth > 5))
+        if (!is_pv_node && tt_result.can_use &&
+            (cut_node == (tt_result.score >= beta) || depth > 5) && !has_excluded)
         {
             return tt_result.score;
         }
@@ -834,6 +836,10 @@ struct engine
         if (ss->in_check)
         {
             ss->static_eval = adjusted_static_eval = param::VALUE_NONE;
+        }
+        else if (has_excluded)
+        {
+            unadjusted_static_eval = adjusted_static_eval = ss->static_eval;
         }
         else if (ss->tt_hit)
         {
@@ -866,7 +872,7 @@ struct engine
         // [check syzygy endgame table]
         int16_t best_score = -param::VALUE_INF;
         int16_t max_score = param::VALUE_INF;
-        if (m_endgame != nullptr && !is_root && m_endgame->is_stored(m_position))
+        if (m_endgame != nullptr && !has_excluded && !is_root && m_endgame->is_stored(m_position))
         {
             int16_t wdl = m_endgame->probe_wdl(m_position);
             int16_t draw_score = 0;
@@ -925,7 +931,7 @@ struct engine
         {
             const bool has_non_pawns = m_position.hasNonPawnMaterial(m_position.sideToMove());
             if (cut_node && (ss - 1)->move != chess::Move::NO_MOVE && has_non_pawns &&
-                adjusted_static_eval >= beta && !param::IS_LOSS(beta))
+                adjusted_static_eval >= beta && !param::IS_LOSS(beta) && !has_excluded)
             {
                 int32_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
 
@@ -980,6 +986,9 @@ struct engine
                     m_move_ordering.sort_moves(moves, i);
                     chess::Move &move = moves[i];
 
+                    if (move == excluded_move)
+                        continue;
+
                     if (move == tt_result.move)
                     {
                         if (searched_tt)
@@ -1003,9 +1012,6 @@ struct engine
 
                     unmake_move(move);
 
-                    if (m_timer.is_stopped())
-                        return 0;
-
                     // check if can cut at lower depth
                     if (score >= probcut_beta)
                     {
@@ -1023,8 +1029,6 @@ struct engine
         }
 
     moves:
-
-        uint8_t tt_flag = param::ALPHA_FLAG;
 
         // [tt-move generation]
         chess::Movelist moves{};
@@ -1048,16 +1052,18 @@ struct engine
         {
             m_move_ordering.sort_moves(moves, move_count);
             const chess::Move &move = moves[move_count];
-            ss->move = move;
 
             bool is_capture = m_position.isCapture(move);
             bool is_check = m_position.givesCheck(move) != chess::CheckType::NO_CHECK;
 
-            int32_t new_depth = depth - 1;
+            int32_t new_depth;
             int16_t score = 0;
+            bool has_non_pawn = m_position.hasNonPawnMaterial(m_position.sideToMove());
+
+            if (move == excluded_move)
+                goto lazy_move_gen;
 
             // [low depth pruning]
-            bool has_non_pawn = m_position.hasNonPawnMaterial(m_position.sideToMove());
             if (move_count > 0 && has_non_pawn && !param::IS_LOSS(best_score))
             {
                 int32_t lmr_depth = depth;
@@ -1118,8 +1124,33 @@ struct engine
                 }
             }
 
-            // [singular extension]
+            new_depth = depth - 1;
 
+            // [singular extension]
+            if (!has_excluded && tt_result.move == move && !is_root && tt_result.hit &&
+                (tt_result.flag == param::EXACT_FLAG || tt_result.flag == param::BETA_FLAG) &&
+                tt_result.depth >= depth - 4 && depth > 7)
+            {
+                int16_t to_beat = tt_result.score - 200;
+                int32_t reduction = depth / 3;
+                int32_t reduced_depth = new_depth - reduction;
+
+                ss->excluded_move = move;
+                int16_t next_best_score =
+                    negamax<NonPV>(to_beat - 1, to_beat, reduced_depth, ss, cut_node);
+                ss->excluded_move = chess::Move::NO_MOVE;
+
+                if (next_best_score < to_beat)
+                {
+                    new_depth += 1;
+                }
+                else if (next_best_score >= beta && !param::IS_DECISIVE(next_best_score))
+                {
+                    return next_best_score;
+                }
+            }
+
+            ss->move = move;
             make_move(move);
 
             if (depth >= 2 && move_count >= 2 && !ss->in_check)
@@ -1132,8 +1163,7 @@ struct engine
                 // if (cut_node)
                 //     reduction += 1 - ss->tt_pv;
 
-                int32_t reduced_depth = std::clamp(new_depth - reduction, 1, new_depth + 1);
-
+                int32_t reduced_depth = std::clamp(new_depth - reduction, 1, depth);
                 score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
                 if (score > alpha && reduced_depth < new_depth)
                 {
@@ -1164,7 +1194,6 @@ struct engine
 
                     if (score >= beta)
                     {
-                        tt_flag = param::BETA_FLAG;
                         m_move_ordering.incr_counter(m_position, prev_move, move);
 
                         // [killer moves update]
@@ -1192,16 +1221,15 @@ struct engine
                         break;
                     }
 
-                    tt_flag = param::EXACT_FLAG;
                     m_line.update(ply, move);
                 }
             }
 
-        lazy_move_gen:
             // malus save
             if (m_move_ordering.is_quiet(m_position, move) && quiet_count < param::QUIET_MOVES)
                 ss->quiet_moves[quiet_count++] = move;
 
+        lazy_move_gen:
             if (lazy_move_gen && move_count == 0)
             {
                 chess::movegen::legalmoves(moves, m_position);
@@ -1214,11 +1242,11 @@ struct engine
         // checkmate or draw
         if (moves.empty())
         {
-            if (m_position.inCheck())
-                return param::MATED_IN(ply);
-
-            // draw
-            return param::VALUE_DRAW;
+            if (ss->in_check)
+                best_score = param::MATED_IN(ply);
+            else
+                // draw
+                best_score = param::VALUE_DRAW;
         }
 
         if (is_pv_node)
@@ -1228,18 +1256,22 @@ struct engine
         if (best_score <= alpha)
             ss->tt_pv = ss->tt_pv || (ss - 1)->tt_pv;
 
+        if (!m_timer.is_stopped())
+        {
+            bucket.store(m_position.hash(),
+                         best_score >= beta                                ? param::BETA_FLAG
+                         : is_pv_node && best_move != chess::Move::NO_MOVE ? param::EXACT_FLAG
+                                                                           : param::ALPHA_FLAG,
+                         best_score, ply, depth, best_move, unadjusted_static_eval, ss->tt_pv,
+                         m_table->m_generation);
+        }
+
         // hack to make a move in root
         if (is_root && best_move == chess::Move::NO_MOVE && m_line.pv_length[0] == 0)
         {
             m_line.pv_table[0][0] = moves[0];
             m_line.pv_length[0] = 1;
             best_move = moves[0];
-        }
-
-        if (!m_timer.is_stopped())
-        {
-            bucket.store(m_position.hash(), tt_flag, best_score, ply, depth, best_move,
-                         unadjusted_static_eval, ss->tt_pv, m_table->m_generation);
         }
 
         return best_score;

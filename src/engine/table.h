@@ -122,6 +122,36 @@ class table_entry
     void set(uint64_t hash, uint8_t flag, int16_t score, int32_t ply, int32_t depth,
              const chess::Move &best_move, int16_t static_eval, bool is_pv, uint8_t age)
     {
+        // if (best_move != chess::Move::NO_MOVE || !MATCHES(hash, m_hash))
+        //     m_best_move = best_move;
+        //
+        // uint8_t age_diff = (age - GET_AGE(m_mask)) & AGE_MASK;
+        // if (flag == param::EXACT_FLAG || !MATCHES(hash, m_hash) ||
+        //     depth + 4 + 2 * is_pv > m_depth || age_diff >= 1)
+        // {
+        //     m_hash = hash >> 32;
+        //     m_depth = depth;
+        //     m_static_eval = static_eval;
+        //
+        //     // to absolute depth
+        //     if (param::IS_VALID(score))
+        //     {
+        //         if (score > param::CHECKMATE)
+        //             score += ply;
+        //         if (score < -param::CHECKMATE)
+        //             score -= ply;
+        //     }
+        //
+        //     m_score = score;
+        //
+        //     m_mask &= ~AGE_MASK;
+        //     m_mask |= SET_AGE(age);
+        //     m_mask &= ~FLAG_MASK;
+        //     m_mask |= SET_FLAG(flag);
+        //     m_mask &= ~PV_MASK;
+        //     m_mask |= SET_PV(is_pv);
+        // }
+
         m_hash = hash >> 32;
         m_depth = depth;
         m_best_move = best_move;
