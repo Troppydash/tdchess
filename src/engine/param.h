@@ -10,7 +10,7 @@ constexpr int32_t UNSEARCHED_DEPTH = -1;
 constexpr int32_t UNINIT_DEPTH = -2;
 constexpr int32_t QDEPTH = 0;
 
-constexpr int16_t INF = 31000;
+constexpr int16_t INF = 30000;
 constexpr int16_t CHECKMATE = INF - MAX_DEPTH;
 constexpr int16_t NNUE_MAX = CHECKMATE - 10;
 constexpr int16_t VALUE_INF = INF + 10;
@@ -29,11 +29,13 @@ constexpr int16_t VALUE_SYZYGY = NNUE_MAX - 10;
 
 constexpr int16_t PV_OFFSET = std::numeric_limits<int16_t>::max() - 10;
 
-constexpr int16_t PROMOTION_OFFSET = PV_OFFSET - 50;
-constexpr std::array<int16_t, 7> PROMOTION_SCORES = {0, 10, 20, 30, 40, 0, 0};
+constexpr int16_t PROMOTION_OFFSET = PV_OFFSET - 65;
+constexpr int16_t UNDERPROMOTION_OFFSET = PROMOTION_OFFSET - 65;
+
+constexpr std::array<int16_t, 7> PROMOTION_SCORES = {0, 1, 2, 3, 4, 0, 0};
 
 // allow 200 for captures
-constexpr int16_t GOOD_CAPTURE_OFFSET = PROMOTION_OFFSET - 200;
+constexpr int16_t GOOD_CAPTURE_OFFSET = UNDERPROMOTION_OFFSET - 100;
 
 // allow 100 for killer
 constexpr int16_t KILLER_OFFSET = GOOD_CAPTURE_OFFSET - 100;
@@ -42,7 +44,7 @@ constexpr std::array<int16_t, NUMBER_KILLERS> KILLER_SCORE = {20, 10};
 constexpr int16_t MATE_KILLER_BONUS = 30;
 
 // allow 200 for bad captures
-constexpr int16_t BAD_CAPTURE_OFFSET = KILLER_OFFSET - 200;
+constexpr int16_t BAD_CAPTURE_OFFSET = KILLER_OFFSET - 100;
 
 // history
 constexpr int16_t MAX_HISTORY = BAD_CAPTURE_OFFSET - 10;

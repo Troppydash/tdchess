@@ -154,6 +154,7 @@ class table_entry
 
         m_hash = hash >> 32;
         m_depth = depth;
+        assert(depth <= 255);
         m_best_move = best_move;
         m_static_eval = static_eval;
 

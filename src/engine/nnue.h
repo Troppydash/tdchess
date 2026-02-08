@@ -167,8 +167,9 @@ class nnue
         {
             auto &us = m_sides[side2move][m_ply];
             auto &them = m_sides[side2move ^ 1][m_ply];
-            output += screlu(us.vals[i]) * m_network.output_weights[bucket][i];
-            output += screlu(them.vals[i]) * m_network.output_weights[bucket][HIDDEN_SIZE + i];
+            output += screlu(us.vals[i]) * m_network.output_weights[bucket * 2 * HIDDEN_SIZE + i];
+            output += screlu(them.vals[i]) *
+                      m_network.output_weights[bucket * 2 * HIDDEN_SIZE + HIDDEN_SIZE + i];
         }
 #endif
 

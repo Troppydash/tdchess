@@ -109,7 +109,7 @@ struct engine_param
     std::array<int, 6> lmp_margins;
     int lmr_depth_ration = 4;
     int lmr_move_ratio = 12;
-    int window_size = 25;
+    int window_size = 50;
     int16_t static_null_base_margin = 85;
     int16_t nmp_depth_limit = 2;
     int16_t nmp_piece_count = 7;
@@ -120,7 +120,7 @@ struct engine_param
     std::array<std::array<int16_t, 6>, 7> mvv_lva;
 
     // evaluation
-    int16_t tempo = 15;
+    int16_t tempo = 10;
 
     explicit engine_param()
     {
@@ -193,16 +193,44 @@ struct move_ordering
 
             if (move.typeOf() == chess::Move::PROMOTION)
             {
+                auto captured = position.at(move.to()).type();
+                auto attacker = position.at(move.from()).type();
+                int16_t mvv_lva = m_param.mvv_lva[captured][attacker];
+
                 if (move.promotionType() == chess::PieceType::QUEEN)
                 {
-                    score +=
-                        param::PROMOTION_OFFSET + param::PROMOTION_SCORES[move.promotionType()];
-                    assert(score < param::PV_OFFSET && score >= param::PROMOTION_OFFSET);
+                    if (see::test_ge(position, move, -200))
+                    {
+                        score += static_cast<int16_t>(param::PROMOTION_OFFSET + mvv_lva);
+                        assert(score < param::PV_OFFSET && score >= param::PROMOTION_OFFSET);
+                    }
+                    else
+                    {
+                        score += static_cast<int16_t>(
+                            param::BAD_CAPTURE_OFFSET +
+                            param::PROMOTION_SCORES[move.promotionType()] + mvv_lva);
+                    }
+                }
+                else if (move.promotionType() == chess::PieceType::KNIGHT)
+                {
+                    if (see::test_ge(position, move, -200))
+                    {
+                        score += static_cast<int16_t>(param::UNDERPROMOTION_OFFSET + mvv_lva);
+                        assert(score < param::PROMOTION_OFFSET &&
+                               score >= param::UNDERPROMOTION_OFFSET);
+                    }
+                    else
+                    {
+                        score += static_cast<int16_t>(
+                            param::BAD_CAPTURE_OFFSET +
+                            param::PROMOTION_SCORES[move.promotionType()] + mvv_lva);
+                    }
                 }
                 else
                 {
                     // bad moves are underpromotion
-                    score += param::BAD_CAPTURE_OFFSET;
+                    score += static_cast<int16_t>(param::BAD_CAPTURE_OFFSET +
+                                                  param::PROMOTION_SCORES[move.promotionType()] + mvv_lva);
                 }
                 goto done;
             }
@@ -210,71 +238,31 @@ struct move_ordering
             // captures
             if (position.isCapture(move))
             {
-                // mvv lva, victim * 16 - attacker, [15000, 700] max 15000, scaled to [-200, 200]
+                // mvv lva, victim * 16 - attacker
                 auto captured = move.typeOf() == chess::Move::ENPASSANT
                                     ? chess::PieceType::PAWN
                                     : position.at(move.to()).type();
                 auto attacker = position.at(move.from()).type();
-                double mvv_lva = (see::TRADITIONAL_PIECE_VALUES[captured] * 16 -
-                                  see::TRADITIONAL_PIECE_VALUES[attacker]);
+                int16_t mvv_lva = m_param.mvv_lva[captured][attacker];
 
-                constexpr double KVALUE =
-                    see::TRADITIONAL_PIECE_VALUES[static_cast<uint8_t>(chess::PieceType::KING)];
-                constexpr double QVALUE =
-                    see::TRADITIONAL_PIECE_VALUES[static_cast<uint8_t>(chess::PieceType::QUEEN)];
-                constexpr double PVALUE =
-                    see::TRADITIONAL_PIECE_VALUES[static_cast<uint8_t>(chess::PieceType::PAWN)];
-                constexpr double MAX = QVALUE * 16 - PVALUE;
-                constexpr double MIN = PVALUE * 16 - KVALUE;
-                constexpr double MID = (MAX + MIN) / 2.0;
-                constexpr double SCALE = (MAX - MIN);
+                // if (IN_Q)
+                // {
+                //     // ignore fancy in qsearch
+                //     score += static_cast<int16_t>(param::GOOD_CAPTURE_OFFSET + mvv_lva);
+                //     assert(score >= param::GOOD_CAPTURE_OFFSET && score < param::PV_OFFSET);
+                //     goto done;
+                // }
 
-                // from [-0.5, 0.5] to [-200, 200]
-                double scaled_mvv_lva = (mvv_lva - MID) / SCALE * 2.0 * 200.0;
-                assert(scaled_mvv_lva <= 200.0 && scaled_mvv_lva >= -200.0);
-                if (IN_Q)
+                if (see::test_ge(position, move, -200))
                 {
-                    // ignore fancy in qsearch
-                    score +=
-                        param::GOOD_CAPTURE_OFFSET + std::round((scaled_mvv_lva / 2.0) + 100.0);
-                    assert(score >= param::GOOD_CAPTURE_OFFSET && score < param::PV_OFFSET);
-                    goto done;
-                }
-
-                if (see::test_ge(position, move, -500))
-                {
-                    score +=
-                        param::GOOD_CAPTURE_OFFSET + std::round((scaled_mvv_lva / 2.0) + 100.0);
+                    score += static_cast<int16_t>(param::GOOD_CAPTURE_OFFSET + mvv_lva);
                     goto done;
                 }
                 else
                 {
-                    score += param::BAD_CAPTURE_OFFSET + std::round((scaled_mvv_lva / 2.0) + 100.0);
+                    score += static_cast<int16_t>(param::BAD_CAPTURE_OFFSET + mvv_lva);
                     goto done;
                 }
-
-                // see ranking, [-2000, 2000], scale by 40 to [-200, 200]
-                // double see_raw = std::clamp(see::test(position, move), -3200, 3200);
-                // double see_score = see_raw / 17.0;
-                //
-                // double see_weight = 0.1;
-                // int16_t average_score = std::round(
-                //     (mvv_lva * (1.0 - see_weight) + see_weight * see_score) / 2.0 + 100.0);
-                //
-                // // additional odds
-                // if (see_raw >= -700)
-                // {
-                //     score += param::GOOD_CAPTURE_OFFSET + average_score;
-                //     assert(score < param::PROMOTION_OFFSET && score >=
-                //     param::GOOD_CAPTURE_OFFSET);
-                // }
-                // else
-                // {
-                //     score += param::BAD_CAPTURE_OFFSET + average_score;
-                //     assert(score < param::KILLER_OFFSET && score >= param::BAD_CAPTURE_OFFSET);
-                // }
-                //
-                // goto done;
             }
 
             // killers
@@ -284,7 +272,8 @@ struct move_ordering
                 {
                     if (move == m_killers[ply][i].first)
                     {
-                        score += param::KILLER_OFFSET + param::KILLER_SCORE[i];
+                        score +=
+                            static_cast<int16_t>(param::KILLER_OFFSET + param::KILLER_SCORE[i]);
                         // mate killers bonus
                         if (m_killers[ply][i].second)
                             score += param::MATE_KILLER_BONUS;
@@ -312,7 +301,7 @@ struct move_ordering
                                                .get_value();
                 }
 
-                assert(score < param::BAD_CAPTURE_OFFSET);
+                // assert(score < param::BAD_CAPTURE_OFFSET);
             }
 
         done:
@@ -443,7 +432,7 @@ struct engine
     // pv-line
     pv_line m_line;
     // search stack
-    constexpr static int SEARCH_STACK_PREFIX = 2;
+    constexpr static int SEARCH_STACK_PREFIX = 5;
     std::array<search_stack, param::MAX_DEPTH + SEARCH_STACK_PREFIX> m_stack;
     // endgame table ref
     endgame_table *m_endgame = nullptr;
@@ -575,7 +564,9 @@ struct engine
             if (best_score >= beta)
             {
                 if (!param::IS_DECISIVE(best_score))
-                    best_score = (best_score + beta) / 2;
+                {
+                    best_score += (beta - best_score) / 2;
+                }
 
                 if (!ss->tt_hit)
                 {
@@ -704,7 +695,7 @@ struct engine
 
         // average out the best score
         if (!param::IS_DECISIVE(best_score) && best_score > beta)
-            best_score = (best_score + beta) / 2;
+            best_score += (beta - best_score) / 2;
 
         if (!m_timer.is_stopped())
         {
@@ -931,6 +922,10 @@ struct engine
         {
             improving = ss->static_eval > (ss - 2)->static_eval;
         }
+        // else if (param::IS_VALID((ss - 4)->static_eval))
+        // {
+        //     improving = ss->static_eval > (ss - 4)->static_eval;
+        // }
 
         if (ss->in_check)
         {

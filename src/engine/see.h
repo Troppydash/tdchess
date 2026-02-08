@@ -5,18 +5,18 @@
 
 struct see
 {
-    constexpr static std::array<int32_t, 7> TRADITIONAL_PIECE_VALUES = {
-        // pawn, knight, bishop, rook, queen, king, none
-        100, 320, 330, 500, 900, 1000, 0,
-    };
+    // constexpr static std::array<int32_t, 7> TRADITIONAL_PIECE_VALUES = {
+    //     // pawn, knight, bishop, rook, queen, king, none
+    //     100, 320, 330, 500, 900, 1000, 0,
+    // };
 
-    static constexpr int32_t PAWN_VALUE = 208;
-    static constexpr int32_t KNIGHT_VALUE = 781;
-    static constexpr int32_t BISHOP_VALUE = 825;
-    static constexpr int32_t ROOK_VALUE = 1276;
-    static constexpr int32_t QUEEN_VALUE = 2538;
+    static constexpr int16_t PAWN_VALUE = 208;
+    static constexpr int16_t KNIGHT_VALUE = 781;
+    static constexpr int16_t BISHOP_VALUE = 825;
+    static constexpr int16_t ROOK_VALUE = 1276;
+    static constexpr int16_t QUEEN_VALUE = 2538;
 
-    constexpr static std::array<int32_t, 7> PIECE_VALUES = {
+    constexpr static std::array<int16_t, 7> PIECE_VALUES = {
         // pawn, knight, bishop, rook, queen, king, none
         PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, 0, 0
     };
@@ -53,7 +53,7 @@ struct see
      * @param threshold
      * @return
      */
-    static bool test_ge(const chess::Board &position, const chess::Move &move, int32_t threshold)
+    static bool test_ge(const chess::Board &position, const chess::Move &move, int16_t threshold)
     {
         if (move.typeOf() != chess::Move::NORMAL)
         {

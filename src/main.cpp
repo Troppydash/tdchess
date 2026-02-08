@@ -156,13 +156,17 @@ int main()
     // chess::Board start;
     // chess::Board start{"8/3q4/8/1kpr2PP/p4Q2/4Q1K1/8/8 w - - 3 59"};
     // chess::Board start{"5B2/2b3p1/2k2pP1/4pP2/2P1P3/prPR1K2/8/8 w - - 0 57"};
-    chess::Board start{"8/4B3/p7/1p3p1p/1P2k1b1/P3P3/5K2/8 w - - 4 57"};
+    // chess::Board start{"8/4B3/p7/1p3p1p/1P2k1b1/P3P3/5K2/8 w - - 4 57"};
     // chess::Board start{"8/8/8/1p6/1P6/P3R1pP/1k2p1K1/5r2 b - - 11 71"};
     // chess::Board start{"8/5pk1/p5p1/1p1Rpq2/1P5p/P3PPnP/Q5P1/1r1B2K1 b - - 1 36"};
 
     // chess::Board start{"8/8/p7/1pB2p1p/1P2k1b1/P3P3/5K2/8 b - - 5 57"};
     // chess::Board start{"8/8/4Bb1p/2k2PpP/1p2K1P1/8/8/8 b - - 1 89"};
     // should be e3e2
+
+    chess::Board start{"1r6/6k1/ppQ1nrp1/4p3/P1Pp1bP1/1N1B4/1P6/1K6 b - - 1 34"};
+    // chess::Board start{"7r/8/pQ2nrpk/4p3/P1Pp1bP1/1N1B4/1P6/1K6 b - - 0 36"};
+
 
     // nnue.initialize(start);
     // constexpr int n = 8;
