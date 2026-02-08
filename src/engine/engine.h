@@ -165,7 +165,7 @@ template <typename I, I LIMIT> struct history_entry
 
     void decay()
     {
-        value /= 2;
+        value /= 8;
     }
 };
 
