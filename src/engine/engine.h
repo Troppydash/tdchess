@@ -115,8 +115,8 @@ struct engine_param
     int16_t static_null_base_margin = 85;
     int16_t nmp_depth_limit = 2;
     int16_t nmp_piece_count = 7;
-    int16_t nmp_depth_base = 4;
-    int16_t nmp_depth_multiplier = 6;
+    int16_t nmp_depth_base = 6;
+    int16_t nmp_depth_multiplier = 4;
 
     // move ordering
     std::array<std::array<int16_t, 6>, 7> mvv_lva;
@@ -318,7 +318,7 @@ struct move_ordering
                                                .get_value();
                 }
 
-                // assert(score < param::BAD_CAPTURE_OFFSET);
+                goto done;
             }
 
         done:
@@ -688,7 +688,7 @@ struct engine
                     (ss - 1)->move != chess::Move::NO_MOVE && move.to() != (ss - 1)->move.to() &&
                     !param::IS_LOSS(futility_base) && move.typeOf() != chess::Move::PROMOTION)
                 {
-                    if (move_count > 3)
+                    if (move_count > 2)
                         continue;
 
                     auto captured = move.typeOf() == chess::Move::ENPASSANT
@@ -1005,6 +1005,12 @@ struct engine
             goto moves;
         }
 
+        // [razoring]
+        if (!is_pv_node && adjusted_static_eval < alpha - 500 - 300 * depth * depth)
+        {
+            return qsearch<NonPV>(alpha, beta, ss);
+        }
+
         // [static null move pruning]
         {
             int16_t margin = m_param.static_null_base_margin * depth;
@@ -1144,6 +1150,7 @@ struct engine
             int32_t extension = 0;
             int16_t score = 0;
             bool has_non_pawn = m_position.hasNonPawnMaterial(m_position.sideToMove());
+            bool is_quiet = false;
 
             if (move == excluded_move)
                 goto lazy_move_gen;
@@ -1215,6 +1222,7 @@ struct engine
 
             // [singular extension]
             if (!has_excluded && tt_result.move == move && !is_root && tt_result.hit &&
+                param::IS_VALID(tt_result.score) &&
                 (tt_result.flag == param::EXACT_FLAG || tt_result.flag == param::BETA_FLAG) &&
                 tt_result.depth >= depth - 4 && depth > 7)
             {
@@ -1231,22 +1239,25 @@ struct engine
                     extension = 1;
                 else if (next_best_score >= beta)
                     return next_best_score;
-                else if (param::IS_VALID(tt_result.score) && tt_result.score >= beta)
+                else if (tt_result.score >= beta)
                     // reduce if exact and tt score proved cutoff
                     extension = -2;
                 else if (cut_node)
                     extension = -1;
             }
 
+            is_quiet = m_move_ordering.is_quiet(m_position, move);
             ss->move = move;
             make_move(move);
 
             new_depth += extension;
 
-            if (depth >= 2 && move_count >= 2 && !ss->in_check)
+            if (depth >= 2 && move_count > 0)
             {
                 int32_t reduction = m_param.lmr[depth][move_count];
 
+                // extend if in check
+                reduction -= ss->in_check;
                 // reduce if not improving
                 reduction += !improving;
                 // reduce if in cut node
@@ -1254,8 +1265,15 @@ struct engine
                     reduction += 1;
                 // extend if pv
                 reduction -= ss->tt_pv + is_pv_node;
+                // reduce/extend based on the history, history range [-30000, 30000]
+                if (is_quiet)
+                    reduction += m_move_ordering
+                                     .m_main_history[m_position.sideToMove()][move.from().index()]
+                                                    [move.to().index()]
+                                     .get_value() /
+                                 15000;
 
-                int32_t reduced_depth = std::clamp(new_depth - reduction, 1, depth);
+                int32_t reduced_depth = std::clamp(new_depth - reduction, 1, depth + 1);
                 score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
                 if (score > alpha && reduced_depth < new_depth)
                 {
@@ -1289,7 +1307,7 @@ struct engine
                         m_move_ordering.incr_counter(m_position, prev_move, move);
 
                         // [killer moves update]
-                        if (m_move_ordering.is_quiet(m_position, move) && cut_node)
+                        if (m_move_ordering.is_quiet(m_position, move))
                         {
                             m_move_ordering.store_killer(move, ply, param::IS_WIN(score));
                         }
@@ -1297,16 +1315,17 @@ struct engine
                         // [main history update]
                         if (m_move_ordering.is_quiet(m_position, move))
                         {
-                            const int16_t main_history_bonus = 300 * depth - 250;
+                            const int16_t main_history_bonus = depth * depth;
                             m_move_ordering.update_main_history(m_position, move,
                                                                 main_history_bonus);
 
                             // malus apply
+                            const int16_t main_history_malus = depth * depth / 4;
                             for (int j = 0; j < quiet_count; ++j)
                             {
                                 auto &m = ss->quiet_moves[j];
                                 m_move_ordering.update_main_history(m_position, m,
-                                                                    -main_history_bonus);
+                                                                    -main_history_malus);
                             }
                         }
 
