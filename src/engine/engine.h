@@ -165,7 +165,7 @@ template <typename I, I LIMIT> struct history_entry
 
     void decay()
     {
-        value /= 8;
+        value /= 2;
     }
 };
 
@@ -414,7 +414,7 @@ struct pv_line
 
     void reset()
     {
-        for (int & i : pv_length)
+        for (int &i : pv_length)
             i = 0;
     }
 };
@@ -561,7 +561,7 @@ struct engine
         const int32_t ply = ss->ply;
         m_stats.sel_depth = std::max(m_stats.sel_depth, ply + 1);
         m_stats.nodes_searched += 1;
-        if (m_stats.nodes_searched % 2048 == 0)
+        if ((m_stats.nodes_searched & 4095) == 0)
             m_timer.check();
 
         if (m_timer.is_stopped())
@@ -841,7 +841,7 @@ struct engine
         m_line.ply_init(ply);
 
         m_stats.nodes_searched += 1;
-        if (m_stats.nodes_searched % 2048 == 0)
+        if ((m_stats.nodes_searched & 4095) == 0)
             m_timer.check();
 
         if (m_timer.is_stopped())
@@ -1449,7 +1449,6 @@ struct engine
 
             return result;
         }
-
 
         int delta = m_param.window_size;
         while (depth <= control.depth)

@@ -5,7 +5,7 @@
 class timer
 {
   private:
-    std::chrono::milliseconds m_target;
+    std::chrono::milliseconds m_target{};
     bool m_is_stopped = false;
     bool m_forced_stopped = false;
 
@@ -58,6 +58,6 @@ class timer
     static std::chrono::milliseconds now()
     {
         return std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::high_resolution_clock::now().time_since_epoch());
+            std::chrono::steady_clock::now().time_since_epoch());
     }
 };
