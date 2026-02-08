@@ -2,11 +2,13 @@
 
 #include "param.h"
 #include <fstream>
-#include <immintrin.h>
 
 #ifdef __AVX2__
 #define TDCHESS_NNUE_SIMD
+#include <immintrin.h>
 #endif
+
+#define TDCHESS_NNUE_INLINE
 
 constexpr size_t HIDDEN_SIZE = 1568;
 constexpr int16_t QA = 255;
@@ -315,7 +317,7 @@ class nnue
 
     void add_piece(const chess::Piece &piece, const chess::Square &square)
     {
-#ifdef TDCHESS_NNUE_SIMD
+#ifdef TDCHESS_NNUE_INLINE
         // hand roll simd
         int white_feature_idx = translate(chess::Color::WHITE, piece, square);
         int black_feature_idx = translate(chess::Color::BLACK, piece, square);
@@ -339,7 +341,7 @@ class nnue
 
     void remove_piece(const chess::Piece &piece, const chess::Square &square)
     {
-#ifdef TDCHESS_NNUE_SIMD
+#ifdef TDCHESS_NNUE_INLINE
         // hand roll simd
         int white_feature_idx = translate(chess::Color::WHITE, piece, square);
         int black_feature_idx = translate(chess::Color::BLACK, piece, square);
@@ -363,7 +365,7 @@ class nnue
 
     void move_piece(const chess::Piece &piece, const chess::Square &start, const chess::Square &end)
     {
-#ifdef TDCHESS_NNUE_SIMD
+#ifdef TDCHESS_NNUE_INLINE
         // hand roll simd
         int white_remove_feature_idx = translate(chess::Color::WHITE, piece, start);
         int black_remove_feature_idx = translate(chess::Color::BLACK, piece, start);
@@ -395,7 +397,7 @@ class nnue
                                  const chess::Square &end, const chess::Piece &removed_piece,
                                  const chess::Square removed)
     {
-#ifdef TDCHESS_NNUE_SIMD
+#ifdef TDCHESS_NNUE_INLINE
         // MOVE PIECE
         int white_remove_feature_idx = translate(chess::Color::WHITE, moved_piece, start);
         int black_remove_feature_idx = translate(chess::Color::BLACK, moved_piece, start);

@@ -90,7 +90,6 @@ int main()
 
 #else
 #include "elo/agent.h"
-#include "elo/arena.h"
 #include "engine/nnue.h"
 
 int evaluate_bucket(const chess::Board &position)
@@ -179,10 +178,10 @@ int main()
     // chess::Board start{"8/8/p7/Bp5b/1P6/3k1pK1/8/8 w - - 52 109"};
 
 
-    endgame_table etable{};
-    etable.load_file("../syzygy");
+    // endgame_table etable{};
+    // etable.load_file("../syzygy");
     table tt{512};
-    engine engine{&etable, &nnue, &tt};
+    engine engine{nullptr, &nnue, &tt};
     search_param param;
     param.movetime = 10000;
     engine.search(start, param, true, true);

@@ -6,11 +6,14 @@
 
 inline void pin_thread_to_processor(int logical_processor)
 {
+#ifdef __linux__
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(logical_processor, &cpuset);
 
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+#else
+#endif
 }
 
 inline int32_t parse_i32(std::string_view s)

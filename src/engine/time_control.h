@@ -81,7 +81,7 @@ struct search_param
             cent_mtg = static_cast<int64_t>(scaled_time * 5.051);
 
         int64_t time_left =
-            std::max(1L, time + (inc * (cent_mtg - 100) - move_overhead * (200 + cent_mtg)) / 100);
+            std::max(static_cast<int64_t>(1), time + (inc * (cent_mtg - 100) - move_overhead * (200 + cent_mtg)) / 100);
 
         if (original_time_adjust < 0)
             original_time_adjust = 0.3128 * std::log10(time_left) - 0.4354;
@@ -92,11 +92,11 @@ struct search_param
                                     0.213035 * (double)time / (double)time_left) *
                            original_time_adjust;
 
-        int64_t optimum_time = std::max(100L, static_cast<int64_t>(opt_scale * time_left));
+        int64_t optimum_time = std::max(static_cast<int64_t>(100), static_cast<int64_t>(opt_scale * time_left));
         if (time - move_overhead < 0)
             throw std::runtime_error{"uh oh"};
 
-        int64_t overhead_sub = std::max(10L, time - move_overhead);
+        int64_t overhead_sub = std::max(static_cast<int64_t>(10), time - move_overhead);
         int64_t true_time = std::min(std::min(optimum_time, overhead_sub), movetime);
         return {depth, true_time};
     }

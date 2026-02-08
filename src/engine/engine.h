@@ -70,7 +70,7 @@ struct engine_stats
     {
         long delta = (total_time - old.total_time).count();
         uint32_t depth_nps = (nodes_searched - old.nodes_searched) * 1000 / std::max(1L, delta);
-        uint32_t nps = nodes_searched * 1000 / std::max(1L, total_time.count());
+        uint32_t nps = nodes_searched * 1000 / std::max(static_cast<int64_t>(1), total_time.count());
 
         printf("info depth %2d, nodes %10d, score %10s (%7d), nps %10d/%10d, moves", result.depth,
                nodes_searched, result.get_score().c_str(), result.score, depth_nps, nps);
@@ -84,7 +84,7 @@ struct engine_stats
 
     long get_nps() const
     {
-        return static_cast<long>(nodes_searched) * 1000 / std::max(1L, total_time.count());
+        return static_cast<long>(nodes_searched) * 1000 / std::max(static_cast<int64_t>(1), total_time.count());
     }
 
     void display_uci(const search_result &result) const
@@ -1335,7 +1335,7 @@ struct engine
         auto original = std::cout.getloc();
         std::cout.imbue(std::locale("en_US.UTF-8"));
         cout << "nodes: " << nodes << ", took " << ms << "ms" << endl;
-        cout << "nps: " << nodes * 1000 / std::max(1L, ms) << endl;
+        cout << "nps: " << nodes * 1000 / std::max(static_cast<int64_t>(1), ms) << endl;
         std::cout.imbue(original);
     }
 

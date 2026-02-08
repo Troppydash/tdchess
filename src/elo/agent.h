@@ -110,6 +110,7 @@ inline void set_nonblocking(int fd)
     // int flags = fcntl(fd, F_GETFL, 0);
     // fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 
+#ifdef __linux__
     // set pipe buffer size high to prevent excessive blocking
     int buffer_size = 128 * 1024;
     int new_buffer = fcntl(fd, F_SETPIPE_SZ, buffer_size);
@@ -123,6 +124,9 @@ inline void set_nonblocking(int fd)
         std::cout << "[warning] tried setting " << buffer_size << "b, got only " << new_buffer
                   << "b\n";
     }
+#else
+
+#endif
 }
 
 inline pid_t spawn_process(const char *path, int stdin_fd, int stdout_fd)
