@@ -1291,15 +1291,26 @@ struct engine
                 reduction -= ss->tt_pv + is_pv_node;
                 // reduce/extend based on the history, history range [-30000, 30000]
                 if (is_quiet)
+                {
+                    // reduce if killer
+                    // if (move == m_move_ordering.m_killers[ply][0].first ||
+                    //     move == m_move_ordering.m_killers[ply][1].first)
+                    //     reduction += 1;
+
                     reduction += m_move_ordering
                                      .m_main_history[m_position.sideToMove()][move.from().index()]
                                                     [move.to().index()]
                                      .get_value() /
                                  15000;
+                }
                 else if (is_capture)
                     reduction += capture_score / 15000;
 
-                int32_t reduced_depth = std::clamp(new_depth - reduction, 1, depth + 1);
+                // reduce if promotion
+                if (move.typeOf() == chess::Move::PROMOTION)
+                    reduction += 1;
+
+                int32_t reduced_depth = std::clamp(new_depth - reduction, 0, depth + 1);
                 score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
                 if (score > alpha && reduced_depth < new_depth)
                 {
