@@ -126,8 +126,6 @@ struct engine_param
 
     explicit engine_param()
     {
-        lmp_margins = {0, 8, 12, 16, 20, 24};
-
         // set lmr
         for (int depth = 1; depth < param::MAX_DEPTH; ++depth)
             for (int move = 1; move < 100; ++move)
@@ -171,9 +169,14 @@ template <typename I, I LIMIT> struct history_entry
 
 struct move_ordering
 {
+    // index by [ply]
     std::array<std::pair<chess::Move, bool>, param::NUMBER_KILLERS> m_killers[param::MAX_DEPTH]{};
+    // indexed by [stm][from][to]
     chess::Move m_counter[2][64][64]{};
+    // indexed by [stm][from][to]
     history_entry<int16_t, param::MAX_HISTORY> m_main_history[2][64][64]{};
+    // indexed by [attacker][to][target_type]
+    history_entry<int16_t, param::MAX_HISTORY> m_capture_history[13][64][7]{};
 
     const engine_param m_param;
 
@@ -255,29 +258,33 @@ struct move_ordering
             // captures
             if (position.isCapture(move))
             {
-                // mvv lva, victim * 16 - attacker
+                // mvv_lva = [0, 50]
                 auto captured = move.typeOf() == chess::Move::ENPASSANT
                                     ? chess::PieceType::PAWN
                                     : position.at(move.to()).type();
                 auto attacker = position.at(move.from()).type();
                 int16_t mvv_lva = m_param.mvv_lva[captured][attacker];
 
-                // if (IN_Q)
-                // {
-                //     // ignore fancy in qsearch
-                //     score += static_cast<int16_t>(param::GOOD_CAPTURE_OFFSET + mvv_lva);
-                //     assert(score >= param::GOOD_CAPTURE_OFFSET && score < param::PV_OFFSET);
-                //     goto done;
-                // }
+                // capture history [-32000, 32000] -> [0, 130]
+                // TODO: fix this
+                int16_t normalized_capture =
+                    (m_capture_history[position.at(move.from())][move.to().index()]
+                                      [position.at(move.to()).type()]
+                                          .get_value() +
+                     param::MAX_HISTORY) /
+                    250;
+                normalized_capture = 0;
 
-                if (see::test_ge(position, move, -200))
+                int16_t combined_rank = mvv_lva + normalized_capture;
+
+                if (see::test_ge(position, move, -100))
                 {
-                    score += static_cast<int16_t>(param::GOOD_CAPTURE_OFFSET + mvv_lva);
+                    score += static_cast<int16_t>(param::GOOD_CAPTURE_OFFSET + combined_rank);
                     goto done;
                 }
                 else
                 {
-                    score += static_cast<int16_t>(param::BAD_CAPTURE_OFFSET + mvv_lva);
+                    score += static_cast<int16_t>(param::BAD_CAPTURE_OFFSET + combined_rank);
                     goto done;
                 }
             }
@@ -352,6 +359,14 @@ struct move_ordering
     {
         m_main_history[position.sideToMove()][move.from().index()][move.to().index()].add_bonus(
             bonus);
+    }
+
+    void update_capture_history(const chess::Board &position, const chess::Move &move,
+                                int16_t bonus)
+    {
+        m_capture_history[position.at(move.from())][move.to().index()]
+                         [position.at(move.to()).type()]
+                             .add_bonus(bonus);
     }
 
     void store_killer(const chess::Move &killer, int32_t ply, bool is_mate)
@@ -429,6 +444,7 @@ struct search_stack
     bool tt_pv = false;
     bool tt_hit = false;
     std::array<chess::Move, param::QUIET_MOVES> quiet_moves{};
+    std::array<chess::Move, param::QUIET_MOVES> capture_moves{};
 
     void reset()
     {
@@ -1138,8 +1154,9 @@ struct engine
 
         chess::Move best_move = chess::Move::NO_MOVE;
 
-        // track quiet moves for malus
+        // track quiet/capture moves for malus
         int quiet_count = 0;
+        int capture_count = 0;
 
         for (int move_count = 0; move_count < moves.size(); ++move_count)
         {
@@ -1149,7 +1166,9 @@ struct engine
             int32_t new_depth;
             int32_t extension = 0;
             int16_t score = 0;
+            int16_t capture_score = 0;
             bool has_non_pawn = m_position.hasNonPawnMaterial(m_position.sideToMove());
+            bool is_capture = m_position.isCapture(move);
             bool is_quiet = false;
 
             if (move == excluded_move)
@@ -1160,7 +1179,6 @@ struct engine
             {
                 int32_t lmr_depth = depth;
                 bool is_check = m_position.givesCheck(move) != chess::CheckType::NO_CHECK;
-                bool is_capture = m_position.isCapture(move);
 
                 if (is_capture || is_check)
                 {
@@ -1247,6 +1265,12 @@ struct engine
             }
 
             is_quiet = m_move_ordering.is_quiet(m_position, move);
+            if (is_capture)
+                capture_score =
+                    m_move_ordering
+                        .m_capture_history[m_position.at(move.from())][move.to().index()]
+                                          [m_position.at(move.to()).type()]
+                        .get_value();
             ss->move = move;
             make_move(move);
 
@@ -1272,6 +1296,8 @@ struct engine
                                                     [move.to().index()]
                                      .get_value() /
                                  15000;
+                else if (is_capture)
+                    reduction += capture_score / 15000;
 
                 int32_t reduced_depth = std::clamp(new_depth - reduction, 1, depth + 1);
                 score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
@@ -1313,19 +1339,30 @@ struct engine
                         }
 
                         // [main history update]
+                        const int16_t main_history_bonus = depth * depth;
+                        const int16_t main_history_malus = main_history_bonus / 4;
                         if (m_move_ordering.is_quiet(m_position, move))
                         {
-                            const int16_t main_history_bonus = depth * depth;
                             m_move_ordering.update_main_history(m_position, move,
                                                                 main_history_bonus);
 
                             // malus apply
-                            const int16_t main_history_malus = depth * depth / 4;
                             for (int j = 0; j < quiet_count; ++j)
                             {
-                                auto &m = ss->quiet_moves[j];
-                                m_move_ordering.update_main_history(m_position, m,
+                                m_move_ordering.update_main_history(m_position, ss->quiet_moves[j],
                                                                     -main_history_malus);
+                            }
+                        }
+                        else if (m_position.isCapture(move))
+                        {
+                            m_move_ordering.update_capture_history(m_position, move,
+                                                                   main_history_bonus);
+
+                            // malus apply
+                            for (int j = 0; j < capture_count; ++j)
+                            {
+                                m_move_ordering.update_capture_history(
+                                    m_position, ss->capture_moves[j], -main_history_malus);
                             }
                         }
 
@@ -1337,8 +1374,16 @@ struct engine
             }
 
             // malus save
-            if (m_move_ordering.is_quiet(m_position, move) && quiet_count < param::QUIET_MOVES)
-                ss->quiet_moves[quiet_count++] = move;
+            if (m_move_ordering.is_quiet(m_position, move))
+            {
+                if (quiet_count < param::QUIET_MOVES)
+                    ss->quiet_moves[quiet_count++] = move;
+            }
+            else if (m_position.isCapture(move))
+            {
+                if (capture_count < param::QUIET_MOVES)
+                    ss->capture_moves[capture_count++] = move;
+            }
 
         lazy_move_gen:
             if (lazy_move_gen && move_count == 0)
