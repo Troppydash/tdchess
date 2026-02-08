@@ -50,7 +50,7 @@ class uci_handler
     int64_t m_move_overhead = 75;
     search_param m_param{};
 
-    engine *m_engine = nullptr;
+    std::unique_ptr<engine> m_engine;
     table *m_tt;
     std::thread m_engine_thread;
 
@@ -58,11 +58,11 @@ class uci_handler
     explicit uci_handler()
     {
         m_tt = new table{128};
+        m_engine = std::make_unique<engine>(m_endgame_table, m_nnue, m_tt);
     };
 
     ~uci_handler()
     {
-        delete m_engine;
         delete m_endgame_table;
         delete m_nnue;
         delete m_tt;
@@ -115,6 +115,11 @@ class uci_handler
                     if (!m_endgame_table->load_file(parts[4]))
                     {
                         delete m_endgame_table;
+                        std::cout << "info cannot load endgame table\n";
+                    }
+                    else
+                    {
+                        m_engine->m_endgame = m_endgame_table;
                     }
                 }
                 else if (parts[2] == "NNUEPath")
@@ -124,6 +129,11 @@ class uci_handler
                     if (!m_nnue->load_network(parts[4]))
                     {
                         delete m_nnue;
+                        std::cout << "info cannot load nnue\n";
+                    }
+                    else
+                    {
+                        m_engine->m_nnue = m_nnue;
                     }
                 }
                 else if (parts[2] == "TTSizeMB")
@@ -176,8 +186,15 @@ class uci_handler
             else if (lead == "ucinewgame")
             {
                 stop_task();
+
+                // to reset time calculations
                 m_param.reset();
+
+                // to reset tt to empty
                 m_tt->clear();
+
+                // reset engine
+                m_engine = std::make_unique<engine>(m_endgame_table, m_nnue, m_tt);
             }
             else if (lead == "isready")
             {
@@ -311,9 +328,6 @@ class uci_handler
     {
         chess::Board position = m_position;
         start_task([&, position]() {
-            delete m_engine;
-            m_engine = new engine{m_endgame_table, m_nnue, m_tt};
-
             auto result = m_engine->search(position, m_param, true, true);
 
             // display results
@@ -329,19 +343,13 @@ class uci_handler
     void start_perft(const int32_t depth)
     {
         chess::Board position = m_position;
-        start_task([&, depth, position]() {
-            delete m_engine;
-            m_engine = new engine{m_endgame_table, m_nnue, m_tt};
-            m_engine->perft(position, depth);
-        });
+        start_task([&, depth, position]() { m_engine->perft(position, depth); });
     }
 
     void start_bench(search_param param)
     {
         chess::Board position = m_position;
         start_task([&, param, position]() {
-            delete m_engine;
-            m_engine = new engine{m_endgame_table, m_nnue, m_tt};
             search_param temp_param = param;
             m_engine->search(position, temp_param, true, true);
 

@@ -70,7 +70,8 @@ struct engine_stats
     {
         long delta = (total_time - old.total_time).count();
         uint32_t depth_nps = (nodes_searched - old.nodes_searched) * 1000 / std::max(1L, delta);
-        uint32_t nps = nodes_searched * 1000 / std::max(static_cast<int64_t>(1), total_time.count());
+        uint32_t nps =
+            nodes_searched * 1000 / std::max(static_cast<int64_t>(1), total_time.count());
 
         printf("info depth %2d, nodes %10d, score %10s (%7d), nps %10d/%10d, moves", result.depth,
                nodes_searched, result.get_score().c_str(), result.score, depth_nps, nps);
@@ -84,7 +85,8 @@ struct engine_stats
 
     long get_nps() const
     {
-        return static_cast<long>(nodes_searched) * 1000 / std::max(static_cast<int64_t>(1), total_time.count());
+        return static_cast<long>(nodes_searched) * 1000 /
+               std::max(static_cast<int64_t>(1), total_time.count());
     }
 
     void display_uci(const search_result &result) const
@@ -160,20 +162,34 @@ template <typename I, I LIMIT> struct history_entry
         I clamped_bonus = helper::clamp(bonus, -LIMIT, LIMIT);
         value += clamped_bonus - value * std::abs(clamped_bonus) / LIMIT;
     }
+
+    void decay()
+    {
+        value /= 8;
+    }
 };
 
 struct move_ordering
 {
     std::array<std::pair<chess::Move, bool>, param::NUMBER_KILLERS> m_killers[param::MAX_DEPTH]{};
-
     chess::Move m_counter[2][64][64]{};
-
     history_entry<int16_t, param::MAX_HISTORY> m_main_history[2][64][64]{};
 
     const engine_param m_param;
 
     explicit move_ordering(const engine_param &param) : m_param(param)
     {
+    }
+
+    /**
+     * Decay variables
+     */
+    void begin()
+    {
+        for (auto &a : m_main_history)
+            for (auto &b : a)
+                for (auto &c : b)
+                    c.decay();
     }
 
     template <bool IN_Q>
@@ -230,7 +246,8 @@ struct move_ordering
                 {
                     // bad moves are underpromotion
                     score += static_cast<int16_t>(param::BAD_CAPTURE_OFFSET +
-                                                  param::PROMOTION_SCORES[move.promotionType()] + mvv_lva);
+                                                  param::PROMOTION_SCORES[move.promotionType()] +
+                                                  mvv_lva);
                 }
                 goto done;
             }
@@ -394,6 +411,12 @@ struct pv_line
         }
         return result;
     }
+
+    void reset()
+    {
+        for (int & i : pv_length)
+            i = 0;
+    }
 };
 
 struct search_stack
@@ -406,6 +429,17 @@ struct search_stack
     bool tt_pv = false;
     bool tt_hit = false;
     std::array<chess::Move, param::QUIET_MOVES> quiet_moves{};
+
+    void reset()
+    {
+        ply = 0;
+        static_eval = param::VALUE_NONE;
+        move = chess::Move::NO_MOVE;
+        excluded_move = chess::Move::NO_MOVE;
+        in_check = false;
+        tt_pv = false;
+        tt_hit = false;
+    }
 };
 
 enum search_node_type
@@ -450,6 +484,45 @@ struct engine
         // init tables
         if (m_nnue == nullptr)
             pesto::init();
+    }
+
+    /**
+     * Setup the engine for a new position in the same game
+     */
+    void begin()
+    {
+        // update stats
+        auto reference_time = timer::now();
+        m_stats = engine_stats{0, 0, 0, timer::now() - reference_time};
+
+        // update age
+        assert(m_table != nullptr);
+        m_table->inc_generation();
+
+        // init nnue
+        if (m_nnue != nullptr)
+        {
+            m_nnue->initialize(m_position);
+        }
+
+        // reset move ordering variables
+        m_move_ordering.begin();
+
+        // reset pvline
+        m_line.reset();
+
+        // reset stack
+        for (int i = SEARCH_STACK_PREFIX; i >= 0; --i)
+        {
+            m_stack[i].reset();
+            m_stack[i].ply = 0;
+        }
+
+        for (int i = 0; i < param::MAX_DEPTH; ++i)
+        {
+            m_stack[i + SEARCH_STACK_PREFIX].reset();
+            m_stack[i + SEARCH_STACK_PREFIX].ply = i;
+        }
     }
 
     [[nodiscard]] int evaluate_bucket() const
@@ -1345,21 +1418,12 @@ struct engine
         // timer info first
         const auto control = param.time_control(reference.fullMoveNumber(), reference.sideToMove());
         std::cout << "info searchtime " << control.time << std::endl;
-
         m_timer.start(control.time);
+
         auto reference_time = timer::now();
-        m_stats = engine_stats{0, 0, 0, timer::now() - reference_time};
-
-        // update age
-        assert(m_table != nullptr);
-        m_table->inc_generation();
-
         m_position = reference;
 
-        if (m_nnue != nullptr)
-        {
-            m_nnue->initialize(m_position);
-        }
+        begin();
 
         int16_t alpha = -param::VALUE_INF, beta = param::VALUE_INF;
         int32_t depth = 1;
@@ -1386,16 +1450,6 @@ struct engine
             return result;
         }
 
-        // make search stack
-        for (int i = SEARCH_STACK_PREFIX; i >= 0; --i)
-        {
-            m_stack[i] = {.ply = 0};
-        }
-
-        for (int i = 0; i < param::MAX_DEPTH; ++i)
-        {
-            m_stack[i + SEARCH_STACK_PREFIX] = {.ply = i};
-        }
 
         int delta = m_param.window_size;
         while (depth <= control.depth)

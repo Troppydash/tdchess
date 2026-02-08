@@ -29,7 +29,7 @@ target_compile_options(tdchess_uci PRIVATE
         "-mtune=native"
         "-funroll-loops"
         "-fno-trapping-math"
-        "-fipa-pta"
+#        "-fipa-pta"
         "-fomit-frame-pointer"
         "-Wall"
         "-Wextra"
