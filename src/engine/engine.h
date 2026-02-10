@@ -13,6 +13,7 @@
 #include "table.h"
 #include "time_control.h"
 #include "timer.h"
+#include "movegen.h"
 
 struct search_result
 {
@@ -146,26 +147,6 @@ struct engine_param
     }
 };
 
-template <typename I, I LIMIT> struct history_entry
-{
-    I value = 0;
-
-    I get_value() const
-    {
-        return value;
-    }
-
-    void add_bonus(I bonus)
-    {
-        I clamped_bonus = helper::clamp(bonus, -LIMIT, LIMIT);
-        value += clamped_bonus - value * std::abs(clamped_bonus) / LIMIT;
-    }
-
-    void decay()
-    {
-        value /= 8;
-    }
-};
 
 struct move_ordering
 {
