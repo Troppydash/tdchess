@@ -36,8 +36,8 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
 
     arena_settings settings;
     if (is_short)
-        settings = arena_settings{latest + "_against_" + baseline, 12, 1 * 1000,
-                                  static_cast<int>(0.1 * 1000), false};
+        settings = arena_settings{latest + "_against_" + baseline, 12, 10 * 1000,
+                                  static_cast<int>(0.2 * 1000), false};
     else
         settings = arena_settings{latest + "_against_" + baseline, 12, 60 * 1000,
                                   static_cast<int>(0.6 * 1000)};
@@ -47,7 +47,7 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
         cores.push_back(2 * i);
 
     arena arena{settings, book, agents, cores};
-    arena.loop(cores.size(), 100);
+    arena.loop(cores.size(), 200);
 }
 
 int main()
@@ -61,7 +61,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.1.2", "1.1.3", true);
+    improvement_test("1.1.1", "1.1.3", true);
 
     return 0;
 }

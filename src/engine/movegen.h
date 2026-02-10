@@ -113,7 +113,7 @@ class movegen
                     int16_t score = static_cast<int16_t>(combined_rank);
                     move.setScore(score);
 
-                    if (see::test_ge(m_position, move, 0))
+                    if (see::test_ge(m_position, move, -200))
                     {
                         m_good_captures.add(move);
                     }
@@ -196,14 +196,13 @@ class movegen
                     break;
                 }
 
-                // chess::Move counter = chess::Move::NO_MOVE;
-                // if (m_prev_move != chess::Move::NO_MOVE &&
-                //     m_position.at(m_prev_move.to()) != chess::Piece::NONE)
-                // {
-                //     counter =
-                //         m_heuristics.counter[m_position.at(m_prev_move.to())]
-                //                             [m_prev_move.from().index()][m_prev_move.to().index()];
-                // }
+                chess::Move counter = chess::Move::NO_MOVE;
+                if (m_prev_move != chess::Move::NO_MOVE &&
+                    m_position.at(m_prev_move.to()) != chess::Piece::NONE)
+                {
+                    counter =
+                        m_heuristics.counter[m_position.at(m_prev_move.to())][m_prev_move.to().index()];
+                }
 
                 // generate killers and normal
                 chess::movegen::legalmoves<chess::movegen::MoveGenType::QUIET>(m_moves, m_position);
@@ -241,8 +240,8 @@ class movegen
                                               [move.to().index()]
                                  .get_value();
 
-                    // if (move == counter)
-                    //     score = std::clamp(score + score / 32, -31000, 31000);
+                    if (move == counter)
+                        score = std::clamp(score + 25, -31000, 31000);
 
                     move.setScore(score);
                     m_normal.add(move);

@@ -893,14 +893,6 @@ struct engine
         while ((move = gen.next_move()) != chess::Move::NO_MOVE)
         {
 
-            // hack to make a move in root
-            // if (is_root && best_move == chess::Move::NO_MOVE && m_line.pv_length[0] == 0)
-            // {
-            //     m_line.pv_table[0][0] = move;
-            //     m_line.pv_length[0] = 1;
-            //     best_move = move;
-            // }
-
             int32_t new_depth;
             int32_t extension = 0;
             int16_t score = 0;
@@ -1030,7 +1022,8 @@ struct engine
 
             if (depth >= 2 && move_count > 2 * is_root)
             {
-                int32_t reduction = m_param.lmr[depth][move_count];
+                int32_t reduction = is_capture ? m_param.lmr_capture[depth][move_count]
+                                               : m_param.lmr[depth][move_count];
 
                 // extend if in check
                 reduction -= ss->in_check;
@@ -1047,7 +1040,7 @@ struct engine
 
                 // reduce/extend based on the history
                 if (is_quiet)
-                    reduction -= history_score / 16000;
+                    reduction -= history_score / 15000;
                 else if (m_position.isCapture(move))
                     reduction -= capture_score / 17000;
 
@@ -1055,7 +1048,7 @@ struct engine
                 if (move.typeOf() == chess::Move::PROMOTION)
                     reduction -= 1;
 
-                int32_t reduced_depth = std::clamp(new_depth - reduction, 1, depth + 1);
+                int32_t reduced_depth = std::clamp(new_depth - reduction, 0, depth + 1);
                 score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
                 if (score > alpha && reduced_depth < new_depth)
                 {
@@ -1131,8 +1124,6 @@ struct engine
                     }
 
                     alpha = score;
-                    if (depth > 3 && depth < 10 && !param::IS_DECISIVE(score))
-                        depth -= 1;
                 }
             }
 

@@ -25,7 +25,7 @@ using history_heuristic = history_entry<int16_t, 31000>[2][64][64];
 using capture_heuristic = history_entry<int16_t, 31000>[12][64][7];
 using killer_heuristic =
     std::array<std::pair<chess::Move, bool>, param::NUMBER_KILLERS>[param::MAX_DEPTH];
-using counter_moves = chess::Move[12][64][64];
+using counter_moves = chess::Move[12][64];
 
 struct heuristics
 {
@@ -79,7 +79,7 @@ struct heuristics
         if (is_quiet(position, move) && prev_move != chess::Move::NO_MOVE &&
             position.at(prev_move.to()) != chess::Piece::NONE)
         {
-            counter[position.at(prev_move.to())][prev_move.from().index()][prev_move.to().index()] = move;
+            counter[position.at(prev_move.to())][prev_move.to().index()] = move;
         }
     }
 
