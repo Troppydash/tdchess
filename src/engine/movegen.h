@@ -5,28 +5,30 @@
 
 enum class movegen_stage
 {
-    PV = 0,
-    GOOD_CAPTURE = 1,
-    PROMOTION = 2,
-    KILLER = 3,
-    BAD_CAPTURE = 4,
-    NORMAL = 5,
-    DONE = 6
+    PV,
+    CAPTURE_INIT,
+    GOOD_CAPTURE,
+    QUIET_INIT,
+    GOOD_QUIET,
+    BAD_CAPTURE,
+    BAD_QUIET,
+
+    QPV,
+    QCAPTURE_INIT,
+    QGOOD_CAPTURE,
+    QBAD_CAPTURE,
+
+    DONE
 };
 
 class movegen
 {
   private:
-    movegen_stage m_stage{movegen_stage::PV};
+    int m_stage;
     chess::Movelist m_moves{};
+    int m_bad_capture_end{0};
+    int m_bad_quiet_end{0};
     int m_move_index{0};
-
-    chess::Movelist m_promotions{};
-    chess::Movelist m_good_captures{};
-    chess::Movelist m_bad_captures{};
-    chess::Movelist m_killers{};
-    chess::Movelist m_normal{};
-    chess::Movelist m_bad_promotion{};
 
     const chess::Board &m_position;
     heuristics &m_heuristics;
@@ -36,14 +38,12 @@ class movegen
 
     std::array<std::array<int16_t, 6>, 7> m_mvv_lva;
 
-    // whether to skip non-captures
-    bool m_only_good;
-
   public:
     explicit movegen(chess::Board &position, heuristics &heuristics, chess::Move pv_move,
                      chess::Move prev_move, int32_t ply, bool only_good = false)
-        : m_position(position), m_heuristics(heuristics), m_pv_move(pv_move),
-          m_prev_move(prev_move), m_ply(ply), m_only_good(only_good)
+        : m_stage{static_cast<int>(only_good ? movegen_stage::QPV : movegen_stage::PV)},
+          m_position(position), m_heuristics(heuristics), m_pv_move(pv_move),
+          m_prev_move(prev_move), m_ply(ply)
     {
 
         // set mvv_lva
@@ -58,50 +58,41 @@ class movegen
         };
     }
 
-    movegen_stage get_stage() const
-    {
-        return m_stage;
-    }
-
     chess::Move next_move()
     {
         while (true)
         {
-            switch (m_stage)
+            switch (static_cast<movegen_stage>(m_stage))
             {
-            case movegen_stage::PV: {
-                m_stage = movegen_stage::GOOD_CAPTURE;
+            case movegen_stage::PV:
+            case movegen_stage::QPV: {
+                m_stage++;
                 if (m_pv_move != chess::Move::NO_MOVE)
                     return m_pv_move;
-                break;
+
+                [[fallthrough]];
             }
-            case movegen_stage::GOOD_CAPTURE: {
-                if (!m_good_captures.empty())
-                {
-                    // get move
-                    if (m_move_index < m_good_captures.size())
-                    {
-                        sort_moves(m_good_captures, m_move_index);
-                        return m_good_captures[m_move_index++];
-                    }
 
-                    m_stage = movegen_stage::PROMOTION;
-                    break;
-                }
-
+            case movegen_stage::QCAPTURE_INIT:
+            case movegen_stage::CAPTURE_INIT: {
+                // generate
                 chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(m_moves,
                                                                                  m_position);
-                // move captures to good_captures or bad_captures
+
+                // score, update bad captures
+                m_bad_capture_end = 0;
                 for (auto &move : m_moves)
                 {
                     if (move == m_pv_move)
+                    {
+                        move.setScore(-31000);
                         continue;
+                    }
 
                     auto captured = move.typeOf() == chess::Move::ENPASSANT
                                         ? chess::PieceType::PAWN
                                         : m_position.at(move.to()).type();
-                    auto attacker = m_position.at(move.from()).type();
-                    int16_t mvv_lva = m_mvv_lva[captured][attacker];
+                    int16_t mvv = see::PIECE_VALUES[captured];
 
                     // capture history
                     int16_t capture_score = m_heuristics
@@ -109,124 +100,64 @@ class movegen
                                                                 [move.to().index()][captured]
                                                 .get_value();
 
-                    int16_t combined_rank = mvv_lva + capture_score;
-                    int16_t score = static_cast<int16_t>(combined_rank);
+                    int16_t score = mvv + capture_score;
                     move.setScore(score);
 
-                    if (see::test_ge(m_position, move, 0))
+                    if (!see::test_ge(m_position, move, -100))
                     {
-                        m_good_captures.add(move);
-                    }
-                    else
-                    {
-                        m_bad_captures.add(move);
+                        std::swap(m_moves[m_bad_capture_end], move);
+                        m_bad_capture_end++;
                     }
                 }
 
-                m_move_index = 0;
-                if (m_good_captures.empty())
-                {
-                    m_stage = movegen_stage::PROMOTION;
-                }
+                m_move_index = m_bad_capture_end;
+                m_stage++;
                 break;
             }
 
-            case movegen_stage::PROMOTION: {
-                if (m_only_good)
-                {
-                    m_stage = movegen_stage::BAD_CAPTURE;
-                    break;
-                }
+            case movegen_stage::GOOD_CAPTURE: {
+                m_move_index = pick_move(m_moves, m_move_index, m_moves.size());
+                if (m_move_index < m_moves.size())
+                    return m_moves[m_move_index++];
 
-                if (!m_promotions.empty())
-                {
-                    // get move
-                    if (m_move_index < m_promotions.size())
-                    {
-                        sort_moves(m_promotions, m_move_index);
-                        return m_promotions[m_move_index++];
-                    }
-
-                    m_stage = movegen_stage::KILLER;
-                    break;
-                }
-
-                // try to generate promotions, note all the capture promotions are in Captures
-                chess::movegen::legal_promote_moves<chess::movegen::MoveGenType::QUIET>(m_moves,
+                m_stage++;
+                [[fallthrough]];
+            }
+            case movegen_stage::QUIET_INIT: {
+                // m_moves = [bad captures, quiets]
+                m_moves.set_size(m_bad_capture_end);
+                chess::movegen::legalmoves_no_clear<chess::movegen::MoveGenType::QUIET>(m_moves,
                                                                                         m_position);
-                // move promotions to m_promotions or m_bad_captures
-                for (auto &move : m_moves)
+
+                chess::Move counter = chess::Move::NO_MOVE;
+                if (m_prev_move != chess::Move::NO_MOVE &&
+                    m_position.at(m_prev_move.to()) != chess::Piece::NONE)
                 {
-                    if (move == m_pv_move)
-                        continue;
-
-                    assert(move.typeOf() == chess::Move::PROMOTION);
-                    int16_t score = see::PIECE_VALUES[move.promotionType()];
-
-                    if ((move.promotionType() == chess::PieceType::QUEEN ||
-                         move.promotionType() == chess::PieceType::KNIGHT))
-                    {
-                        move.setScore(score);
-                        m_promotions.add(move);
-                    }
-                    else
-                    {
-                        move.setScore(score);
-                        m_bad_promotion.add(move);
-                    }
+                    counter =
+                        m_heuristics
+                            .counter[m_position.at(m_prev_move.to())][m_prev_move.to().index()];
                 }
 
-                m_move_index = 0;
-                if (m_promotions.empty())
-                    m_stage = movegen_stage::KILLER;
-                break;
-            }
-            case movegen_stage::KILLER: {
-                if (!m_killers.empty())
+                // m_moves = [bad captures, bad_quiet, good_quiet]
+                m_bad_quiet_end = m_bad_capture_end;
+                for (int i = m_bad_capture_end; i < m_moves.size(); ++i)
                 {
-                    if (m_move_index < m_killers.size())
+                    chess::Move &move = m_moves[i];
+                    if (move == m_pv_move)
                     {
-                        sort_moves(m_killers, m_move_index);
-                        return m_killers[m_move_index++];
+                        move.setScore(-31000);
+                        continue;
                     }
 
-                    // bad capture needs 0 index
-                    m_move_index = 0;
-                    m_stage = movegen_stage::BAD_CAPTURE;
-                    break;
-                }
-
-                // chess::Move counter = chess::Move::NO_MOVE;
-                // if (m_prev_move != chess::Move::NO_MOVE &&
-                //     m_position.at(m_prev_move.to()) != chess::Piece::NONE)
-                // {
-                //     counter =
-                //         m_heuristics.counter[m_position.at(m_prev_move.to())]
-                //                             [m_prev_move.from().index()][m_prev_move.to().index()];
-                // }
-
-                // generate killers and normal
-                chess::movegen::legalmoves<chess::movegen::MoveGenType::QUIET>(m_moves, m_position);
-                // convert to m_killers and m_normal
-                for (auto &move : m_moves)
-                {
-                    if (move == m_pv_move)
-                        continue;
-
-                    // ignore promotions
-                    if (move.typeOf() == chess::Move::PROMOTION)
-                        continue;
-
-                    // killers
+                    // killer move
                     bool found = false;
-                    for (size_t i = 0; i < param::NUMBER_KILLERS; ++i)
+                    for (int i = 0; i < param::NUMBER_KILLERS; ++i)
                     {
                         const auto &entry = m_heuristics.killers[m_ply][i];
                         if (move == entry.first)
                         {
                             // mate killers first
-                            move.setScore(100 * entry.second - i);
-                            m_killers.add(move);
+                            move.setScore(30000 + 100 * entry.second - i);
                             found = true;
                             break;
                         }
@@ -241,49 +172,64 @@ class movegen
                                               [move.to().index()]
                                  .get_value();
 
-                    // if (move == counter)
-                    //     score = std::clamp(score + score / 32, -31000, 31000);
+                    if (move == counter)
+                        score += 100;
 
                     move.setScore(score);
-                    m_normal.add(move);
+
+                    if (score < -500)
+                    {
+                        std::swap(m_moves[m_bad_quiet_end], m_moves[i]);
+                        m_bad_quiet_end++;
+                    }
                 }
 
-                // also add bad promotion to normals
-                for (auto &move : m_bad_promotion)
-                    m_normal.add(move);
+                m_move_index = m_bad_quiet_end;
+                m_stage++;
+                [[fallthrough]];
+            }
+            case movegen_stage::GOOD_QUIET: {
+                m_move_index = pick_move(m_moves, m_move_index, m_moves.size());
+                if (m_move_index < m_moves.size())
+                    return m_moves[m_move_index++];
 
                 m_move_index = 0;
-                if (m_killers.empty())
-                    m_stage = movegen_stage::BAD_CAPTURE;
-                break;
+                m_stage++;
+                [[fallthrough]];
             }
             case movegen_stage::BAD_CAPTURE: {
-                if (m_move_index < m_bad_captures.size())
-                {
-                    sort_moves(m_bad_captures, m_move_index);
-                    return m_bad_captures[m_move_index++];
-                }
+                m_move_index = pick_move(m_moves, m_move_index, m_bad_capture_end);
+                if (m_move_index < m_bad_capture_end)
+                    return m_moves[m_move_index++];
 
-                // normal requires zero index
-                m_move_index = 0;
-                m_stage = movegen_stage::NORMAL;
+                m_move_index = m_bad_capture_end;
+                m_stage++;
+                [[fallthrough]];
+            }
+            case movegen_stage::BAD_QUIET: {
+                m_move_index = pick_move(m_moves, m_move_index, m_bad_quiet_end);
+                if (m_move_index < m_bad_quiet_end)
+                    return m_moves[m_move_index++];
+
+                m_stage = static_cast<int>(movegen_stage::DONE);
                 break;
             }
-            case movegen_stage::NORMAL: {
-                if (m_only_good)
-                {
-                    m_stage = movegen_stage::DONE;
-                    break;
-                }
 
-                // get move
-                if (m_move_index < m_normal.size())
-                {
-                    sort_moves(m_normal, m_move_index);
-                    return m_normal[m_move_index++];
-                }
+            case movegen_stage::QGOOD_CAPTURE: {
+                m_move_index = pick_move(m_moves, m_move_index, m_moves.size());
+                if (m_move_index < m_moves.size())
+                    return m_moves[m_move_index++];
 
-                m_stage = movegen_stage::DONE;
+                m_move_index = 0;
+                m_stage++;
+                [[fallthrough]];
+            }
+            case movegen_stage::QBAD_CAPTURE: {
+                m_move_index = pick_move(m_moves, m_move_index, m_bad_capture_end);
+                if (m_move_index < m_bad_capture_end)
+                    return m_moves[m_move_index++];
+
+                m_stage = static_cast<int>(movegen_stage::DONE);
                 break;
             }
 
@@ -293,11 +239,26 @@ class movegen
         }
     }
 
-    void sort_moves(chess::Movelist &moves, int i)
+    int pick_move(chess::Movelist &moves, int start, int end)
     {
+        for (int i = start; i < end; ++i)
+        {
+            sort_moves(moves, i, end);
+            if (moves[i] != m_pv_move)
+                return i;
+        }
+
+        return end;
+    }
+
+    void sort_moves(chess::Movelist &moves, int i, int end = -1)
+    {
+        if (end == -1)
+            end = moves.size();
+
         int highest_score = moves[i].score();
         int highest_index = i;
-        for (int j = i + 1; j < moves.size(); ++j)
+        for (int j = i + 1; j < end; ++j)
         {
             if (moves[j].score() > highest_score)
             {

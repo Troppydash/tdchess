@@ -1414,6 +1414,11 @@ class Movelist {
         return -1;
     }
 
+    void set_size(size_type size)
+    {
+        size_ = size;
+    }
+
    private:
     std::array<value_type, constants::MAX_MOVES> moves_;
     size_type size_ = 0;
@@ -1447,6 +1452,11 @@ class movegen {
     void static legalmoves(Movelist &movelist, const Board &board,
                            int pieces = PieceGenType::PAWN | PieceGenType::KNIGHT | PieceGenType::BISHOP |
                                         PieceGenType::ROOK | PieceGenType::QUEEN | PieceGenType::KING);
+
+    template <MoveGenType mt = MoveGenType::ALL>
+        void static legalmoves_no_clear(Movelist &movelist, const Board &board,
+                               int pieces = PieceGenType::PAWN | PieceGenType::KNIGHT | PieceGenType::BISHOP |
+                                            PieceGenType::ROOK | PieceGenType::QUEEN | PieceGenType::KING);
 
     template <MoveGenType mt = MoveGenType::ALL>
     void static legal_promote_moves(Movelist &movelist, const Board &board);
@@ -4222,6 +4232,14 @@ template <movegen::MoveGenType mt>
 inline void movegen::legalmoves(Movelist &movelist, const Board &board, int pieces) {
     movelist.clear();
 
+    if (board.sideToMove() == Color::WHITE)
+        legalmoves<Color::WHITE, mt>(movelist, board, pieces);
+    else
+        legalmoves<Color::BLACK, mt>(movelist, board, pieces);
+}
+
+template <movegen::MoveGenType mt>
+inline void movegen::legalmoves_no_clear(Movelist &movelist, const Board &board, int pieces) {
     if (board.sideToMove() == Color::WHITE)
         legalmoves<Color::WHITE, mt>(movelist, board, pieces);
     else

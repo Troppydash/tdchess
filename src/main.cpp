@@ -29,9 +29,9 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
     std::string baseline_prefix = "../builds/" + baseline;
     std::string latest_prefix = "../builds/" + latest;
     const agent_settings base{
-        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 512};
+        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "", 512};
     const agent_settings late{latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin",
-                              "../syzygy", 512, false};
+                              "", 512, false};
     std::vector<agent_settings> agents{late, base};
 
     arena_settings settings;
@@ -61,7 +61,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.1.2", "1.1.3", true);
+    improvement_test("1.0.13", "1.1.4", true);
 
     return 0;
 }
@@ -152,7 +152,7 @@ int main()
 
     nnue nnue{};
     nnue.load_network("../nets/2026-02-08-1800-370.bin");
-    chess::Board start;
+    // chess::Board start;
     // chess::Board start{"8/3q4/8/1kpr2PP/p4Q2/4Q1K1/8/8 w - - 3 59"};
     // chess::Board start{"5B2/2b3p1/2k2pP1/4pP2/2P1P3/prPR1K2/8/8 w - - 0 57"};
     // chess::Board start{"8/4B3/p7/1p3p1p/1P2k1b1/P3P3/5K2/8 w - - 4 57"};
@@ -163,7 +163,7 @@ int main()
     // chess::Board start{"8/8/4Bb1p/2k2PpP/1p2K1P1/8/8/8 b - - 1 89"};
     // should be e3e2
 
-    // chess::Board start{"1r6/6k1/ppQ1nrp1/4p3/P1Pp1bP1/1N1B4/1P6/1K6 b - - 1 34"};
+    chess::Board start{"1r6/6k1/ppQ1nrp1/4p3/P1Pp1bP1/1N1B4/1P6/1K6 b - - 1 34"};
     // chess::Board start{"7r/8/pQ2nrpk/4p3/P1Pp1bP1/1N1B4/1P6/1K6 b - - 0 36"};
 
 
