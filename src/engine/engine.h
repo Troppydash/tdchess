@@ -109,6 +109,7 @@ struct engine_param
 {
     // pruning
     int32_t lmr[param::MAX_DEPTH][100];
+    int32_t lmr_capture[param::MAX_DEPTH][100];
     std::array<int, 6> lmp_margins;
     int lmr_depth_ration = 4;
     int lmr_move_ratio = 12;
@@ -132,6 +133,8 @@ struct engine_param
             for (int move = 1; move < 100; ++move)
             {
                 lmr[depth][move] = std::round(0.99 + std::log(depth) * std::log(move) / 3.14);
+                lmr_capture[depth][move] =
+                    std::round(0.99 + std::log(depth) * std::log(move) / 3.5);
             }
 
         // set mvv_lva
@@ -538,6 +541,8 @@ struct engine
         if (move.typeOf() != chess::Move::NORMAL)
         {
             // uncommon harder types just guess that it is fine
+            return true;
+
             chess::PieceGenType moved_piece_gen;
             if (moved_piece.type() == chess::PieceType::PAWN)
                 moved_piece_gen = chess::PieceGenType::PAWN;
@@ -733,15 +738,13 @@ struct engine
         }
 
         // improving flag
-        bool improving = false;
-        if (param::IS_VALID((ss - 2)->static_eval))
+        bool improving = true;
+        if (ss->in_check)
+            improving = false;
+        else if (param::IS_VALID((ss - 2)->static_eval) && param::IS_VALID(ss->static_eval))
         {
             improving = ss->static_eval > (ss - 2)->static_eval;
         }
-        // else if (param::IS_VALID((ss - 4)->static_eval))
-        // {
-        //     improving = ss->static_eval > (ss - 4)->static_eval;
-        // }
 
         if (ss->in_check)
         {
@@ -749,7 +752,8 @@ struct engine
         }
 
         // [razoring]
-        if (!is_pv_node && adjusted_static_eval < alpha - 500 - 300 * depth * depth)
+        if (!is_pv_node && param::IS_VALID(adjusted_static_eval) &&
+            adjusted_static_eval < alpha - 500 - 300 * depth * depth)
         {
             return qsearch<NonPV>(alpha, beta, ss);
         }
@@ -845,9 +849,12 @@ struct engine
 
     moves:
 
+        // if (is_root)
         // {
         //     chess::Movelist actual_moves;
         //     chess::movegen::legalmoves(actual_moves, m_position);
+        //
+        //     assert(m_position == chess::Board{});
         //
         //     movegen gen{m_position, m_heuristics, tt_result.move, prev_move, ply};
         //     chess::Movelist found_moves;
@@ -856,7 +863,6 @@ struct engine
         //     {
         //         found_moves.add(move);
         //     }
-        //
         //
         //     for (auto &m : actual_moves)
         //     {
@@ -867,7 +873,7 @@ struct engine
         //     for (auto &m : found_moves)
         //     {
         //         assert(std::find(actual_moves.begin(), actual_moves.end(), m) !=
-        //         actual_moves.end());
+        //                actual_moves.end());
         //     }
         //
         //     assert(actual_moves.size() == found_moves.size());
@@ -1022,17 +1028,20 @@ struct engine
             ss->move = move;
             make_move(move);
 
-            if (depth >= 2 && move_count > 0)
+            if (depth >= 2 && move_count > 2 * is_root)
             {
                 int32_t reduction = m_param.lmr[depth][move_count];
 
                 // extend if in check
                 reduction -= ss->in_check;
+
                 // reduce if not improving
                 reduction += !improving;
+
                 // reduce if in cut node
                 if (cut_node)
                     reduction += 1;
+
                 // extend if pv
                 reduction -= ss->tt_pv + is_pv_node;
 
@@ -1042,7 +1051,7 @@ struct engine
                 else if (m_position.isCapture(move))
                     reduction -= capture_score / 17000;
 
-                // reduce if promotion
+                // extend if promotion
                 if (move.typeOf() == chess::Move::PROMOTION)
                     reduction -= 1;
 
@@ -1069,11 +1078,12 @@ struct engine
             if (score > best_score)
             {
                 best_score = score;
-                best_move = move;
 
                 if (score > alpha)
                 {
-                    alpha = score;
+                    best_move = move;
+                    if (is_pv_node)
+                        m_line.update(ply, best_move);
 
                     if (score >= beta)
                     {
@@ -1090,7 +1100,10 @@ struct engine
                         const int16_t main_history_malus = main_history_bonus / 4;
                         if (m_heuristics.is_quiet(m_position, move))
                         {
-                            m_heuristics.update_main_history(m_position, move, main_history_bonus);
+                            // don't store if early cutoff at low depth
+                            if (depth > 3 || quiet_count > 0)
+                                m_heuristics.update_main_history(m_position, move,
+                                                                 main_history_bonus);
 
                             // malus apply
                             for (int j = 0; j < quiet_count; ++j)
@@ -1101,8 +1114,10 @@ struct engine
                         }
                         else if (m_position.isCapture(move))
                         {
-                            m_heuristics.update_capture_history(m_position, move,
-                                                                main_history_bonus);
+                            // don't store if early cutoff at low depth
+                            if (depth > 3 || capture_count > 0)
+                                m_heuristics.update_capture_history(m_position, move,
+                                                                    main_history_bonus);
 
                             // malus apply
                             for (int j = 0; j < capture_count; ++j)
@@ -1115,7 +1130,9 @@ struct engine
                         break;
                     }
 
-                    m_line.update(ply, move);
+                    alpha = score;
+                    if (depth > 3 && depth < 10 && !param::IS_DECISIVE(score))
+                        depth -= 1;
                 }
             }
 

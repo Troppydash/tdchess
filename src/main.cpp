@@ -36,10 +36,10 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
 
     arena_settings settings;
     if (is_short)
-        settings = arena_settings{latest + "_against_" + baseline, 16, 10 * 1000,
+        settings = arena_settings{latest + "_against_" + baseline, 12, 1 * 1000,
                                   static_cast<int>(0.1 * 1000), false};
     else
-        settings = arena_settings{latest + "_against_" + baseline, 16, 60 * 1000,
+        settings = arena_settings{latest + "_against_" + baseline, 12, 60 * 1000,
                                   static_cast<int>(0.6 * 1000)};
 
     std::vector<int> cores;
@@ -61,7 +61,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.1.1", "1.1.2", true);
+    improvement_test("1.1.2", "1.1.3", true);
 
     return 0;
 }
@@ -183,7 +183,7 @@ int main()
     table tt{512};
     engine engine{nullptr, &nnue, &tt};
     search_param param;
-    param.movetime = 10000;
+    param.movetime = 100000;
     engine.search(start, param, true, true);
 
     return 0;

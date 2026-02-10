@@ -21,7 +21,7 @@ constexpr int16_t VALUE_SYZYGY = NNUE_MAX - 10;
 
 constexpr size_t NUMBER_KILLERS = 2;
 
-constexpr int16_t COUNTER_BONUS = 5;
+// constexpr int16_t COUNTER_BONUS = 3000;
 
 constexpr uint8_t EXACT_FLAG = 3;
 constexpr uint8_t BETA_FLAG = 2;

@@ -32,3 +32,6 @@ Process
 1. Run elo using short time control
 2. Aim for around 100 games
 3. Accept if LLR > b, Reject if LLR < a
+
+## License
+This project is licensed under the GNU General Public License v3.0 - see the [COPYING](COPYING) file for details

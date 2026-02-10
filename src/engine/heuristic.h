@@ -25,7 +25,7 @@ using history_heuristic = history_entry<int16_t, 31000>[2][64][64];
 using capture_heuristic = history_entry<int16_t, 31000>[12][64][7];
 using killer_heuristic =
     std::array<std::pair<chess::Move, bool>, param::NUMBER_KILLERS>[param::MAX_DEPTH];
-using counter_moves = chess::Move[2][64][64];
+using counter_moves = chess::Move[12][64][64];
 
 struct heuristics
 {
@@ -76,8 +76,11 @@ struct heuristics
     void incr_counter(const chess::Board &position, const chess::Move &prev_move,
                       const chess::Move &move)
     {
-        if (is_quiet(position, move) && prev_move != chess::Move::NO_MOVE)
-            counter[position.sideToMove()][prev_move.from().index()][prev_move.to().index()] = move;
+        if (is_quiet(position, move) && prev_move != chess::Move::NO_MOVE &&
+            position.at(prev_move.to()) != chess::Piece::NONE)
+        {
+            counter[position.at(prev_move.to())][prev_move.from().index()][prev_move.to().index()] = move;
+        }
     }
 
     void begin()
@@ -91,5 +94,26 @@ struct heuristics
             for (auto &b : a)
                 for (auto &c : b)
                     c.decay();
+
+        // clear counter
+        // for (auto &a : counter)
+        // {
+        //     for (auto &b : a)
+        //     {
+        //         for (auto &c : b)
+        //         {
+        //             b = chess::Move::NO_MOVE;
+        //         }
+        //     }
+        // }
+
+        // clear killer
+        // for (auto &a : killers)
+        // {
+        //     for (auto &b : a)
+        //     {
+        //         b = {chess::Move::NO_MOVE, false};
+        //     }
+        // }
     }
 };

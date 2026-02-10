@@ -28,7 +28,7 @@ class movegen
     chess::Movelist m_normal{};
     chess::Movelist m_bad_promotion{};
 
-    chess::Board &m_position;
+    const chess::Board &m_position;
     heuristics &m_heuristics;
     chess::Move m_pv_move;
     chess::Move m_prev_move;
@@ -162,13 +162,18 @@ class movegen
 
                     assert(move.typeOf() == chess::Move::PROMOTION);
                     int16_t score = see::PIECE_VALUES[move.promotionType()];
-                    move.setScore(score);
 
                     if ((move.promotionType() == chess::PieceType::QUEEN ||
                          move.promotionType() == chess::PieceType::KNIGHT))
+                    {
+                        move.setScore(score);
                         m_promotions.add(move);
+                    }
                     else
+                    {
+                        move.setScore(score);
                         m_bad_promotion.add(move);
+                    }
                 }
 
                 m_move_index = 0;
@@ -190,6 +195,15 @@ class movegen
                     m_stage = movegen_stage::BAD_CAPTURE;
                     break;
                 }
+
+                // chess::Move counter = chess::Move::NO_MOVE;
+                // if (m_prev_move != chess::Move::NO_MOVE &&
+                //     m_position.at(m_prev_move.to()) != chess::Piece::NONE)
+                // {
+                //     counter =
+                //         m_heuristics.counter[m_position.at(m_prev_move.to())]
+                //                             [m_prev_move.from().index()][m_prev_move.to().index()];
+                // }
 
                 // generate killers and normal
                 chess::movegen::legalmoves<chess::movegen::MoveGenType::QUIET>(m_moves, m_position);
@@ -222,20 +236,13 @@ class movegen
 
                     // normal
                     int16_t score = 0;
-                    if (m_prev_move != chess::Move::NO_MOVE)
-                    {
-                        const auto &counter =
-                            m_heuristics
-                                .counter[m_position.sideToMove()][m_prev_move.from().index()]
-                                        [m_prev_move.to().index()];
-                        if (move == counter)
-                            score += param::COUNTER_BONUS;
-                    }
-
                     score += m_heuristics
                                  .main_history[m_position.sideToMove()][move.from().index()]
                                               [move.to().index()]
                                  .get_value();
+
+                    // if (move == counter)
+                    //     score = std::clamp(score + score / 32, -31000, 31000);
 
                     move.setScore(score);
                     m_normal.add(move);
