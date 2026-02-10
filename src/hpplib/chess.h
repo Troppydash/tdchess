@@ -1448,6 +1448,9 @@ class movegen {
                            int pieces = PieceGenType::PAWN | PieceGenType::KNIGHT | PieceGenType::BISHOP |
                                         PieceGenType::ROOK | PieceGenType::QUEEN | PieceGenType::KING);
 
+    template <MoveGenType mt = MoveGenType::ALL>
+    void static legal_promote_moves(Movelist &movelist, const Board &board);
+
    public:
     static auto init_squares_between();
     static const std::array<std::array<Bitboard, 64>, 64> SQUARES_BETWEEN_BB;
@@ -1471,6 +1474,10 @@ class movegen {
     static void generatePawnMoves(const Board &board, Movelist &moves, Bitboard pin_d, Bitboard pin_hv,
                                   Bitboard checkmask, Bitboard occ_enemy);
 
+    template <Color::underlying c, MoveGenType mt>
+   static void generatePawnPromoteMoves(const Board &board, Movelist &moves, Bitboard pin_d, Bitboard pin_hv,
+                                 Bitboard checkmask, Bitboard occ_enemy);
+
     [[nodiscard]] static std::array<Move, 2> generateEPMove(const Board &board, Bitboard checkmask, Bitboard pin_d,
                                                             Bitboard pawns_lr, Square ep, Color c);
 
@@ -1492,6 +1499,9 @@ class movegen {
 
     template <Color::underlying c, MoveGenType mt>
     static void legalmoves(Movelist &movelist, const Board &board, int pieces);
+
+    template <Color::underlying c, MoveGenType mt>
+    static void legal_promote_moves(Movelist &movelist, const Board &board);
 
     template <Color::underlying c>
     static bool isEpSquareValid(const Board &board, Square ep);
@@ -3901,6 +3911,91 @@ inline void movegen::generatePawnMoves(const Board &board, Movelist &moves, Bitb
     }
 }
 
+
+template <Color::underlying c, movegen::MoveGenType mt>
+inline void movegen::generatePawnPromoteMoves(const Board &board, Movelist &moves, Bitboard pin_d, Bitboard pin_hv,
+                                       Bitboard checkmask, Bitboard occ_opp) {
+    // flipped for black
+
+    constexpr auto UP         = make_direction(Direction::NORTH, c);
+    constexpr auto DOWN       = make_direction(Direction::SOUTH, c);
+    constexpr auto DOWN_LEFT  = make_direction(Direction::SOUTH_WEST, c);
+    constexpr auto DOWN_RIGHT = make_direction(Direction::SOUTH_EAST, c);
+    constexpr auto UP_LEFT    = make_direction(Direction::NORTH_WEST, c);
+    constexpr auto UP_RIGHT   = make_direction(Direction::NORTH_EAST, c);
+
+    constexpr auto RANK_B_PROMO     = Rank::rank(Rank::RANK_7, c).bb();
+    constexpr auto RANK_PROMO       = Rank::rank(Rank::RANK_8, c).bb();
+    constexpr auto DOUBLE_PUSH_RANK = Rank::rank(Rank::RANK_3, c).bb();
+
+    const auto pawns = board.pieces(PieceType::PAWN, c);
+
+    // These pawns can maybe take Left or Right
+    const Bitboard pawns_lr          = pawns & ~pin_hv;
+    const Bitboard unpinned_pawns_lr = pawns_lr & ~pin_d;
+    const Bitboard pinned_pawns_lr   = pawns_lr & pin_d;
+
+    auto l_pawns = attacks::shift<UP_LEFT>(unpinned_pawns_lr) | (attacks::shift<UP_LEFT>(pinned_pawns_lr) & pin_d);
+    auto r_pawns = attacks::shift<UP_RIGHT>(unpinned_pawns_lr) | (attacks::shift<UP_RIGHT>(pinned_pawns_lr) & pin_d);
+
+    // Prune moves that don't capture a piece and are not on the checkmask.
+    l_pawns &= occ_opp & checkmask;
+    r_pawns &= occ_opp & checkmask;
+
+    // These pawns can walk Forward
+    const auto pawns_hv = pawns & ~pin_d;
+
+    const auto pawns_pinned_hv   = pawns_hv & pin_hv;
+    const auto pawns_unpinned_hv = pawns_hv & ~pin_hv;
+
+    // Prune moves that are blocked by a piece
+    const auto single_push_unpinned = attacks::shift<UP>(pawns_unpinned_hv) & ~board.occ();
+    const auto single_push_pinned   = attacks::shift<UP>(pawns_pinned_hv) & pin_hv & ~board.occ();
+
+    // Prune moves that are not on the checkmask.
+    Bitboard single_push = (single_push_unpinned | single_push_pinned) & checkmask;
+
+    Bitboard double_push = ((attacks::shift<UP>(single_push_unpinned & DOUBLE_PUSH_RANK) & ~board.occ()) |
+                            (attacks::shift<UP>(single_push_pinned & DOUBLE_PUSH_RANK) & ~board.occ())) &
+                           checkmask;
+
+    if (pawns & RANK_B_PROMO) {
+        Bitboard promo_left  = l_pawns & RANK_PROMO;
+        Bitboard promo_right = r_pawns & RANK_PROMO;
+        Bitboard promo_push  = single_push & RANK_PROMO;
+
+        // Skip capturing promotions if we are only generating quiet moves.
+        // Generates at ALL and CAPTURE
+        while (mt != MoveGenType::QUIET && promo_left) {
+            const auto index = promo_left.pop();
+            moves.add(Move::make<Move::PROMOTION>(index + DOWN_RIGHT, index, PieceType::QUEEN));
+            moves.add(Move::make<Move::PROMOTION>(index + DOWN_RIGHT, index, PieceType::ROOK));
+            moves.add(Move::make<Move::PROMOTION>(index + DOWN_RIGHT, index, PieceType::BISHOP));
+            moves.add(Move::make<Move::PROMOTION>(index + DOWN_RIGHT, index, PieceType::KNIGHT));
+        }
+
+        // Skip capturing promotions if we are only generating quiet moves.
+        // Generates at ALL and CAPTURE
+        while (mt != MoveGenType::QUIET && promo_right) {
+            const auto index = promo_right.pop();
+            moves.add(Move::make<Move::PROMOTION>(index + DOWN_LEFT, index, PieceType::QUEEN));
+            moves.add(Move::make<Move::PROMOTION>(index + DOWN_LEFT, index, PieceType::ROOK));
+            moves.add(Move::make<Move::PROMOTION>(index + DOWN_LEFT, index, PieceType::BISHOP));
+            moves.add(Move::make<Move::PROMOTION>(index + DOWN_LEFT, index, PieceType::KNIGHT));
+        }
+
+        // Skip quiet promotions if we are only generating captures.
+        // Generates at ALL and QUIET
+        while (mt != MoveGenType::CAPTURE && promo_push) {
+            const auto index = promo_push.pop();
+            moves.add(Move::make<Move::PROMOTION>(index + DOWN, index, PieceType::QUEEN));
+            moves.add(Move::make<Move::PROMOTION>(index + DOWN, index, PieceType::ROOK));
+            moves.add(Move::make<Move::PROMOTION>(index + DOWN, index, PieceType::BISHOP));
+            moves.add(Move::make<Move::PROMOTION>(index + DOWN, index, PieceType::KNIGHT));
+        }
+    }
+}
+
 [[nodiscard]] inline std::array<Move, 2> movegen::generateEPMove(const Board &board, Bitboard checkmask, Bitboard pin_d,
                                                                  Bitboard pawns_lr, Square ep, Color c) {
     assert((ep.rank() == Rank::RANK_3 && board.sideToMove() == Color::BLACK) ||
@@ -4131,6 +4226,56 @@ inline void movegen::legalmoves(Movelist &movelist, const Board &board, int piec
         legalmoves<Color::WHITE, mt>(movelist, board, pieces);
     else
         legalmoves<Color::BLACK, mt>(movelist, board, pieces);
+}
+
+template <movegen::MoveGenType mt>
+inline void movegen::legal_promote_moves(Movelist &movelist, const Board &board) {
+    movelist.clear();
+
+    if (board.sideToMove() == Color::WHITE)
+        legal_promote_moves<Color::WHITE, mt>(movelist, board);
+    else
+        legal_promote_moves<Color::BLACK, mt>(movelist, board);
+}
+
+template <Color::underlying c, movegen::MoveGenType mt>
+inline void movegen::legal_promote_moves(Movelist &movelist, const Board &board) {
+    /*
+     The size of the movelist might not
+     be 0! This is done on purpose since it enables
+     you to append new move types to any movelist.
+    */
+    auto king_sq = board.kingSq(c);
+
+    Bitboard occ_us  = board.us(c);
+    Bitboard occ_opp = board.us(~c);
+    Bitboard occ_all = occ_us | occ_opp;
+
+    Bitboard opp_empty = ~occ_us;
+
+    const auto [checkmask, checks] = checkMask<c>(board, king_sq);
+    const auto pin_hv              = pinMask<c, PieceType::ROOK>(board, king_sq, occ_opp, occ_us);
+    const auto pin_d               = pinMask<c, PieceType::BISHOP>(board, king_sq, occ_opp, occ_us);
+
+    assert(checks <= 2);
+
+    Bitboard movable_square;
+
+    // Slider, Knights and King moves can only go to enemy or empty squares.
+    if constexpr (mt == MoveGenType::ALL)
+        movable_square = opp_empty;
+    else if constexpr (mt == MoveGenType::CAPTURE)
+        movable_square = occ_opp;
+    else  // QUIET moves
+        movable_square = ~occ_all;
+
+    // Early return for double check as described earlier
+    if (checks == 2) return;
+
+    // Moves have to be on the checkmask
+    movable_square &= checkmask;
+
+    generatePawnPromoteMoves<c, mt>(board, movelist, pin_d, pin_hv, checkmask, occ_opp);
 }
 
 template <Color::underlying c>

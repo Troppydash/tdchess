@@ -7,13 +7,13 @@
 #include "../hpplib/chess.h"
 #include "endgame.h"
 #include "evaluation.h"
+#include "movegen.h"
 #include "nnue.h"
 #include "param.h"
 #include "see.h"
 #include "table.h"
 #include "time_control.h"
 #include "timer.h"
-#include "movegen.h"
 
 struct search_result
 {
@@ -147,238 +147,6 @@ struct engine_param
     }
 };
 
-
-struct move_ordering
-{
-    // index by [ply]
-    std::array<std::pair<chess::Move, bool>, param::NUMBER_KILLERS> m_killers[param::MAX_DEPTH]{};
-    // indexed by [stm][from][to]
-    chess::Move m_counter[2][64][64]{};
-    // indexed by [stm][from][to]
-    history_entry<int16_t, param::MAX_HISTORY> m_main_history[2][64][64]{};
-    // indexed by [attacker][to][target_type]
-    history_entry<int16_t, param::MAX_HISTORY> m_capture_history[13][64][7]{};
-
-    const engine_param m_param;
-
-    explicit move_ordering(const engine_param &param) : m_param(param)
-    {
-    }
-
-    /**
-     * Decay variables
-     */
-    void begin()
-    {
-        for (auto &a : m_main_history)
-            for (auto &b : a)
-                for (auto &c : b)
-                    c.decay();
-
-        for (auto &a : m_capture_history)
-            for (auto &b : a)
-                for (auto &c : b)
-                    c.decay();
-    }
-
-    template <bool IN_Q>
-    void score_moves(const chess::Board &position, chess::Movelist &movelist,
-                     const chess::Move &pv_move, const chess::Move &prev_move, int32_t ply)
-    {
-        for (auto &move : movelist)
-        {
-            int16_t score = 0;
-
-            // pv
-            if (move == pv_move)
-            {
-                score += param::PV_OFFSET;
-                goto done;
-            }
-
-            if (move.typeOf() == chess::Move::PROMOTION)
-            {
-                auto captured = position.at(move.to()).type();
-                auto attacker = position.at(move.from()).type();
-                int16_t mvv_lva = m_param.mvv_lva[captured][attacker];
-
-                if (move.promotionType() == chess::PieceType::QUEEN)
-                {
-                    if (see::test_ge(position, move, -200))
-                    {
-                        score += static_cast<int16_t>(param::PROMOTION_OFFSET + mvv_lva);
-                        assert(score < param::PV_OFFSET && score >= param::PROMOTION_OFFSET);
-                    }
-                    else
-                    {
-                        score += static_cast<int16_t>(
-                            param::BAD_CAPTURE_OFFSET +
-                            param::PROMOTION_SCORES[move.promotionType()] + mvv_lva);
-                    }
-                }
-                else if (move.promotionType() == chess::PieceType::KNIGHT)
-                {
-                    if (see::test_ge(position, move, -200))
-                    {
-                        score += static_cast<int16_t>(param::UNDERPROMOTION_OFFSET + mvv_lva);
-                        assert(score < param::PROMOTION_OFFSET &&
-                               score >= param::UNDERPROMOTION_OFFSET);
-                    }
-                    else
-                    {
-                        score += static_cast<int16_t>(
-                            param::BAD_CAPTURE_OFFSET +
-                            param::PROMOTION_SCORES[move.promotionType()] + mvv_lva);
-                    }
-                }
-                else
-                {
-                    // bad moves are underpromotion
-                    score += static_cast<int16_t>(param::BAD_CAPTURE_OFFSET +
-                                                  param::PROMOTION_SCORES[move.promotionType()] +
-                                                  mvv_lva);
-                }
-                goto done;
-            }
-
-            // captures
-            if (position.isCapture(move))
-            {
-                // mvv_lva = [0, 50]
-                auto captured = move.typeOf() == chess::Move::ENPASSANT
-                                    ? chess::PieceType::PAWN
-                                    : position.at(move.to()).type();
-                auto attacker = position.at(move.from()).type();
-                int16_t mvv_lva = m_param.mvv_lva[captured][attacker];
-
-                // capture history [-32000, 32000] -> [0, 130]
-                // TODO: fix this
-                int16_t normalized_capture =
-                    (m_capture_history[position.at(move.from())][move.to().index()]
-                                      [position.at(move.to()).type()]
-                                          .get_value() +
-                     param::MAX_HISTORY) /
-                    250;
-                normalized_capture = 0;
-
-                int16_t combined_rank = mvv_lva + normalized_capture;
-
-                if (see::test_ge(position, move, -100))
-                {
-                    score += static_cast<int16_t>(param::GOOD_CAPTURE_OFFSET + combined_rank);
-                    goto done;
-                }
-                else
-                {
-                    score += static_cast<int16_t>(param::BAD_CAPTURE_OFFSET + combined_rank);
-                    goto done;
-                }
-            }
-
-            // killers
-            {
-                // current ply
-                for (size_t i = 0; i < param::NUMBER_KILLERS; ++i)
-                {
-                    if (move == m_killers[ply][i].first)
-                    {
-                        score +=
-                            static_cast<int16_t>(param::KILLER_OFFSET + param::KILLER_SCORE[i]);
-                        // mate killers bonus
-                        if (m_killers[ply][i].second)
-                            score += param::MATE_KILLER_BONUS;
-
-                        assert(score < param::GOOD_CAPTURE_OFFSET && score >= param::KILLER_OFFSET);
-                        goto done;
-                    }
-                }
-            }
-
-            // rest
-            {
-                if (prev_move != chess::Move::NO_MOVE && is_quiet(position, move))
-                {
-                    const auto &counter = m_counter[position.sideToMove()][prev_move.from().index()]
-                                                   [prev_move.to().index()];
-                    if (move == counter)
-                        score += param::COUNTER_BONUS;
-                }
-
-                if (is_quiet(position, move))
-                {
-                    score += m_main_history[position.sideToMove()][move.from().index()]
-                                           [move.to().index()]
-                                               .get_value();
-                }
-
-                goto done;
-            }
-
-        done:
-            move.setScore(score);
-        }
-    }
-
-    void sort_moves(chess::Movelist &movelist, int i)
-    {
-        int highest_score = movelist[i].score();
-        int highest_index = i;
-        for (int j = i + 1; j < movelist.size(); ++j)
-        {
-            if (movelist[j].score() > highest_score)
-            {
-                highest_score = movelist[j].score();
-                highest_index = j;
-            }
-        }
-
-        if (i != highest_index)
-            std::swap(movelist[i], movelist[highest_index]);
-    }
-
-    bool is_quiet(const chess::Board &position, const chess::Move &move) const
-    {
-        return !position.isCapture(move) && move.typeOf() != chess::Move::PROMOTION;
-    }
-
-    void update_main_history(const chess::Board &position, const chess::Move &move, int16_t bonus)
-    {
-        m_main_history[position.sideToMove()][move.from().index()][move.to().index()].add_bonus(
-            bonus);
-    }
-
-    void update_capture_history(const chess::Board &position, const chess::Move &move,
-                                int16_t bonus)
-    {
-        m_capture_history[position.at(move.from())][move.to().index()]
-                         [position.at(move.to()).type()]
-                             .add_bonus(bonus);
-    }
-
-    void store_killer(const chess::Move &killer, int32_t ply, bool is_mate)
-    {
-        std::pair<chess::Move, bool> insert = {killer, is_mate};
-        for (size_t i = 0; i < param::NUMBER_KILLERS && insert.first != chess::Move::NO_MOVE; ++i)
-        {
-            if (killer == m_killers[ply][i].first)
-            {
-                m_killers[ply][i] = insert;
-                break;
-            }
-
-            std::swap(m_killers[ply][i], insert);
-        }
-    }
-
-    void incr_counter(const chess::Board &position, const chess::Move &prev_move,
-                      const chess::Move &move)
-    {
-        if (is_quiet(position, move) && prev_move != chess::Move::NO_MOVE)
-            m_counter[position.sideToMove()][prev_move.from().index()][prev_move.to().index()] =
-                move;
-    }
-};
-
 struct pv_line
 {
     // pv_table[ply][i] is the ith pv move at ply
@@ -464,7 +232,7 @@ struct engine
     // tt
     table *m_table;
     // move ordering
-    move_ordering m_move_ordering;
+    heuristics m_heuristics;
     // pv-line
     pv_line m_line;
     // search stack
@@ -481,7 +249,7 @@ struct engine
     }
 
     explicit engine(endgame_table *endgame, nnue *nnue, table *table)
-        : m_stats(), m_table(table), m_move_ordering(m_param), m_endgame(endgame), m_nnue(nnue)
+        : m_stats(), m_table(table), m_endgame(endgame), m_nnue(nnue)
     {
         // init tables
         if (m_nnue == nullptr)
@@ -508,7 +276,7 @@ struct engine
         }
 
         // reset move ordering variables
-        m_move_ordering.begin();
+        m_heuristics.begin();
 
         // reset pvline
         m_line.reset();
@@ -661,27 +429,12 @@ struct engine
 
         int16_t score;
         chess::Move best_move = chess::Move::NO_MOVE;
-        chess::Movelist moves{};
-        bool lazy_movegen = tt_result.move != chess::Move::NO_MOVE;
-        if (lazy_movegen)
+        movegen gen{m_position, m_heuristics, tt_result.move, (ss - 1)->move, ply, !ss->in_check};
+        chess::Move move;
+        int move_count = -1;
+        while ((move = gen.next_move()) != chess::Move::NO_MOVE)
         {
-            moves.add(tt_result.move);
-        }
-        else
-        {
-            if (ss->in_check)
-            {
-                chess::movegen::legalmoves(moves, m_position);
-            }
-            else
-                chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves, m_position);
-            m_move_ordering.score_moves<true>(m_position, moves, tt_result.move, (ss - 1)->move,
-                                              ply);
-        }
-        for (int move_count = 0; move_count < moves.size(); ++move_count)
-        {
-            m_move_ordering.sort_moves(moves, move_count);
-            const chess::Move &move = moves[move_count];
+            move_count += 1;
 
             if (!param::IS_LOSS(best_score))
             {
@@ -700,19 +453,19 @@ struct engine
                     if (futility_value <= alpha)
                     {
                         best_score = std::max(best_score, futility_value);
-                        goto lazy_movegen_check;
+                        continue;
                     }
 
                     if (!see::test_ge(m_position, move, alpha - futility_base))
                     {
                         best_score = std::max(best_score, std::min(futility_base, alpha));
-                        goto lazy_movegen_check;
+                        continue;
                     }
                 }
 
                 // [see pruning]
                 if (!see::test_ge(m_position, move, -80))
-                    goto lazy_movegen_check;
+                    continue;
             }
 
             ss->move = move;
@@ -736,32 +489,20 @@ struct engine
                         break;
                 }
             }
-
-        lazy_movegen_check:
-            if (lazy_movegen && move_count == 0)
-            {
-                if (ss->in_check)
-                {
-                    chess::movegen::legalmoves(moves, m_position);
-                }
-                else
-                    chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves,
-                                                                                     m_position);
-                m_move_ordering.score_moves<true>(m_position, moves, tt_result.move, (ss - 1)->move,
-                                                  ply);
-            }
         }
 
         // [mate check]
-        if (ss->in_check && moves.empty())
+        if (ss->in_check && move_count == -1)
         {
             return param::MATED_IN(ply);
         }
 
         // [draw check]
-        if (moves.empty())
+        if (move_count == -1)
         {
-            chess::movegen::legalmoves(moves, m_position);
+            // we've explored all capture moves, only care about quiet moves
+            chess::Movelist moves;
+            chess::movegen::legalmoves<chess::movegen::MoveGenType::QUIET>(moves, m_position);
             if (moves.empty())
             {
                 return param::VALUE_DRAW;
@@ -1066,33 +807,12 @@ struct engine
                 !(tt_result.hit && param::IS_VALID(tt_result.score) &&
                   tt_result.score < probcut_beta))
             {
-                // only care about capture/good moves
-                chess::Movelist moves{};
-                chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(moves, m_position);
-
-                // add pv move as well
-                if (tt_result.move != chess::Move::NO_MOVE)
-                    moves.add(tt_result.move);
-
-                m_move_ordering.score_moves<true>(m_position, moves, tt_result.move, prev_move,
-                                                  ply);
+                movegen gen{m_position, m_heuristics, tt_result.move, prev_move, ply, true};
+                chess::Move move;
 
                 int32_t probcut_depth = std::clamp(depth - 3, 0, depth);
-                bool searched_tt = false;
-                for (int i = 0; i < moves.size(); ++i)
+                while ((move = gen.next_move()) != chess::Move::NO_MOVE)
                 {
-                    m_move_ordering.sort_moves(moves, i);
-                    chess::Move &move = moves[i];
-
-                    if (move == tt_result.move)
-                    {
-                        if (searched_tt)
-                        {
-                            continue;
-                        }
-                        searched_tt = true;
-                    }
-
                     ss->move = move;
                     make_move(move);
 
@@ -1125,40 +845,69 @@ struct engine
 
     moves:
 
-        // [tt-move generation]
-        chess::Movelist moves{};
-        bool lazy_move_gen = tt_result.move != chess::Move::NO_MOVE;
-        if (lazy_move_gen)
-        {
-            moves.add(tt_result.move);
-        }
-        else
-        {
-            chess::movegen::legalmoves(moves, m_position);
-            m_move_ordering.score_moves<false>(m_position, moves, tt_result.move, prev_move, ply);
-        }
+        // {
+        //     chess::Movelist actual_moves;
+        //     chess::movegen::legalmoves(actual_moves, m_position);
+        //
+        //     movegen gen{m_position, m_heuristics, tt_result.move, prev_move, ply};
+        //     chess::Movelist found_moves;
+        //     chess::Move move;
+        //     while ((move = gen.next_move()) != chess::Move::NO_MOVE)
+        //     {
+        //         found_moves.add(move);
+        //     }
+        //
+        //
+        //     for (auto &m : actual_moves)
+        //     {
+        //         assert(std::find(found_moves.begin(), found_moves.end(), m) !=
+        //         found_moves.end());
+        //     }
+        //
+        //     for (auto &m : found_moves)
+        //     {
+        //         assert(std::find(actual_moves.begin(), actual_moves.end(), m) !=
+        //         actual_moves.end());
+        //     }
+        //
+        //     assert(actual_moves.size() == found_moves.size());
+        // }
+
+        movegen gen{m_position, m_heuristics, tt_result.move, prev_move, ply};
+        chess::Move move;
 
         chess::Move best_move = chess::Move::NO_MOVE;
+        std::array<chess::Move, param::QUIET_MOVES> quiet_moves{};
+        std::array<chess::Move, param::QUIET_MOVES> capture_moves{};
 
         // track quiet/capture moves for malus
         int quiet_count = 0;
         int capture_count = 0;
-
-        for (int move_count = 0; move_count < moves.size(); ++move_count)
+        int move_count = -1;
+        while ((move = gen.next_move()) != chess::Move::NO_MOVE)
         {
-            m_move_ordering.sort_moves(moves, move_count);
-            const chess::Move &move = moves[move_count];
+
+            // hack to make a move in root
+            // if (is_root && best_move == chess::Move::NO_MOVE && m_line.pv_length[0] == 0)
+            // {
+            //     m_line.pv_table[0][0] = move;
+            //     m_line.pv_length[0] = 1;
+            //     best_move = move;
+            // }
 
             int32_t new_depth;
             int32_t extension = 0;
             int16_t score = 0;
             int16_t capture_score = 0;
+            int16_t history_score = 0;
             bool has_non_pawn = m_position.hasNonPawnMaterial(m_position.sideToMove());
             bool is_capture = m_position.isCapture(move);
             bool is_quiet = false;
 
             if (move == excluded_move)
-                goto lazy_move_gen;
+                continue;
+
+            move_count += 1;
 
             // [low depth pruning]
             if (move_count > 0 && has_non_pawn && !param::IS_LOSS(best_score))
@@ -1178,7 +927,7 @@ struct engine
                         int16_t fut_value =
                             ss->static_eval + 300 + 300 * lmr_depth + see::PIECE_VALUES[captured];
                         if (fut_value <= alpha)
-                            goto lazy_move_gen;
+                            continue;
                     }
 
                     // [see pruning for captures and checks]
@@ -1193,7 +942,7 @@ struct engine
                     {
                         int16_t margin = 200 + 400 * depth;
                         if (!see::test_ge(m_position, move, -margin))
-                            goto lazy_move_gen;
+                            continue;
                     }
                 }
                 else
@@ -1209,7 +958,7 @@ struct engine
                                 !param::IS_WIN(fut_value))
                                 best_score = fut_value;
 
-                            goto lazy_move_gen;
+                            continue;
                         }
                     }
 
@@ -1217,7 +966,7 @@ struct engine
                     int16_t margin = 100 + 50 * lmr_depth * lmr_depth;
                     if (!see::test_ge(m_position, move, -margin))
                     {
-                        goto lazy_move_gen;
+                        continue;
                     }
                 }
             }
@@ -1250,17 +999,28 @@ struct engine
                     extension = -1;
             }
 
-            is_quiet = m_move_ordering.is_quiet(m_position, move);
-            if (is_capture)
-                capture_score =
-                    m_move_ordering
-                        .m_capture_history[m_position.at(move.from())][move.to().index()]
-                                          [m_position.at(move.to()).type()]
-                        .get_value();
+            new_depth += extension;
+
+            is_quiet = m_heuristics.is_quiet(m_position, move);
+            if (is_quiet)
+            {
+                history_score = m_heuristics
+                                    .main_history[m_position.sideToMove()][move.from().index()]
+                                                 [move.to().index()]
+                                    .get_value();
+            }
+            else if (m_position.isCapture(move))
+            {
+                capture_score = m_heuristics
+                                    .capture_history[m_position.at(move.from())][move.to().index()]
+                                                    [move == chess::Move::ENPASSANT
+                                                         ? chess::PieceType::PAWN
+                                                         : m_position.at(move.to()).type()]
+                                    .get_value();
+            }
+
             ss->move = move;
             make_move(move);
-
-            new_depth += extension;
 
             if (depth >= 2 && move_count > 0)
             {
@@ -1275,28 +1035,18 @@ struct engine
                     reduction += 1;
                 // extend if pv
                 reduction -= ss->tt_pv + is_pv_node;
-                // reduce/extend based on the history, history range [-30000, 30000]
-                if (is_quiet)
-                {
-                    // reduce if killer
-                    // if (move == m_move_ordering.m_killers[ply][0].first ||
-                    //     move == m_move_ordering.m_killers[ply][1].first)
-                    //     reduction += 1;
 
-                    reduction += m_move_ordering
-                                     .m_main_history[m_position.sideToMove()][move.from().index()]
-                                                    [move.to().index()]
-                                     .get_value() /
-                                 15000;
-                }
-                else if (is_capture)
-                    reduction += capture_score / 15000;
+                // reduce/extend based on the history
+                if (is_quiet)
+                    reduction -= history_score / 16000;
+                else if (m_position.isCapture(move))
+                    reduction -= capture_score / 17000;
 
                 // reduce if promotion
                 if (move.typeOf() == chess::Move::PROMOTION)
-                    reduction += 1;
+                    reduction -= 1;
 
-                int32_t reduced_depth = std::clamp(new_depth - reduction, 0, depth + 1);
+                int32_t reduced_depth = std::clamp(new_depth - reduction, 1, depth + 1);
                 score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
                 if (score > alpha && reduced_depth < new_depth)
                 {
@@ -1327,39 +1077,38 @@ struct engine
 
                     if (score >= beta)
                     {
-                        m_move_ordering.incr_counter(m_position, prev_move, move);
+                        m_heuristics.incr_counter(m_position, prev_move, move);
 
                         // [killer moves update]
-                        if (m_move_ordering.is_quiet(m_position, move))
+                        if (m_heuristics.is_quiet(m_position, move))
                         {
-                            m_move_ordering.store_killer(move, ply, param::IS_WIN(score));
+                            m_heuristics.store_killer(move, ply, param::IS_WIN(score));
                         }
 
                         // [main history update]
                         const int16_t main_history_bonus = depth * depth;
                         const int16_t main_history_malus = main_history_bonus / 4;
-                        if (m_move_ordering.is_quiet(m_position, move))
+                        if (m_heuristics.is_quiet(m_position, move))
                         {
-                            m_move_ordering.update_main_history(m_position, move,
-                                                                main_history_bonus);
+                            m_heuristics.update_main_history(m_position, move, main_history_bonus);
 
                             // malus apply
                             for (int j = 0; j < quiet_count; ++j)
                             {
-                                m_move_ordering.update_main_history(m_position, ss->quiet_moves[j],
-                                                                    -main_history_malus);
+                                m_heuristics.update_main_history(m_position, quiet_moves[j],
+                                                                 -main_history_malus);
                             }
                         }
                         else if (m_position.isCapture(move))
                         {
-                            m_move_ordering.update_capture_history(m_position, move,
-                                                                   main_history_bonus);
+                            m_heuristics.update_capture_history(m_position, move,
+                                                                main_history_bonus);
 
                             // malus apply
                             for (int j = 0; j < capture_count; ++j)
                             {
-                                m_move_ordering.update_capture_history(
-                                    m_position, ss->capture_moves[j], -main_history_malus);
+                                m_heuristics.update_capture_history(m_position, capture_moves[j],
+                                                                    -main_history_malus);
                             }
                         }
 
@@ -1371,29 +1120,20 @@ struct engine
             }
 
             // malus save
-            if (m_move_ordering.is_quiet(m_position, move))
+            if (m_heuristics.is_quiet(m_position, move))
             {
                 if (quiet_count < param::QUIET_MOVES)
-                    ss->quiet_moves[quiet_count++] = move;
+                    quiet_moves[quiet_count++] = move;
             }
             else if (m_position.isCapture(move))
             {
                 if (capture_count < param::QUIET_MOVES)
-                    ss->capture_moves[capture_count++] = move;
-            }
-
-        lazy_move_gen:
-            if (lazy_move_gen && move_count == 0)
-            {
-                chess::movegen::legalmoves(moves, m_position);
-                m_move_ordering.score_moves<false>(m_position, moves, tt_result.move, prev_move,
-                                                   ply);
-                m_move_ordering.sort_moves(moves, 0);
+                    capture_moves[capture_count++] = move;
             }
         }
 
         // checkmate or draw
-        if (moves.empty())
+        if (move_count == -1)
         {
             if (has_excluded)
                 best_score = alpha;
@@ -1419,14 +1159,6 @@ struct engine
                                                                            : param::ALPHA_FLAG,
                          best_score, ply, depth, best_move, unadjusted_static_eval, ss->tt_pv,
                          m_table->m_generation);
-        }
-
-        // hack to make a move in root
-        if (is_root && best_move == chess::Move::NO_MOVE && m_line.pv_length[0] == 0)
-        {
-            m_line.pv_table[0][0] = moves[0];
-            m_line.pv_length[0] = 1;
-            best_move = moves[0];
         }
 
         return best_score;
