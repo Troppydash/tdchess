@@ -27,14 +27,18 @@ using killer_heuristic =
     std::array<std::pair<chess::Move, bool>, param::NUMBER_KILLERS>[param::MAX_DEPTH];
 using counter_moves = chess::Move[12][64];
 
+constexpr int LOW_PLY = 8;
+using low_ply_history = history_entry<int16_t, 10000>[2][LOW_PLY][64][64];
+
 struct heuristics
 {
     history_heuristic main_history;
     capture_heuristic capture_history;
     killer_heuristic killers;
     counter_moves counter;
+    low_ply_history low_ply_history;
 
-    heuristics() : main_history{}, capture_history{}, killers{}, counter{}
+    heuristics() : main_history{}, capture_history{}, killers{}, counter{}, low_ply_history{}
     {
     }
 
@@ -43,8 +47,15 @@ struct heuristics
         return !position.isCapture(move);
     }
 
-    void update_main_history(const chess::Board &position, const chess::Move &move, int16_t bonus)
+    void update_main_history(const chess::Board &position, const chess::Move &move, int32_t ply,
+                             int16_t bonus)
     {
+        if (ply < LOW_PLY)
+        {
+            low_ply_history[position.sideToMove()][ply][move.from().index()][move.to().index()]
+                .add_bonus(bonus);
+        }
+
         main_history[position.sideToMove()][move.from().index()][move.to().index()].add_bonus(
             bonus);
     }

@@ -1097,13 +1097,13 @@ struct engine
                         {
                             // don't store if early cutoff at low depth
                             if (depth > 3 || quiet_count > 0)
-                                m_heuristics.update_main_history(m_position, move,
+                                m_heuristics.update_main_history(m_position, move, ply,
                                                                  main_history_bonus);
 
                             // malus apply
                             for (int j = 0; j < quiet_count; ++j)
                             {
-                                m_heuristics.update_main_history(m_position, quiet_moves[j],
+                                m_heuristics.update_main_history(m_position, quiet_moves[j], ply,
                                                                  -main_history_malus);
                             }
                         }

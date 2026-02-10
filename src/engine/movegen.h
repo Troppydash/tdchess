@@ -164,6 +164,18 @@ class movegen
                                               [move.to().index()]
                                  .get_value();
 
+                    // low ply
+                    if (m_ply < LOW_PLY)
+                    {
+                        score = std::min(
+                            score + m_heuristics
+                                            .low_ply_history[m_position.sideToMove()][m_ply]
+                                                            [move.from().index()][move.to().index()]
+                                            .get_value(),
+                            32000);
+                    }
+
+                    // countermove
                     if (move == counter)
                         score += 100;
 
