@@ -193,6 +193,11 @@ struct move_ordering
             for (auto &b : a)
                 for (auto &c : b)
                     c.decay();
+
+        for (auto &a : m_capture_history)
+            for (auto &b : a)
+                for (auto &c : b)
+                    c.decay();
     }
 
     template <bool IN_Q>
