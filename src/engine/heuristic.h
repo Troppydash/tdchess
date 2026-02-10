@@ -17,7 +17,7 @@ template <typename I, I LIMIT> struct history_entry
 
     void decay()
     {
-        value /= 8;
+        value /= 2;
     }
 };
 
@@ -94,26 +94,5 @@ struct heuristics
             for (auto &b : a)
                 for (auto &c : b)
                     c.decay();
-
-        // clear counter
-        // for (auto &a : counter)
-        // {
-        //     for (auto &b : a)
-        //     {
-        //         for (auto &c : b)
-        //         {
-        //             b = chess::Move::NO_MOVE;
-        //         }
-        //     }
-        // }
-
-        // clear killer
-        // for (auto &a : killers)
-        // {
-        //     for (auto &b : a)
-        //     {
-        //         b = {chess::Move::NO_MOVE, false};
-        //     }
-        // }
     }
 };

@@ -36,14 +36,14 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
 
     arena_settings settings;
     if (is_short)
-        settings = arena_settings{latest + "_against_" + baseline, 12, 1 * 1000,
+        settings = arena_settings{latest + "_against_" + baseline, 12, 3 * 1000,
                                   static_cast<int>(0.1 * 1000), false};
     else
         settings = arena_settings{latest + "_against_" + baseline, 12, 60 * 1000,
                                   static_cast<int>(0.6 * 1000)};
 
     std::vector<int> cores;
-    for (int i = 0; i < 6; ++i)
+    for (int i = 0; i < 3; ++i)
         cores.push_back(2 * i);
 
     arena arena{settings, book, agents, cores};
@@ -61,7 +61,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.0.13", "1.1.4", true);
+    improvement_test("1.1.4", "1.1.5", true);
 
     return 0;
 }
@@ -180,7 +180,7 @@ int main()
 
     // endgame_table etable{};
     // etable.load_file("../syzygy");
-    table tt{512};
+    table tt{1024};
     engine engine{nullptr, &nnue, &tt};
     search_param param;
     param.movetime = 100000;

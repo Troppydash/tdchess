@@ -18,6 +18,10 @@ enum class movegen_stage
     QGOOD_CAPTURE,
     QBAD_CAPTURE,
 
+    PROBPV,
+    PROB_CAPTURE_INIT,
+    PROB_GOOD_CAPTURE,
+
     DONE
 };
 
@@ -36,26 +40,12 @@ class movegen
     chess::Move m_prev_move;
     int32_t m_ply;
 
-    std::array<std::array<int16_t, 6>, 7> m_mvv_lva;
-
   public:
     explicit movegen(chess::Board &position, heuristics &heuristics, chess::Move pv_move,
-                     chess::Move prev_move, int32_t ply, bool only_good = false)
-        : m_stage{static_cast<int>(only_good ? movegen_stage::QPV : movegen_stage::PV)},
-          m_position(position), m_heuristics(heuristics), m_pv_move(pv_move),
-          m_prev_move(prev_move), m_ply(ply)
+                     chess::Move prev_move, int32_t ply, movegen_stage stage = movegen_stage::PV)
+        : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
+          m_pv_move(pv_move), m_prev_move(prev_move), m_ply(ply)
     {
-
-        // set mvv_lva
-        m_mvv_lva = {
-            std::array<int16_t, 6>{15, 14, 13, 12, 11, 10}, // victim Pawn
-            {25, 24, 23, 22, 21, 20},                       // victim Knight
-            {35, 34, 33, 32, 31, 30},                       // victim Bishop
-            {45, 44, 43, 42, 41, 40},                       // victim Rook
-            {55, 54, 53, 52, 51, 50},                       // victim Queen
-            {0, 0, 0, 0, 0, 0},                             // victim King
-            {0, 0, 0, 0, 0, 0},                             // No piece
-        };
     }
 
     chess::Move next_move()
@@ -65,7 +55,8 @@ class movegen
             switch (static_cast<movegen_stage>(m_stage))
             {
             case movegen_stage::PV:
-            case movegen_stage::QPV: {
+            case movegen_stage::QPV:
+            case movegen_stage::PROBPV: {
                 m_stage++;
                 if (m_pv_move != chess::Move::NO_MOVE)
                     return m_pv_move;
@@ -73,8 +64,9 @@ class movegen
                 [[fallthrough]];
             }
 
+            case movegen_stage::CAPTURE_INIT:
             case movegen_stage::QCAPTURE_INIT:
-            case movegen_stage::CAPTURE_INIT: {
+            case movegen_stage::PROB_CAPTURE_INIT: {
                 // generate
                 chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(m_moves,
                                                                                  m_position);
@@ -227,6 +219,15 @@ class movegen
             case movegen_stage::QBAD_CAPTURE: {
                 m_move_index = pick_move(m_moves, m_move_index, m_bad_capture_end);
                 if (m_move_index < m_bad_capture_end)
+                    return m_moves[m_move_index++];
+
+                m_stage = static_cast<int>(movegen_stage::DONE);
+                break;
+            }
+
+            case movegen_stage::PROB_GOOD_CAPTURE: {
+                m_move_index = pick_move(m_moves, m_move_index, m_moves.size());
+                if (m_move_index < m_moves.size())
                     return m_moves[m_move_index++];
 
                 m_stage = static_cast<int>(movegen_stage::DONE);

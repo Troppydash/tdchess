@@ -132,9 +132,9 @@ struct engine_param
         for (int depth = 1; depth < param::MAX_DEPTH; ++depth)
             for (int move = 1; move < 100; ++move)
             {
-                lmr[depth][move] = std::round(0.99 + std::log(depth) * std::log(move) / 3.14);
+                lmr[depth][move] = std::floor(0.99 + std::log(depth) * std::log(move) / 3.14);
                 lmr_capture[depth][move] =
-                    std::round(0.99 + std::log(depth) * std::log(move) / 3.5);
+                    std::floor(0.99 + std::log(depth) * std::log(move) / 3.6);
             }
 
         // set mvv_lva
@@ -432,7 +432,9 @@ struct engine
 
         int16_t score;
         chess::Move best_move = chess::Move::NO_MOVE;
-        movegen gen{m_position, m_heuristics, tt_result.move, (ss - 1)->move, ply, !ss->in_check};
+        movegen gen{
+            m_position,     m_heuristics, tt_result.move,
+            (ss - 1)->move, ply,          ss->in_check ? movegen_stage::PV : movegen_stage::QPV};
         chess::Move move;
         int move_count = -1;
         while ((move = gen.next_move()) != chess::Move::NO_MOVE)
@@ -796,7 +798,7 @@ struct engine
         }
 
         // iir
-        if ((is_pv_node || cut_node) && depth >= 4 && tt_result.move == chess::Move::NO_MOVE)
+        if ((is_pv_node || cut_node) && depth >= 3 && tt_result.move == chess::Move::NO_MOVE)
             depth -= 1;
 
         // [prob cut]
@@ -811,7 +813,8 @@ struct engine
                 !(tt_result.hit && param::IS_VALID(tt_result.score) &&
                   tt_result.score < probcut_beta))
             {
-                movegen gen{m_position, m_heuristics, tt_result.move, prev_move, ply, true};
+                movegen gen{m_position, m_heuristics, tt_result.move,
+                            prev_move,  ply,          movegen_stage::PROBPV};
                 chess::Move move;
 
                 int32_t probcut_depth = std::clamp(depth - 3, 0, depth);
@@ -1021,7 +1024,8 @@ struct engine
 
             if (depth >= 2 && move_count > 2 * is_root)
             {
-                int32_t reduction = m_param.lmr[depth][move_count];
+                int32_t reduction = is_capture ? m_param.lmr_capture[depth][move_count]
+                                               : m_param.lmr[depth][move_count];
 
                 // extend if in check
                 reduction -= ss->in_check;
@@ -1087,8 +1091,8 @@ struct engine
                         }
 
                         // [main history update]
-                        const int16_t main_history_bonus = depth * depth;
-                        const int16_t main_history_malus = main_history_bonus / 4;
+                        const int16_t main_history_bonus = 64 * depth;
+                        const int16_t main_history_malus = main_history_bonus;
                         if (m_heuristics.is_quiet(m_position, move))
                         {
                             // don't store if early cutoff at low depth
