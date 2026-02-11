@@ -202,6 +202,7 @@ struct search_stack
     bool tt_hit = false;
     std::array<chess::Move, param::QUIET_MOVES> quiet_moves{};
     std::array<chess::Move, param::QUIET_MOVES> capture_moves{};
+    continuation_history *continuation = nullptr;
 
     void reset()
     {
@@ -212,6 +213,7 @@ struct search_stack
         in_check = false;
         tt_pv = false;
         tt_hit = false;
+        continuation = nullptr;
     }
 };
 
@@ -315,18 +317,41 @@ struct engine
         return pesto::evaluate(m_position) + m_param.tempo;
     }
 
-    void make_move(const chess::Move &move)
+    void make_move(const chess::Move &move, search_stack *ss)
     {
-        if (m_nnue != nullptr)
-            m_nnue->make_move(m_position, move);
-        m_position.makeMove(move);
+        ss->move = move;
+        if (move == chess::Move::NO_MOVE)
+        {
+            ss->continuation = nullptr;
+            m_position.makeNullMove();
+        }
+        else
+        {
+            assert(m_position.at(move.from()) < 12);
+            assert(move.to().index() < 64);
+            ss->continuation =
+                &m_heuristics
+                     .continuation_history_full[m_position.at(move.from())][move.to().index()];
+
+            if (m_nnue != nullptr)
+                m_nnue->make_move(m_position, move);
+
+            m_position.makeMove(move);
+        }
     }
 
     void unmake_move(const chess::Move &move)
     {
-        m_position.unmakeMove(move);
-        if (m_nnue != nullptr)
-            m_nnue->unmake_move();
+        if (move == chess::Move::NO_MOVE)
+        {
+            m_position.unmakeNullMove();
+        }
+        else
+        {
+            m_position.unmakeMove(move);
+            if (m_nnue != nullptr)
+                m_nnue->unmake_move();
+        }
     }
 
     template <bool is_pv_node> int16_t qsearch(int16_t alpha, int16_t beta, search_stack *ss)
@@ -430,11 +455,17 @@ struct engine
             futility_base = ss->static_eval + 300;
         }
 
+        chess::Move prev_move = (ss - 1)->move;
         int16_t score;
         chess::Move best_move = chess::Move::NO_MOVE;
-        movegen gen{
-            m_position,     m_heuristics, tt_result.move,
-            (ss - 1)->move, ply,          ss->in_check ? movegen_stage::PV : movegen_stage::QPV};
+        movegen gen{m_position,
+                    m_heuristics,
+                    tt_result.move,
+                    prev_move,
+                    ply,
+                    (ss - 1)->continuation,
+                    (ss - 2)->continuation,
+                    ss->in_check ? movegen_stage::PV : movegen_stage::QPV};
         chess::Move move;
         int move_count = -1;
         while ((move = gen.next_move()) != chess::Move::NO_MOVE)
@@ -473,8 +504,7 @@ struct engine
                     continue;
             }
 
-            ss->move = move;
-            make_move(move);
+            make_move(move, ss);
             score = -qsearch<is_pv_node>(-beta, -alpha, ss + 1);
             unmake_move(move);
 
@@ -781,11 +811,10 @@ struct engine
                 int32_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
 
                 // since nmp uses ss+1, we fake that this move is nothing
-                ss->move = chess::Move::NO_MOVE;
-                m_position.makeNullMove();
+                make_move(chess::Move::NO_MOVE, ss);
                 int16_t null_score =
                     -negamax<false>(-beta, -beta + 1, depth - reduction, ss + 1, false);
-                m_position.unmakeNullMove();
+                unmake_move(chess::Move::NO_MOVE);
 
                 if (m_timer.is_stopped())
                     return 0;
@@ -820,8 +849,7 @@ struct engine
                 int32_t probcut_depth = std::clamp(depth - 3, 0, depth);
                 while ((move = gen.next_move()) != chess::Move::NO_MOVE)
                 {
-                    ss->move = move;
-                    make_move(move);
+                    make_move(move, ss);
 
                     // check if move exceeds beta first
                     int16_t score = -qsearch<false>(-probcut_beta, -probcut_beta + 1, ss + 1);
@@ -882,7 +910,15 @@ struct engine
         //
         // }
 
-        movegen gen{m_position, m_heuristics, tt_result.move, prev_move, ply};
+        movegen gen{
+            m_position,
+            m_heuristics,
+            tt_result.move,
+            prev_move,
+            ply,
+            (ss - 1)->continuation,
+            (ss - 2)->continuation,
+        };
 
         chess::Move best_move = chess::Move::NO_MOVE;
         std::array<chess::Move, param::QUIET_MOVES> quiet_moves{};
@@ -1019,8 +1055,7 @@ struct engine
                                     .get_value();
             }
 
-            ss->move = move;
-            make_move(move);
+            make_move(move, ss);
 
             if (depth >= 2 && move_count > 2 * is_root)
             {
@@ -1082,14 +1117,6 @@ struct engine
 
                     if (score >= beta)
                     {
-                        m_heuristics.incr_counter(m_position, prev_move, move);
-
-                        // [killer moves update]
-                        if (m_heuristics.is_quiet(m_position, move))
-                        {
-                            m_heuristics.store_killer(move, ply, param::IS_WIN(score));
-                        }
-
                         // [main history update]
                         const int16_t main_history_bonus = 64 * depth;
                         const int16_t main_history_malus = main_history_bonus;
@@ -1105,6 +1132,21 @@ struct engine
                             {
                                 m_heuristics.update_main_history(m_position, quiet_moves[j], ply,
                                                                  -main_history_malus);
+                            }
+
+                            // [killer moves update]
+                            m_heuristics.store_killer(move, ply, param::IS_WIN(score));
+
+                            // [continuation history]
+                            update_continuation_history(ss, m_position.at(move.from()), move.to(),
+                                                        main_history_bonus);
+
+                            // malus apply
+                            for (int j = 0; j < quiet_count; ++j)
+                            {
+                                update_continuation_history(
+                                    ss, m_position.at(quiet_moves[j].from()), quiet_moves[j].to(),
+                                    -main_history_malus);
                             }
                         }
                         else if (m_position.isCapture(move))
@@ -1172,6 +1214,23 @@ struct engine
         }
 
         return best_score;
+    }
+
+    void update_continuation_history(search_stack *ss, chess::Piece piece, chess::Square to,
+                                     int bonus)
+    {
+        constexpr std::array<int16_t, NUM_CONTINUATION> weights{1100, 700};
+        for (int i = 1; i <= NUM_CONTINUATION; ++i)
+        {
+            if ((ss - i)->continuation != nullptr)
+            {
+                assert(piece < 12);
+                assert(to.index() < 64);
+                assert((ss - i)->move != chess::Move::NO_MOVE);
+                (*(ss - i)->continuation)[piece][to.index()].add_bonus(bonus * weights[i - 1] /
+                                                                       1024);
+            }
+        }
     }
 
     uint64_t perft(int depth)

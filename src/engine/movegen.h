@@ -35,16 +35,29 @@ class movegen
     int m_move_index{0};
 
     const chess::Board &m_position;
-    heuristics &m_heuristics;
+    const heuristics &m_heuristics;
     chess::Move m_pv_move;
     chess::Move m_prev_move;
     int32_t m_ply;
 
+    const continuation_history *m_continuation1 = nullptr;
+    const continuation_history *m_continuation2 = nullptr;
+
   public:
-    explicit movegen(chess::Board &position, heuristics &heuristics, chess::Move pv_move,
+    explicit movegen(chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
                      chess::Move prev_move, int32_t ply, movegen_stage stage = movegen_stage::PV)
         : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
           m_pv_move(pv_move), m_prev_move(prev_move), m_ply(ply)
+    {
+    }
+
+    explicit movegen(chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
+                     chess::Move prev_move, int32_t ply, const continuation_history *continuation1,
+                     const continuation_history *continuation2,
+                     movegen_stage stage = movegen_stage::PV)
+        : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
+          m_pv_move(pv_move), m_prev_move(prev_move), m_ply(ply), m_continuation1(continuation1),
+          m_continuation2(continuation2)
     {
     }
 
@@ -121,14 +134,14 @@ class movegen
                 chess::movegen::legalmoves_no_clear<chess::movegen::MoveGenType::QUIET>(m_moves,
                                                                                         m_position);
 
-                chess::Move counter = chess::Move::NO_MOVE;
-                if (m_prev_move != chess::Move::NO_MOVE &&
-                    m_position.at(m_prev_move.to()) != chess::Piece::NONE)
-                {
-                    counter =
-                        m_heuristics
-                            .counter[m_position.at(m_prev_move.to())][m_prev_move.to().index()];
-                }
+                // chess::Move counter = chess::Move::NO_MOVE;
+                // if (m_prev_move != chess::Move::NO_MOVE &&
+                //     m_position.at(m_prev_move.to()) != chess::Piece::NONE)
+                // {
+                //     counter =
+                //         m_heuristics
+                //             .counter[m_position.at(m_prev_move.to())][m_prev_move.to().index()];
+                // }
 
                 // m_moves = [bad captures, bad_quiet, good_quiet]
                 m_bad_quiet_end = m_bad_capture_end;
@@ -158,26 +171,35 @@ class movegen
                         continue;
 
                     // normal
-                    int16_t score = 0;
+                    int32_t score = 0;
                     score += m_heuristics
                                  .main_history[m_position.sideToMove()][move.from().index()]
                                               [move.to().index()]
-                                 .get_value();
+                                 .get_value() /
+                             2;
 
                     // low ply
                     if (m_ply < LOW_PLY)
                     {
-                        score = std::min(
-                            score + m_heuristics
-                                            .low_ply_history[m_position.sideToMove()][m_ply]
-                                                            [move.from().index()][move.to().index()]
-                                            .get_value(),
-                            32000);
+                        score += m_heuristics
+                                     .low_ply_history[m_position.sideToMove()][m_ply]
+                                                     [move.from().index()][move.to().index()]
+                                     .get_value() /
+                                 2;
                     }
 
-                    // countermove
-                    if (move == counter)
-                        score += 100;
+                    // continuation
+                    if (m_continuation1 != nullptr)
+                        score += (*m_continuation1)[m_position.at(move.from())][move.to().index()]
+                                     .get_value() /
+                                 2;
+
+                    if (m_continuation2 != nullptr)
+                        score += (*m_continuation2)[m_position.at(move.from())][move.to().index()]
+                                     .get_value() /
+                                 6;
+
+                    score = std::clamp(score, -32000, 32000);
 
                     move.setScore(score);
 
