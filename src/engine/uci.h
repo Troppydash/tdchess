@@ -141,6 +141,7 @@ class uci_handler
                     size_t tt_size = parse_i32(parts[4]);
                     delete m_tt;
                     m_tt = new table{tt_size};
+                    m_engine = std::make_unique<engine>(m_endgame_table, m_nnue, m_tt);
                 }
                 else if (parts[2] == "CoreAff")
                 {

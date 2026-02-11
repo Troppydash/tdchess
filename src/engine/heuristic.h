@@ -17,15 +17,23 @@ template <typename I, I LIMIT> struct history_entry
 
     void decay()
     {
-        value /= 8;
+        value /= 2;
     }
 };
 
-using history_heuristic = history_entry<int16_t, 31000>[2][64][64];
-using capture_heuristic = history_entry<int16_t, 31000>[12][64][7];
+using history_heuristic = history_entry<int16_t, 20000>[2][64][64];
+using capture_heuristic = history_entry<int16_t, 20000>[12][64][7];
 using killer_heuristic =
     std::array<std::pair<chess::Move, bool>, param::NUMBER_KILLERS>[param::MAX_DEPTH];
 using counter_moves = chess::Move[12][64];
+
+constexpr int LOW_PLY = 8;
+using low_ply_history = history_entry<int16_t, 10000>[2][LOW_PLY][64][64];
+
+// indexed by [piece][to]
+using continuation_history = history_entry<int16_t, 10000>[12][64];
+using continuation_history_full = history_entry<int16_t, 10000>[12][64][12][64];
+constexpr int NUM_CONTINUATION = 2;
 
 struct heuristics
 {
@@ -33,18 +41,29 @@ struct heuristics
     capture_heuristic capture_history;
     killer_heuristic killers;
     counter_moves counter;
+    low_ply_history low_ply_history;
+    continuation_history_full continuation_history_full;
 
-    heuristics() : main_history{}, capture_history{}, killers{}, counter{}
+    heuristics()
+        : main_history{}, capture_history{}, killers{}, counter{}, low_ply_history{},
+          continuation_history_full{}
     {
     }
 
     bool is_quiet(const chess::Board &position, const chess::Move &move) const
     {
-        return !position.isCapture(move) && move != chess::Move::PROMOTION;
+        return !position.isCapture(move);
     }
 
-    void update_main_history(const chess::Board &position, const chess::Move &move, int16_t bonus)
+    void update_main_history(const chess::Board &position, const chess::Move &move, int32_t ply,
+                             int16_t bonus)
     {
+        if (ply < LOW_PLY)
+        {
+            low_ply_history[position.sideToMove()][ply][move.from().index()][move.to().index()]
+                .add_bonus(bonus);
+        }
+
         main_history[position.sideToMove()][move.from().index()][move.to().index()].add_bonus(
             bonus);
     }
@@ -95,25 +114,10 @@ struct heuristics
                 for (auto &c : b)
                     c.decay();
 
-        // clear counter
-        // for (auto &a : counter)
-        // {
-        //     for (auto &b : a)
-        //     {
-        //         for (auto &c : b)
-        //         {
-        //             b = chess::Move::NO_MOVE;
-        //         }
-        //     }
-        // }
-
-        // clear killer
-        // for (auto &a : killers)
-        // {
-        //     for (auto &b : a)
-        //     {
-        //         b = {chess::Move::NO_MOVE, false};
-        //     }
-        // }
+        for (auto &a : continuation_history_full)
+            for (auto &b : a)
+                for (auto &c : b)
+                    for (auto &d : c)
+                        d.decay();
     }
 };
