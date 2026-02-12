@@ -43,11 +43,11 @@ target_link_options(tdchess_test PRIVATE
         -fsanitize=undefined
 )
 target_compile_options(tdchess_test PRIVATE
-        "-O3"
-        "-march=native"
-        "-Wall"
-#        -fsanitize=undefined
-#        -g
+#        "-O3"
+#        "-march=native"
+#        "-Wall"
+        -fsanitize=undefined
+        -g
 #        "-ftrapv"
 )
 

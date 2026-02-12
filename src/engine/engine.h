@@ -886,35 +886,35 @@ struct engine
 
     moves:
 
-        // if (is_root)
-        // {
-        //     chess::Movelist actual_moves;
-        //     chess::movegen::legalmoves(actual_moves, m_position);
-        //
-        //     movegen gen{m_position, m_heuristics, tt_result.move, prev_move, ply};
-        //     chess::Movelist found_moves;
-        //     chess::Move move;
-        //     while ((move = gen.next_move()) != chess::Move::NO_MOVE)
-        //     {
-        //         found_moves.add(move);
-        //     }
-        //
-        //     for (auto &m : actual_moves)
-        //     {
-        //         assert(std::find(found_moves.begin(), found_moves.end(), m) !=
-        //         found_moves.end());
-        //     }
-        //
-        //     for (auto &m : found_moves)
-        //     {
-        //         assert(std::find(actual_moves.begin(), actual_moves.end(), m) !=
-        //                actual_moves.end());
-        //     }
-        //
-        //     assert(!(actual_moves.size() > found_moves.size()));
-        //     assert(!(actual_moves.size() < found_moves.size()));
-        //
-        // }
+        if (is_root)
+        {
+            chess::Movelist actual_moves;
+            chess::movegen::legalmoves(actual_moves, m_position);
+
+            movegen gen{m_position, m_heuristics, tt_result.move, prev_move, ply};
+            chess::Movelist found_moves;
+            chess::Move move;
+            while ((move = gen.next_move()) != chess::Move::NO_MOVE)
+            {
+                found_moves.add(move);
+            }
+
+            for (auto &m : actual_moves)
+            {
+                assert(std::find(found_moves.begin(), found_moves.end(), m) !=
+                found_moves.end());
+            }
+
+            for (auto &m : found_moves)
+            {
+                assert(std::find(actual_moves.begin(), actual_moves.end(), m) !=
+                       actual_moves.end());
+            }
+
+            assert(!(actual_moves.size() > found_moves.size()));
+            assert(!(actual_moves.size() < found_moves.size()));
+
+        }
 
         movegen gen{
             m_position, m_heuristics,           tt_result.move,         prev_move,
