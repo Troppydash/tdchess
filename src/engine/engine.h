@@ -331,7 +331,7 @@ struct engine
             assert(move.to().index() < 64);
             ss->continuation =
                 &m_heuristics
-                     .continuation_history_full[m_position.at(move.from())][move.to().index()];
+                     .continuation[m_position.at(move.from())][move.to().index()];
 
             if (m_nnue != nullptr)
                 m_nnue->make_move(m_position, move);

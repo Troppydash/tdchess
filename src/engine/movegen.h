@@ -182,7 +182,7 @@ class movegen
                     if (m_ply < LOW_PLY)
                     {
                         score += m_heuristics
-                                     .low_ply_history[m_position.sideToMove()][m_ply]
+                                     .low_ply[m_position.sideToMove()][m_ply]
                                                      [move.from().index()][move.to().index()]
                                      .get_value() /
                                  2;

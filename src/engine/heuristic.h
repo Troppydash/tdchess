@@ -41,12 +41,12 @@ struct heuristics
     capture_heuristic capture_history;
     killer_heuristic killers;
     counter_moves counter;
-    low_ply_history low_ply_history;
-    continuation_history_full continuation_history_full;
+    low_ply_history low_ply;
+    continuation_history_full continuation;
 
     heuristics()
-        : main_history{}, capture_history{}, killers{}, counter{}, low_ply_history{},
-          continuation_history_full{}
+        : main_history{}, capture_history{}, killers{}, counter{}, low_ply{},
+          continuation{}
     {
     }
 
@@ -60,7 +60,7 @@ struct heuristics
     {
         if (ply < LOW_PLY)
         {
-            low_ply_history[position.sideToMove()][ply][move.from().index()][move.to().index()]
+            low_ply[position.sideToMove()][ply][move.from().index()][move.to().index()]
                 .add_bonus(bonus);
         }
 
@@ -114,7 +114,7 @@ struct heuristics
                 for (auto &c : b)
                     c.decay();
 
-        for (auto &a : continuation_history_full)
+        for (auto &a : continuation)
             for (auto &b : a)
                 for (auto &c : b)
                     for (auto &d : c)
