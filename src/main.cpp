@@ -61,7 +61,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.1.1", "1.1.7", false);
+    improvement_test("1.1.1", "1.2.0", true);
 
     return 0;
 }
@@ -184,7 +184,7 @@ int main()
     engine engine{nullptr, &nnue, &tt};
     search_param param;
     param.movetime = 100000;
-    engine.search(start, param, true, true);
+    engine.search(start, param, true);
 
     return 0;
 }

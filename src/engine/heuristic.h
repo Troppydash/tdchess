@@ -50,9 +50,17 @@ struct heuristics
     {
     }
 
-    bool is_quiet(const chess::Board &position, const chess::Move &move) const
+    bool is_capture(const chess::Board &position, const chess::Move &move) const
     {
-        return !position.isCapture(move);
+        return position.isCapture(move) || (move.typeOf() == chess::Move::PROMOTION && move.promotionType() == chess::PieceType::QUEEN);
+    }
+
+    chess::PieceType get_capture(const chess::Board &position, const chess::Move &move) const
+    {
+        if (move.typeOf() == chess::Move::ENPASSANT)
+            return chess::PieceType::PAWN;
+
+        return position.at(move.to()).type();
     }
 
     void update_main_history(const chess::Board &position, const chess::Move &move, int32_t ply,
@@ -92,15 +100,15 @@ struct heuristics
         }
     }
 
-    void incr_counter(const chess::Board &position, const chess::Move &prev_move,
-                      const chess::Move &move)
-    {
-        if (is_quiet(position, move) && prev_move != chess::Move::NO_MOVE &&
-            position.at(prev_move.to()) != chess::Piece::NONE)
-        {
-            counter[position.at(prev_move.to())][prev_move.to().index()] = move;
-        }
-    }
+    // void incr_counter(const chess::Board &position, const chess::Move &prev_move,
+    //                   const chess::Move &move)
+    // {
+    //     if (is_quiet(position, move) && prev_move != chess::Move::NO_MOVE &&
+    //         position.at(prev_move.to()) != chess::Piece::NONE)
+    //     {
+    //         counter[position.at(prev_move.to())][prev_move.to().index()] = move;
+    //     }
+    // }
 
     void begin()
     {
@@ -114,10 +122,10 @@ struct heuristics
                 for (auto &c : b)
                     c.decay();
 
-        for (auto &a : continuation)
-            for (auto &b : a)
-                for (auto &c : b)
-                    for (auto &d : c)
-                        d.decay();
+        // for (auto &a : continuation)
+        //     for (auto &b : a)
+        //         for (auto &c : b)
+        //             for (auto &d : c)
+        //                 d.decay();
     }
 };

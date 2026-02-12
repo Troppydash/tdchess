@@ -71,6 +71,7 @@ class uci_handler
     void loop()
     {
         std::ios::sync_with_stdio(false);
+        std::cout << std::unitbuf;  // auto-flush after each output
 
         std::string buffer{};
         while (true)
@@ -200,6 +201,7 @@ class uci_handler
             else if (lead == "isready")
             {
                 std::cout << "readyok\n";
+                std::cout << std::flush;
             }
             else if (lead == "go")
             {
@@ -329,7 +331,7 @@ class uci_handler
     {
         chess::Board position = m_position;
         start_task([&, position]() {
-            auto result = m_engine->search(position, m_param, true, true);
+            auto result = m_engine->search(position, m_param, true);
 
             // display results
             std::cout << "bestmove " << chess::uci::moveToUci(result.pv_line[0]);
@@ -338,6 +340,7 @@ class uci_handler
                 std::cout << " ponder " << chess::uci::moveToUci(result.pv_line[1]);
             }
             std::cout << std::endl;
+            std::cout << std::flush;
         });
     }
 
@@ -352,7 +355,7 @@ class uci_handler
         chess::Board position = m_position;
         start_task([&, param, position]() {
             search_param temp_param = param;
-            m_engine->search(position, temp_param, true, true);
+            m_engine->search(position, temp_param, true);
 
             std::cout << "info finalnps " << m_engine->m_stats.get_nps() << std::endl;
         });

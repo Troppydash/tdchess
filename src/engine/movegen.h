@@ -25,6 +25,8 @@ enum class movegen_stage
     DONE
 };
 
+constexpr int16_t IGNORE_SCORE = -32000;
+
 class movegen
 {
   private:
@@ -84,19 +86,21 @@ class movegen
                 chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(m_moves,
                                                                                  m_position);
 
+                // generate quiet queen promotions
+                chess::movegen::legal_promote_moves<chess::movegen::MoveGenType::QUIET>(m_moves,
+                                                                                 m_position);
+
                 // score, update bad captures
                 m_bad_capture_end = 0;
                 for (auto &move : m_moves)
                 {
                     if (move == m_pv_move)
                     {
-                        move.setScore(-31000);
+                        move.setScore(IGNORE_SCORE);
                         continue;
                     }
 
-                    auto captured = move.typeOf() == chess::Move::ENPASSANT
-                                        ? chess::PieceType::PAWN
-                                        : m_position.at(move.to()).type();
+                    auto captured = m_heuristics.get_capture(m_position, move);
                     int16_t mvv = see::PIECE_VALUES[captured];
 
                     // capture history
@@ -134,15 +138,6 @@ class movegen
                 chess::movegen::legalmoves_no_clear<chess::movegen::MoveGenType::QUIET>(m_moves,
                                                                                         m_position);
 
-                // chess::Move counter = chess::Move::NO_MOVE;
-                // if (m_prev_move != chess::Move::NO_MOVE &&
-                //     m_position.at(m_prev_move.to()) != chess::Piece::NONE)
-                // {
-                //     counter =
-                //         m_heuristics
-                //             .counter[m_position.at(m_prev_move.to())][m_prev_move.to().index()];
-                // }
-
                 // m_moves = [bad captures, bad_quiet, good_quiet]
                 m_bad_quiet_end = m_bad_capture_end;
                 for (int i = m_bad_capture_end; i < m_moves.size(); ++i)
@@ -150,7 +145,14 @@ class movegen
                     chess::Move &move = m_moves[i];
                     if (move == m_pv_move)
                     {
-                        move.setScore(-31000);
+                        move.setScore(IGNORE_SCORE);
+                        continue;
+                    }
+
+                    if (move.typeOf() == chess::Move::PROMOTION &&
+                        move.promotionType() == chess::PieceType::QUEEN)
+                    {
+                        move.setScore(IGNORE_SCORE);
                         continue;
                     }
 
@@ -182,8 +184,8 @@ class movegen
                     if (m_ply < LOW_PLY)
                     {
                         score += m_heuristics
-                                     .low_ply[m_position.sideToMove()][m_ply]
-                                                     [move.from().index()][move.to().index()]
+                                     .low_ply[m_position.sideToMove()][m_ply][move.from().index()]
+                                             [move.to().index()]
                                      .get_value() /
                                  2;
                     }
@@ -192,14 +194,14 @@ class movegen
                     if (m_continuation1 != nullptr)
                         score += (*m_continuation1)[m_position.at(move.from())][move.to().index()]
                                      .get_value() /
-                                 2;
+                                 4;
 
                     if (m_continuation2 != nullptr)
                         score += (*m_continuation2)[m_position.at(move.from())][move.to().index()]
                                      .get_value() /
-                                 6;
+                                 8;
 
-                    score = std::clamp(score, -32000, 32000);
+                    score = std::clamp(score, -31000, 31000);
 
                     move.setScore(score);
 
@@ -276,14 +278,11 @@ class movegen
 
     int pick_move(chess::Movelist &moves, int start, int end)
     {
-        for (int i = start; i < end; ++i)
-        {
-            sort_moves(moves, i, end);
-            if (moves[i] != m_pv_move)
-                return i;
-        }
+        sort_moves(moves, start, end);
+        if (moves[start].score() == IGNORE_SCORE)
+            return end;
 
-        return end;
+        return start;
     }
 
     void sort_moves(chess::Movelist &moves, int i, int end = -1)

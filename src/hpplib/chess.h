@@ -3979,9 +3979,6 @@ inline void movegen::generatePawnPromoteMoves(const Board &board, Movelist &move
         while (mt != MoveGenType::QUIET && promo_left) {
             const auto index = promo_left.pop();
             moves.add(Move::make<Move::PROMOTION>(index + DOWN_RIGHT, index, PieceType::QUEEN));
-            moves.add(Move::make<Move::PROMOTION>(index + DOWN_RIGHT, index, PieceType::ROOK));
-            moves.add(Move::make<Move::PROMOTION>(index + DOWN_RIGHT, index, PieceType::BISHOP));
-            moves.add(Move::make<Move::PROMOTION>(index + DOWN_RIGHT, index, PieceType::KNIGHT));
         }
 
         // Skip capturing promotions if we are only generating quiet moves.
@@ -3989,9 +3986,6 @@ inline void movegen::generatePawnPromoteMoves(const Board &board, Movelist &move
         while (mt != MoveGenType::QUIET && promo_right) {
             const auto index = promo_right.pop();
             moves.add(Move::make<Move::PROMOTION>(index + DOWN_LEFT, index, PieceType::QUEEN));
-            moves.add(Move::make<Move::PROMOTION>(index + DOWN_LEFT, index, PieceType::ROOK));
-            moves.add(Move::make<Move::PROMOTION>(index + DOWN_LEFT, index, PieceType::BISHOP));
-            moves.add(Move::make<Move::PROMOTION>(index + DOWN_LEFT, index, PieceType::KNIGHT));
         }
 
         // Skip quiet promotions if we are only generating captures.
@@ -3999,9 +3993,6 @@ inline void movegen::generatePawnPromoteMoves(const Board &board, Movelist &move
         while (mt != MoveGenType::CAPTURE && promo_push) {
             const auto index = promo_push.pop();
             moves.add(Move::make<Move::PROMOTION>(index + DOWN, index, PieceType::QUEEN));
-            moves.add(Move::make<Move::PROMOTION>(index + DOWN, index, PieceType::ROOK));
-            moves.add(Move::make<Move::PROMOTION>(index + DOWN, index, PieceType::BISHOP));
-            moves.add(Move::make<Move::PROMOTION>(index + DOWN, index, PieceType::KNIGHT));
         }
     }
 }
@@ -4248,8 +4239,6 @@ inline void movegen::legalmoves_no_clear(Movelist &movelist, const Board &board,
 
 template <movegen::MoveGenType mt>
 inline void movegen::legal_promote_moves(Movelist &movelist, const Board &board) {
-    movelist.clear();
-
     if (board.sideToMove() == Color::WHITE)
         legal_promote_moves<Color::WHITE, mt>(movelist, board);
     else

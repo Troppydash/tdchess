@@ -330,8 +330,7 @@ struct engine
             assert(m_position.at(move.from()) < 12);
             assert(move.to().index() < 64);
             ss->continuation =
-                &m_heuristics
-                     .continuation[m_position.at(move.from())][move.to().index()];
+                &m_heuristics.continuation[m_position.at(move.from())][move.to().index()];
 
             if (m_nnue != nullptr)
                 m_nnue->make_move(m_position, move);
@@ -357,6 +356,7 @@ struct engine
     template <bool is_pv_node> int16_t qsearch(int16_t alpha, int16_t beta, search_stack *ss)
     {
         const int32_t ply = ss->ply;
+        m_line.ply_init(ply);
         m_stats.sel_depth = std::max(m_stats.sel_depth, ply + 1);
         m_stats.nodes_searched += 1;
         if ((m_stats.nodes_searched & 4095) == 0)
@@ -392,7 +392,7 @@ struct engine
             tt_result.hit && is_kinda_legal(tt_result.move) ? tt_result.move : chess::Move::NO_MOVE;
         if (!is_pv_node && tt_result.can_use)
         {
-            if (m_position.halfMoveClock() < 80)
+            if (m_position.halfMoveClock() < 96)
                 return tt_result.score;
         }
 
@@ -482,9 +482,7 @@ struct engine
                     if (move_count > 2)
                         continue;
 
-                    auto captured = move.typeOf() == chess::Move::ENPASSANT
-                                        ? chess::PieceType::PAWN
-                                        : m_position.at(move.to()).type();
+                    auto captured = m_heuristics.get_capture(m_position, move);
                     int16_t futility_value = futility_base + see::PIECE_VALUES[captured];
                     if (futility_value <= alpha)
                     {
@@ -514,14 +512,18 @@ struct engine
             if (score > best_score)
             {
                 best_score = score;
-                best_move = move;
 
                 if (score > alpha)
                 {
-                    alpha = score;
+                    best_move = move;
+
+                    if (is_pv_node)
+                        m_line.update(ply, move);
 
                     if (score >= beta)
                         break;
+
+                    alpha = score;
                 }
             }
         }
@@ -681,10 +683,11 @@ struct engine
 
         // [tt early return]
         if (!is_pv_node && tt_result.can_use &&
-            (cut_node == (tt_result.score >= beta) || depth > 5) && !has_excluded)
+            // (cut_node == (tt_result.score >= beta) || depth > 5) &&
+            !has_excluded)
         {
             // ignore tt for close to half move
-            if (m_position.halfMoveClock() < 80)
+            if (m_position.halfMoveClock() < 96)
                 return tt_result.score;
         }
 
@@ -860,6 +863,9 @@ struct engine
                                                 ss + 1, !cut_node);
                     }
 
+                    if (m_timer.is_stopped())
+                        return 0;
+
                     unmake_move(move);
 
                     // check if can cut at lower depth
@@ -911,13 +917,8 @@ struct engine
         // }
 
         movegen gen{
-            m_position,
-            m_heuristics,
-            tt_result.move,
-            prev_move,
-            ply,
-            (ss - 1)->continuation,
-            (ss - 2)->continuation,
+            m_position, m_heuristics,           tt_result.move,         prev_move,
+            ply,        (ss - 1)->continuation, (ss - 2)->continuation,
         };
 
         chess::Move best_move = chess::Move::NO_MOVE;
@@ -953,9 +954,7 @@ struct engine
 
                 if (is_capture || is_check)
                 {
-                    auto captured = move.typeOf() == chess::Move::ENPASSANT
-                                        ? chess::PieceType::PAWN
-                                        : m_position.at(move.to()).type();
+                    auto captured = m_heuristics.get_capture(m_position, move);
 
                     // [fut prune for captures]
                     if (!is_check && lmr_depth < 7 && param::IS_VALID(ss->static_eval))
@@ -1024,6 +1023,9 @@ struct engine
                     negamax<NonPV>(to_beat - 1, to_beat, reduced_depth, ss, cut_node);
                 ss->excluded_move = chess::Move::NO_MOVE;
 
+                if (m_timer.is_stopped())
+                    return 0;
+
                 if (next_best_score < to_beat)
                     extension = 1;
                 else if (next_best_score >= beta)
@@ -1037,7 +1039,7 @@ struct engine
 
             new_depth += extension;
 
-            is_quiet = m_heuristics.is_quiet(m_position, move);
+            is_quiet = !m_heuristics.is_capture(m_position, move);
             if (is_quiet)
             {
                 history_score = m_heuristics
@@ -1045,13 +1047,11 @@ struct engine
                                                  [move.to().index()]
                                     .get_value();
             }
-            else if (m_position.isCapture(move))
+            else
             {
                 capture_score = m_heuristics
                                     .capture_history[m_position.at(move.from())][move.to().index()]
-                                                    [move == chess::Move::ENPASSANT
-                                                         ? chess::PieceType::PAWN
-                                                         : m_position.at(move.to()).type()]
+                                                    [m_heuristics.get_capture(m_position, move)]
                                     .get_value();
             }
 
@@ -1077,13 +1077,14 @@ struct engine
 
                 // reduce/extend based on the history
                 if (is_quiet)
-                    reduction -= history_score / 11000;
-                else if (m_position.isCapture(move))
-                    reduction -= capture_score / 12000;
+                    reduction -= history_score / 10000;
+                else
+                    reduction -= capture_score / 10000;
 
-                // extend if promotion
-                if (move.typeOf() == chess::Move::PROMOTION)
-                    reduction -= 1;
+                // reduce if promotion not queen
+                if (move.typeOf() == chess::Move::PROMOTION &&
+                    move.promotionType() != chess::PieceType::QUEEN)
+                    reduction += 1;
 
                 int32_t reduced_depth = std::clamp(new_depth - reduction, 0, depth);
                 score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
@@ -1120,7 +1121,7 @@ struct engine
                         // [main history update]
                         const int16_t main_history_bonus = 64 * depth;
                         const int16_t main_history_malus = main_history_bonus;
-                        if (m_heuristics.is_quiet(m_position, move))
+                        if (!m_heuristics.is_capture(m_position, move))
                         {
                             // don't store if early cutoff at low depth
                             if (depth > 3 || quiet_count > 0)
@@ -1149,7 +1150,7 @@ struct engine
                                     -main_history_malus);
                             }
                         }
-                        else if (m_position.isCapture(move))
+                        else
                         {
                             // don't store if early cutoff at low depth
                             if (depth > 3 || capture_count > 0)
@@ -1172,12 +1173,12 @@ struct engine
             }
 
             // malus save
-            if (m_heuristics.is_quiet(m_position, move))
+            if (!m_heuristics.is_capture(m_position, move))
             {
                 if (quiet_count < param::QUIET_MOVES)
                     quiet_moves[quiet_count++] = move;
             }
-            else if (m_position.isCapture(move))
+            else
             {
                 if (capture_count < param::QUIET_MOVES)
                     capture_moves[capture_count++] = move;
@@ -1274,8 +1275,7 @@ struct engine
         std::cout.imbue(original);
     }
 
-    search_result search(const chess::Board &reference, search_param &param, bool verbose = false,
-                         bool uci = false)
+    search_result search(const chess::Board &reference, search_param &param, bool verbose = false)
     {
         // timer info first
         const auto control = param.time_control(reference.fullMoveNumber(), reference.sideToMove());
@@ -1290,7 +1290,6 @@ struct engine
         int16_t alpha = -param::VALUE_INF, beta = param::VALUE_INF;
         int32_t depth = 1;
 
-        engine_stats last_stats = m_stats;
         search_result result{};
 
         if (m_endgame != nullptr && m_endgame->is_stored(m_position))
@@ -1298,15 +1297,12 @@ struct engine
             // root search
             auto probe = m_endgame->probe_dtm(m_position, m_timer);
             result.pv_line = probe.first;
-            result.depth = 1;
+            result.depth = result.pv_line.size();
             result.score = probe.second;
 
             if (verbose)
             {
-                if (uci)
-                {
-                    m_stats.display_uci(result);
-                }
+                m_stats.display_uci(result);
             }
 
             return result;
@@ -1348,14 +1344,18 @@ struct engine
             {
                 m_stats.total_time = timer::now() - reference_time;
                 m_stats.tt_occupancy = m_table->occupied();
-                if (uci)
-                    m_stats.display_uci(result);
-                else
-                    m_stats.display_delta(last_stats, result);
-                last_stats = m_stats;
+                m_stats.display_uci(result);
             }
 
             depth += 1;
+        }
+
+        // final log
+        if (verbose)
+        {
+            m_stats.total_time = timer::now() - reference_time;
+            m_stats.tt_occupancy = m_table->occupied();
+            m_stats.display_uci(result);
         }
 
         return result;
