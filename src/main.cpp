@@ -180,7 +180,7 @@ int main()
 
     // endgame_table etable{};
     // etable.load_file("../syzygy");
-    table tt{1024};
+    table tt{512};
     engine engine{nullptr, &nnue, &tt};
     search_param param;
     param.movetime = 100000;

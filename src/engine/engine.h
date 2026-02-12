@@ -1086,7 +1086,7 @@ struct engine
                     move.promotionType() != chess::PieceType::QUEEN)
                     reduction += 1;
 
-                int32_t reduced_depth = std::clamp(new_depth - reduction, 0, depth);
+                int32_t reduced_depth = std::clamp(new_depth - reduction, 0, depth + 1);
                 score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
                 if (score > alpha && reduced_depth < new_depth)
                 {
@@ -1173,15 +1173,16 @@ struct engine
             }
 
             // malus save
-            if (!m_heuristics.is_capture(m_position, move))
+            if (move_count < param::QUIET_MOVES)
             {
-                if (quiet_count < param::QUIET_MOVES)
+                if (!m_heuristics.is_capture(m_position, move))
+                {
                     quiet_moves[quiet_count++] = move;
-            }
-            else
-            {
-                if (capture_count < param::QUIET_MOVES)
+                }
+                else
+                {
                     capture_moves[capture_count++] = move;
+                }
             }
         }
 
