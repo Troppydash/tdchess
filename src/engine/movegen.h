@@ -125,7 +125,7 @@ class movegen
             case movegen_stage::GOOD_CAPTURE: {
                 // see check, incr bad_capture_end
                 m_move_index = pick_move(m_moves, m_move_index, m_moves.size(), [&](auto &move) {
-                    if (!see::test_ge(m_position, move, -move.score() / 40))
+                    if (!see::test_ge(m_position, move, -move.score() / 25))
                     {
                         std::swap(m_moves[m_bad_capture_end], move);
                         m_bad_capture_end++;
@@ -149,6 +149,7 @@ class movegen
                                                                                         m_position);
 
                 // m_moves = [bad captures, quiets]
+                m_bad_quiet_end = m_bad_capture_end;
                 for (int i = m_bad_capture_end; i < m_moves.size(); ++i)
                 {
                     chess::Move &move = m_moves[i];
@@ -167,13 +168,13 @@ class movegen
 
                     // killer move
                     bool found = false;
-                    for (int i = 0; i < param::NUMBER_KILLERS; ++i)
+                    for (int j = 0; j < param::NUMBER_KILLERS; ++j)
                     {
-                        const auto &entry = m_heuristics.killers[m_ply][i];
+                        const auto &entry = m_heuristics.killers[m_ply][j];
                         if (move == entry.first)
                         {
                             // mate killers first
-                            move.setScore(30000 + 100 * entry.second - i);
+                            move.setScore(32000 + 100 * entry.second - j);
                             found = true;
                             break;
                         }
@@ -213,24 +214,22 @@ class movegen
                     score = std::clamp(score, -31000, 31000);
 
                     move.setScore(score);
+
+                    if (score < -500)
+                    {
+                        std::swap(m_moves[m_bad_quiet_end], m_moves[i]);
+                        m_bad_quiet_end++;
+                    }
                 }
 
-                m_bad_quiet_end = m_bad_capture_end;
-                m_move_index = m_bad_capture_end;
+                m_move_index = m_bad_quiet_end;
                 m_stage++;
                 break;
             }
                 // iterating through quiet moves, sorting into bad quiets
             case movegen_stage::GOOD_QUIET: {
-                m_move_index = pick_move(m_moves, m_move_index, m_moves.size(), [&](auto &move) {
-                    if (move.score() < BAD_QUIET_THRESHOLD)
-                    {
-                        std::swap(m_moves[m_bad_quiet_end], move);
-                        m_bad_quiet_end++;
-                        return false;
-                    }
-                    return true;
-                });
+                m_move_index =
+                    pick_move(m_moves, m_move_index, m_moves.size(), [](auto &_m) { return true; });
                 if (m_move_index < m_moves.size())
                     return m_moves[m_move_index++];
 
@@ -261,10 +260,21 @@ class movegen
             }
 
                 // explore all good captures
-            case movegen_stage::QGOOD_CAPTURE:
-            case movegen_stage::PROB_GOOD_CAPTURE: {
+            case movegen_stage::QGOOD_CAPTURE: {
                 m_move_index =
                     pick_move(m_moves, m_move_index, m_moves.size(), [](auto &_m) { return true; });
+                if (m_move_index < m_moves.size())
+                    return m_moves[m_move_index++];
+
+                m_stage = static_cast<int>(movegen_stage::DONE);
+                break;
+            }
+
+                // explore only see captures
+            case movegen_stage::PROB_GOOD_CAPTURE: {
+                m_move_index = pick_move(m_moves, m_move_index, m_moves.size(), [&](auto &move) {
+                    return see::test_ge(m_position, move, -move.score() / 60);
+                });
                 if (m_move_index < m_moves.size())
                     return m_moves[m_move_index++];
 
@@ -278,8 +288,8 @@ class movegen
         }
     }
 
-    int pick_move(chess::Movelist &moves, const int start, const int end,
-                  const std::function<bool(chess::Move &move)> &filter)
+    template <typename Pred>
+    int pick_move(chess::Movelist &moves, const int start, const int end, Pred filter)
     {
         for (int i = start; i < end; ++i)
         {
