@@ -46,6 +46,8 @@ class movegen
     const continuation_history *m_continuation1 = nullptr;
     const continuation_history *m_continuation2 = nullptr;
 
+    bool m_skip_quiet = false;
+
   public:
     explicit movegen(chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
                      chess::Move prev_move, int32_t ply, movegen_stage stage = movegen_stage::PV)
@@ -62,6 +64,11 @@ class movegen
           m_pv_move(pv_move), m_prev_move(prev_move), m_ply(ply), m_continuation1(continuation1),
           m_continuation2(continuation2)
     {
+    }
+
+    void skip_quiet()
+    {
+        m_skip_quiet = true;
     }
 
     chess::Move next_move()
@@ -228,6 +235,13 @@ class movegen
             }
                 // iterating through quiet moves, sorting into bad quiets
             case movegen_stage::GOOD_QUIET: {
+                if (m_skip_quiet)
+                {
+                    m_move_index = 0;
+                    m_stage++;
+                    break;
+                }
+
                 m_move_index =
                     pick_move(m_moves, m_move_index, m_moves.size(), [](auto &_m) { return true; });
                 if (m_move_index < m_moves.size())
@@ -250,6 +264,12 @@ class movegen
             }
                 // iterating through bad quiet moves
             case movegen_stage::BAD_QUIET: {
+                if (m_skip_quiet)
+                {
+                    m_stage = static_cast<int>(movegen_stage::DONE);
+                    break;
+                }
+
                 m_move_index = pick_move(m_moves, m_move_index, m_bad_quiet_end,
                                          [](auto &_m) { return true; });
                 if (m_move_index < m_bad_quiet_end)

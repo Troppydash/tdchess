@@ -357,7 +357,9 @@ struct engine
     {
         const int32_t ply = ss->ply;
         m_line.ply_init(ply);
-        m_stats.sel_depth = std::max(m_stats.sel_depth, ply + 1);
+        if (is_pv_node)
+            m_stats.sel_depth = std::max(m_stats.sel_depth, ply + 1);
+
         m_stats.nodes_searched += 1;
         if ((m_stats.nodes_searched & 4095) == 0)
             m_timer.check();
@@ -683,8 +685,7 @@ struct engine
 
         // [tt early return]
         if (!is_pv_node && tt_result.can_use &&
-            // (cut_node == (tt_result.score >= beta) || depth > 5) &&
-            !has_excluded)
+            (cut_node == (tt_result.score >= beta) || depth > 5) && !has_excluded)
         {
             // ignore tt for close to half move
             if (m_position.halfMoveClock() < 96)
@@ -810,7 +811,8 @@ struct engine
         {
             const bool has_non_pawns = m_position.hasNonPawnMaterial(m_position.sideToMove());
             if (cut_node && (ss - 1)->move != chess::Move::NO_MOVE && has_non_pawns &&
-                adjusted_static_eval >= beta && !param::IS_LOSS(beta) && !has_excluded)
+                param::IS_VALID(adjusted_static_eval) && adjusted_static_eval >= beta &&
+                !param::IS_LOSS(beta) && !has_excluded)
             {
                 int32_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
 
@@ -948,8 +950,12 @@ struct engine
             move_count += 1;
 
             // [low depth pruning]
-            if (move_count > 0 && has_non_pawn && !param::IS_LOSS(best_score))
+            if (!is_root && has_non_pawn && !param::IS_LOSS(best_score))
             {
+                // [late move pruning], higher threshold if improving
+                if (move_count >= (3 + depth * depth) / (2 - improving))
+                    gen.skip_quiet();
+
                 int32_t lmr_depth = depth;
                 bool is_check = m_position.givesCheck(move) != chess::CheckType::NO_CHECK;
 
@@ -1212,8 +1218,9 @@ struct engine
                          best_score >= beta                                ? param::BETA_FLAG
                          : is_pv_node && best_move != chess::Move::NO_MOVE ? param::EXACT_FLAG
                                                                            : param::ALPHA_FLAG,
-                         best_score, ply, depth, best_move, unadjusted_static_eval, ss->tt_pv,
-                         m_table->m_generation);
+                         best_score, ply,
+                         move_count != -1 ? depth : std::min(param::MAX_DEPTH - 1, depth + 5),
+                         best_move, unadjusted_static_eval, ss->tt_pv, m_table->m_generation);
         }
 
         return best_score;

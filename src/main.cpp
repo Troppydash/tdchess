@@ -164,7 +164,9 @@ int main()
     // should be e3e2
 
     // chess::Board start{"1r6/6k1/ppQ1nrp1/4p3/P1Pp1bP1/1N1B4/1P6/1K6 b - - 1 34"};
-    chess::Board start{"2r2rk1/pp2bppp/1q6/5b2/2N1R3/P2Q4/1P1N1PPP/R1B3K1 b - - 0 23"};
+    chess::Board start{"5rk1/pr3pp1/1bq4p/2pN4/PPQR4/8/6PP/5RK1 b - - 0 31"};
+    // chess::Board start{"8/6pk/Pp4qp/1Pp1Rp2/7P/3Q2P1/r7/5K2 b - - 8 58"};
+    // chess::Board start{"8/6pk/Pp4qp/1Pp1Rp2/7P/3Q2P1/1r6/5K2 w - - 9 59"};
     // chess::Board start{"7r/8/pQ2nrpk/4p3/P1Pp1bP1/1N1B4/1P6/1K6 b - - 0 36"};
 
 
