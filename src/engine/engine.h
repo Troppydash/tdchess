@@ -237,7 +237,7 @@ struct engine
     // tt
     table *m_table;
     // move ordering
-    heuristics m_heuristics;
+    std::unique_ptr<heuristics> m_heuristics = std::make_unique<heuristics>();
     // pv-line
     pv_line m_line;
     // search stack
@@ -281,7 +281,7 @@ struct engine
         }
 
         // reset move ordering variables
-        m_heuristics.begin();
+        m_heuristics->begin();
 
         // reset pvline
         m_line.reset();
@@ -330,7 +330,7 @@ struct engine
             assert(m_position.at(move.from()) < 12);
             assert(move.to().index() < 64);
             ss->continuation =
-                &m_heuristics.continuation[m_position.at(move.from())][move.to().index()];
+                &(m_heuristics->continuation)[m_position.at(move.from())][move.to().index()];
 
             if (m_nnue != nullptr)
                 m_nnue->make_move(m_position, move);
@@ -461,7 +461,7 @@ struct engine
         int16_t score;
         chess::Move best_move = chess::Move::NO_MOVE;
         movegen gen{m_position,
-                    m_heuristics,
+                    (*m_heuristics),
                     tt_result.move,
                     prev_move,
                     ply,
@@ -484,7 +484,7 @@ struct engine
                     if (move_count > 2)
                         continue;
 
-                    auto captured = m_heuristics.get_capture(m_position, move);
+                    auto captured = m_heuristics->get_capture(m_position, move);
                     int16_t futility_value = futility_base + see::PIECE_VALUES[captured];
                     if (futility_value <= alpha)
                     {
@@ -847,8 +847,8 @@ struct engine
                 !(tt_result.hit && param::IS_VALID(tt_result.score) &&
                   tt_result.score < probcut_beta))
             {
-                movegen gen{m_position, m_heuristics, tt_result.move,
-                            prev_move,  ply,          movegen_stage::PROBPV};
+                movegen gen{m_position, *m_heuristics, tt_result.move,
+                            prev_move,  ply,           movegen_stage::PROBPV};
                 chess::Move move;
 
                 int32_t probcut_depth = std::clamp(depth - 3, 0, depth);
@@ -922,7 +922,7 @@ struct engine
         // }
 
         movegen gen{
-            m_position, m_heuristics,           tt_result.move,         prev_move,
+            m_position, *m_heuristics,          tt_result.move,         prev_move,
             ply,        (ss - 1)->continuation, (ss - 2)->continuation,
         };
 
@@ -963,7 +963,7 @@ struct engine
 
                 if (is_capture || is_check)
                 {
-                    auto captured = m_heuristics.get_capture(m_position, move);
+                    auto captured = m_heuristics->get_capture(m_position, move);
 
                     // [fut prune for captures]
                     if (!is_check && lmr_depth < 7 && param::IS_VALID(ss->static_eval))
@@ -1048,20 +1048,19 @@ struct engine
 
             new_depth += extension;
 
-            is_quiet = !m_heuristics.is_capture(m_position, move);
+            is_quiet = !m_heuristics->is_capture(m_position, move);
             if (is_quiet)
             {
-                history_score = m_heuristics
-                                    .main_history[m_position.sideToMove()][move.from().index()]
-                                                 [move.to().index()]
-                                    .get_value();
+                history_score = (m_heuristics->main_history)[m_position.sideToMove()]
+                                                            [move.from().index()][move.to().index()]
+                                                                .get_value();
             }
             else
             {
-                capture_score = m_heuristics
-                                    .capture_history[m_position.at(move.from())][move.to().index()]
-                                                    [m_heuristics.get_capture(m_position, move)]
-                                    .get_value();
+                capture_score =
+                    (m_heuristics->capture_history)[m_position.at(move.from())][move.to().index()]
+                                                   [m_heuristics->get_capture(m_position, move)]
+                                                       .get_value();
             }
 
             make_move(move, ss);
@@ -1138,22 +1137,22 @@ struct engine
                         // [main history update]
                         const int16_t main_history_bonus = 64 * depth;
                         const int16_t main_history_malus = main_history_bonus;
-                        if (!m_heuristics.is_capture(m_position, move))
+                        if (!m_heuristics->is_capture(m_position, move))
                         {
                             // don't store if early cutoff at low depth
                             if (depth > 3 || quiet_count > 0)
-                                m_heuristics.update_main_history(m_position, move, ply,
+                                m_heuristics->update_main_history(m_position, move, ply,
                                                                  main_history_bonus);
 
                             // malus apply
                             for (int j = 0; j < quiet_count; ++j)
                             {
-                                m_heuristics.update_main_history(m_position, quiet_moves[j], ply,
+                                m_heuristics->update_main_history(m_position, quiet_moves[j], ply,
                                                                  -main_history_malus);
                             }
 
                             // [killer moves update]
-                            m_heuristics.store_killer(move, ply, param::IS_WIN(score));
+                            m_heuristics->store_killer(move, ply, param::IS_WIN(score));
 
                             // [continuation history]
                             update_continuation_history(ss, m_position.at(move.from()), move.to(),
@@ -1171,13 +1170,13 @@ struct engine
                         {
                             // don't store if early cutoff at low depth
                             if (depth > 3 || capture_count > 0)
-                                m_heuristics.update_capture_history(m_position, move,
+                                m_heuristics->update_capture_history(m_position, move,
                                                                     main_history_bonus);
 
                             // malus apply
                             for (int j = 0; j < capture_count; ++j)
                             {
-                                m_heuristics.update_capture_history(m_position, capture_moves[j],
+                                m_heuristics->update_capture_history(m_position, capture_moves[j],
                                                                     -main_history_malus);
                             }
                         }
@@ -1192,7 +1191,7 @@ struct engine
             // malus save
             if (move_count < param::QUIET_MOVES)
             {
-                if (!m_heuristics.is_capture(m_position, move))
+                if (!m_heuristics->is_capture(m_position, move))
                 {
                     quiet_moves[quiet_count++] = move;
                 }

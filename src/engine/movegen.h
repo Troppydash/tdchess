@@ -115,7 +115,7 @@ class movegen
                     }
 
                     auto captured = m_heuristics.get_capture(m_position, move);
-                    int16_t mvv = see::PIECE_VALUES[captured];
+                    int16_t mvv = see::PIECE_VALUES[captured] * 7;
 
                     // capture history
                     int16_t capture_score = m_heuristics
@@ -221,7 +221,7 @@ class movegen
                         if (move == entry.first)
                         {
                             // mate killers first
-                            move.setScore(32000 + 100 * entry.second - j);
+                            move.setScore(32100 + entry.second - j * 100);
                             found = true;
                             break;
                         }
@@ -232,37 +232,43 @@ class movegen
                     // normal
                     int32_t score = 0;
                     score += m_heuristics
-                                 .main_history[m_position.sideToMove()][move.from().index()]
-                                              [move.to().index()]
-                                 .get_value() /
-                             2;
+                                     .main_history[m_position.sideToMove()][move.from().index()]
+                                                  [move.to().index()]
+                                     .get_value();
 
                     // low ply
                     if (m_ply < LOW_PLY)
                     {
-                        score += m_heuristics
+                        score += 8 *
+                                 m_heuristics
                                      .low_ply[m_position.sideToMove()][m_ply][move.from().index()]
                                              [move.to().index()]
                                      .get_value() /
-                                 2;
+                                 (1 + m_ply);
                     }
+
+                    // pawn history
+                    score += m_heuristics
+                                     .pawn[m_position.pieces(chess::PieceType::PAWN).getBits() %
+                                           PAWN_STRUCTURE_SIZE][m_position.at(move.from())]
+                                          [move.to().index()]
+                                     .get_value();
 
                     // continuation
                     if (m_continuation1 != nullptr)
                         score += (*m_continuation1)[m_position.at(move.from())][move.to().index()]
-                                     .get_value() /
-                                 4;
+                                     .get_value() / 2;
 
                     if (m_continuation2 != nullptr)
                         score += (*m_continuation2)[m_position.at(move.from())][move.to().index()]
-                                     .get_value() /
-                                 8;
+                                     .get_value() / 4;
 
+                    score = score / 8;
                     score = std::clamp(score, -31000, 31000);
 
                     move.setScore(score);
 
-                    if (score < -500)
+                    if (score < -1000)
                     {
                         std::swap(m_moves[m_bad_quiet_end], m_moves[i]);
                         m_bad_quiet_end++;

@@ -27,15 +27,16 @@ using killer_heuristic =
     std::array<std::pair<chess::Move, bool>, param::NUMBER_KILLERS>[param::MAX_DEPTH];
 using counter_moves = chess::Move[12][64];
 
-constexpr int LOW_PLY = 8;
-using low_ply_history = history_entry<int16_t, 10000>[2][LOW_PLY][64][64];
+constexpr int LOW_PLY = 5;
+using low_ply_history = history_entry<int16_t, 20000>[2][LOW_PLY][64][64];
 
 // indexed by [piece][to]
-using continuation_history = history_entry<int16_t, 10000>[12][64];
-using continuation_history_full = history_entry<int16_t, 10000>[12][64][12][64];
+using continuation_history = history_entry<int16_t, 20000>[12][64];
+using continuation_history_full = history_entry<int16_t, 20000>[12][64][12][64];
 constexpr int NUM_CONTINUATION = 2;
 
-// TODO: pawn history
+constexpr int PAWN_STRUCTURE_SIZE = 1 << 13;
+using pawn_history = history_entry<int16_t, 20000>[PAWN_STRUCTURE_SIZE][12][64];
 
 struct heuristics
 {
@@ -45,16 +46,17 @@ struct heuristics
     counter_moves counter;
     low_ply_history low_ply;
     continuation_history_full continuation;
+    pawn_history pawn;
 
     heuristics()
-        : main_history{}, capture_history{}, killers{}, counter{}, low_ply{},
-          continuation{}
+        : main_history{}, capture_history{}, killers{}, counter{}, low_ply{}, continuation{}, pawn{}
     {
     }
 
     bool is_capture(const chess::Board &position, const chess::Move &move) const
     {
-        return position.isCapture(move) || (move.typeOf() == chess::Move::PROMOTION && move.promotionType() == chess::PieceType::QUEEN);
+        return position.isCapture(move) || (move.typeOf() == chess::Move::PROMOTION &&
+                                            move.promotionType() == chess::PieceType::QUEEN);
     }
 
     chess::PieceType get_capture(const chess::Board &position, const chess::Move &move) const
@@ -68,23 +70,28 @@ struct heuristics
     void update_main_history(const chess::Board &position, const chess::Move &move, int32_t ply,
                              int16_t bonus)
     {
+        // update lowply
         if (ply < LOW_PLY)
         {
-            low_ply[position.sideToMove()][ply][move.from().index()][move.to().index()]
-                .add_bonus(bonus);
+            low_ply[position.sideToMove()][ply][move.from().index()][move.to().index()].add_bonus(
+                bonus);
         }
 
+        // update main
         main_history[position.sideToMove()][move.from().index()][move.to().index()].add_bonus(
             bonus);
+
+        // update pawn history
+        pawn[position.pieces(chess::PieceType::PAWN).getBits() % PAWN_STRUCTURE_SIZE]
+            [position.at(move.from())][move.to().index()]
+                .add_bonus(bonus);
     }
 
     void update_capture_history(const chess::Board &position, const chess::Move &move,
                                 int16_t bonus)
     {
-        capture_history[position.at(move.from())][move.to().index()]
-                       [move == chess::Move::ENPASSANT ? chess::PieceType::PAWN
-                                                       : position.at(move.to()).type()]
-                           .add_bonus(bonus);
+        capture_history[position.at(move.from())][move.to().index()][get_capture(position, move)]
+            .add_bonus(bonus);
     }
 
     void store_killer(const chess::Move &killer, int32_t ply, bool is_mate)
