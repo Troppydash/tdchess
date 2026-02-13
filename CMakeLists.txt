@@ -39,22 +39,22 @@ target_compile_options(tdchess_uci PRIVATE
 
 add_executable(tdchess_test src/main.cpp)
 target_link_libraries(tdchess_test PRIVATE fathom)
-#target_link_options(tdchess_test PRIVATE
-#        -fsanitize=undefined
-#)
+target_link_options(tdchess_test PRIVATE
+        -fsanitize=undefined
+)
 target_compile_options(tdchess_test PRIVATE
-        "-Ofast"
-        "-march=native"
-        "-Wall"
-        "-march=native"
-        "-mtune=native"
-        "-funroll-loops"
-        "-fno-trapping-math"
-        "-fomit-frame-pointer"
-        "-Wall"
-        "-Wextra"
-#        -fsanitize=undefined
-#        -g
+#        "-Ofast"
+#        "-march=native"
+#        "-Wall"
+#        "-march=native"
+#        "-mtune=native"
+#        "-funroll-loops"
+#        "-fno-trapping-math"
+#        "-fomit-frame-pointer"
+#        "-Wall"
+#        "-Wextra"
+        -fsanitize=undefined
+        -g
 #        "-ftrapv"
 )
 

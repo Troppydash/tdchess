@@ -734,10 +734,11 @@ struct engine
         // [check syzygy endgame table]
         int16_t best_score = -param::VALUE_INF;
         int16_t max_score = param::VALUE_INF;
-        if (m_endgame != nullptr && !has_excluded && !is_root && m_endgame->is_stored(m_position))
+        if (m_endgame != nullptr && !has_excluded && !is_root && m_endgame->is_stored(m_position) &&
+            m_position.halfMoveClock() == 0)
         {
             int16_t wdl = m_endgame->probe_wdl(m_position);
-            int16_t draw_score = 0;
+            int16_t draw_score = 1;
 
             int16_t tb_score = param::VALUE_SYZYGY - ply;
 

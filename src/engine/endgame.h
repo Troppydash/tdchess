@@ -12,7 +12,7 @@ struct tb_cache_entry
 };
 
 constexpr int TB_MASK_BITS = 16;
-constexpr uint64_t TB_ENTRIES = 1 << TB_MASK_BITS;  // 1mb
+constexpr uint64_t TB_ENTRIES = 1 << TB_MASK_BITS; // 1mb
 constexpr uint64_t TB_MASK = TB_ENTRIES - 1;
 
 struct endgame_table
@@ -173,7 +173,6 @@ struct endgame_table
 
     int16_t probe_wdl(const chess::Board &position)
     {
-        // TODO: note that zob hash doesn't care about 50 move rule
         tb_cache_entry &cache = m_entries[position.hash() & TB_MASK];
         if (cache.hash == position.hash())
             return cache.score;
