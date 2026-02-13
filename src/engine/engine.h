@@ -1084,6 +1084,7 @@ struct engine
                 // extend if pv
                 reduction -= ss->tt_pv + is_pv_node;
 
+                // reduce if tt capture
                 reduction += is_tt_capture;
 
                 // reduce/extend based on the history
@@ -1101,7 +1102,12 @@ struct engine
                 score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
                 if (score > alpha && reduced_depth < new_depth)
                 {
-                    score = -negamax<false>(-(alpha + 1), -alpha, new_depth, ss + 1, !cut_node);
+                    // depth extend if score is good, reduce if score is bad
+                    new_depth += (score > best_score + 55 + new_depth * 2);
+                    new_depth -= (score < best_score + 10);
+
+                    if (reduced_depth < new_depth)
+                        score = -negamax<false>(-(alpha + 1), -alpha, new_depth, ss + 1, !cut_node);
                 }
             }
             else if (!is_pv_node || move_count > 0)
