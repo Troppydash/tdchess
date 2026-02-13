@@ -212,6 +212,30 @@ struct alignas(64) bucket
             }
         }
 
+        // int best_slot = -1;
+        // int32_t worst_score = std::numeric_limits<int32_t>::max();
+        // uint32_t key = hash >> 32;
+        // for (int i = 0; i < NUM_BUCKETS; ++i)
+        // {
+        //     const auto &entry = m_entries[i];
+        //     if (key == entry.m_hash && entry.m_depth > param::UNINIT_DEPTH)
+        //     {
+        //         best_slot = i;
+        //         break;
+        //     }
+        //
+        //     uint8_t entry_age = GET_AGE(entry.m_mask);
+        //     uint8_t age_diff = (age - entry_age) & AGE_MASK;
+        //     int32_t replacement_score = entry.m_depth - age_diff * 8;
+        //
+        //     if (replacement_score < worst_score)
+        //     {
+        //         worst_score = replacement_score;
+        //         best_slot = i;
+        //     }
+        // }
+
+
         bucket_hit = false;
         return m_entries[0];
     }
@@ -233,7 +257,7 @@ struct alignas(64) bucket
 
             uint8_t entry_age = GET_AGE(entry.m_mask);
             uint8_t age_diff = (age - entry_age) & AGE_MASK;
-            int32_t replacement_score = entry.m_depth - age_diff * 4;
+            int32_t replacement_score = entry.m_depth - age_diff;
 
             if (replacement_score < worst_score)
             {

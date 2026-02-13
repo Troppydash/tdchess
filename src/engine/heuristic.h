@@ -17,7 +17,7 @@ template <typename I, I LIMIT> struct history_entry
 
     void decay()
     {
-        value /= 2;
+        value /= 8;
     }
 };
 
@@ -34,6 +34,8 @@ using low_ply_history = history_entry<int16_t, 10000>[2][LOW_PLY][64][64];
 using continuation_history = history_entry<int16_t, 10000>[12][64];
 using continuation_history_full = history_entry<int16_t, 10000>[12][64][12][64];
 constexpr int NUM_CONTINUATION = 2;
+
+// TODO: pawn history
 
 struct heuristics
 {
@@ -112,20 +114,28 @@ struct heuristics
 
     void begin()
     {
-        for (auto &a : main_history)
-            for (auto &b : a)
-                for (auto &c : b)
-                    c.decay();
-
-        for (auto &a : capture_history)
-            for (auto &b : a)
-                for (auto &c : b)
-                    c.decay();
+        // for (auto &a : main_history)
+        //     for (auto &b : a)
+        //         for (auto &c : b)
+        //             c.decay();
+        //
+        // for (auto &a : capture_history)
+        //     for (auto &b : a)
+        //         for (auto &c : b)
+        //             c.decay();
 
         // for (auto &a : continuation)
         //     for (auto &b : a)
         //         for (auto &c : b)
         //             for (auto &d : c)
         //                 d.decay();
+        //
+        // for (auto &k : killers)
+        // {
+        //     for (auto &n : k)
+        //     {
+        //         n = {chess::Move::NO_MOVE, false};
+        //     }
+        // }
     }
 };

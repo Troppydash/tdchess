@@ -163,7 +163,8 @@ int main()
     // chess::Board start{"8/8/4Bb1p/2k2PpP/1p2K1P1/8/8/8 b - - 1 89"};
     // should be e3e2
 
-    chess::Board start{"1r6/6k1/ppQ1nrp1/4p3/P1Pp1bP1/1N1B4/1P6/1K6 b - - 1 34"};
+    // chess::Board start{"1r6/6k1/ppQ1nrp1/4p3/P1Pp1bP1/1N1B4/1P6/1K6 b - - 1 34"};
+    chess::Board start{"2r2rk1/pp2bppp/1q6/5b2/2N1R3/P2Q4/1P1N1PPP/R1B3K1 b - - 0 23"};
     // chess::Board start{"7r/8/pQ2nrpk/4p3/P1Pp1bP1/1N1B4/1P6/1K6 b - - 0 36"};
 
 
