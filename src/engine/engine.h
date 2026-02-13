@@ -467,7 +467,7 @@ struct engine
                     ply,
                     (ss - 1)->continuation,
                     (ss - 2)->continuation,
-                    ss->in_check ? movegen_stage::PV : movegen_stage::QPV};
+                    ss->in_check ? movegen_stage::EPV : movegen_stage::QPV};
         chess::Move move;
         int move_count = -1;
         while ((move = gen.next_move()) != chess::Move::NO_MOVE)
@@ -842,7 +842,7 @@ struct engine
         {
             // assume a 350 shift
             int16_t probcut_beta = beta + 300;
-            if (!is_root && !has_excluded && depth >= 3 && !param::IS_DECISIVE(beta) &&
+            if (!is_root && depth >= 3 && !param::IS_DECISIVE(beta) &&
                 // also ignore when tt score is lower than expected beta
                 !(tt_result.hit && param::IS_VALID(tt_result.score) &&
                   tt_result.score < probcut_beta))
@@ -854,6 +854,9 @@ struct engine
                 int32_t probcut_depth = std::clamp(depth - 3, 0, depth);
                 while ((move = gen.next_move()) != chess::Move::NO_MOVE)
                 {
+                    if (move == excluded_move)
+                        continue;
+
                     make_move(move, ss);
 
                     // check if move exceeds beta first
@@ -1080,6 +1083,8 @@ struct engine
 
                 // extend if pv
                 reduction -= ss->tt_pv + is_pv_node;
+
+                reduction += is_tt_capture;
 
                 // reduce/extend based on the history
                 if (is_quiet)

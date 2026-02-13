@@ -15,7 +15,11 @@ enum class movegen_stage
 
     QPV,
     QCAPTURE_INIT,
-    QGOOD_CAPTURE,
+    QCAPTURE,
+
+    EPV,
+    EINIT,
+    EMOVES,
 
     PROBPV,
     PROB_CAPTURE_INIT,
@@ -80,6 +84,7 @@ class movegen
                 // pv find
             case movegen_stage::PV:
             case movegen_stage::QPV:
+            case movegen_stage::EPV:
             case movegen_stage::PROBPV: {
                 m_stage++;
                 if (m_pv_move != chess::Move::NO_MOVE)
@@ -125,6 +130,41 @@ class movegen
                 m_bad_capture_end = 0;
                 m_move_index = 0;
                 m_stage++;
+                break;
+            }
+
+                // generate all evasion moves
+            case movegen_stage::EINIT: {
+                chess::movegen::legalmoves(m_moves, m_position);
+
+                // score
+                for (auto &move : m_moves)
+                {
+                    if (move == m_pv_move)
+                    {
+                        move.setScore(IGNORE_SCORE);
+                        continue;
+                    }
+
+                    if (m_heuristics.is_capture(m_position, move))
+                    {
+                        move.setScore(
+                            see::PIECE_VALUES[m_heuristics.get_capture(m_position, move)] +
+                            (32000 - see::QUEEN_VALUE));
+                    }
+                    else
+                    {
+                        int16_t score = m_heuristics
+                                            .main_history[m_position.sideToMove()]
+                                                         [move.from().index()][move.to().index()]
+                                            .get_value();
+
+                        move.setScore(score);
+                    }
+                }
+
+                m_stage++;
+                m_move_index = 0;
                 break;
             }
 
@@ -280,7 +320,17 @@ class movegen
             }
 
                 // explore all good captures
-            case movegen_stage::QGOOD_CAPTURE: {
+            case movegen_stage::QCAPTURE: {
+                m_move_index =
+                    pick_move(m_moves, m_move_index, m_moves.size(), [](auto &_m) { return true; });
+                if (m_move_index < m_moves.size())
+                    return m_moves[m_move_index++];
+
+                m_stage = static_cast<int>(movegen_stage::DONE);
+                break;
+            }
+
+            case movegen_stage::EMOVES: {
                 m_move_index =
                     pick_move(m_moves, m_move_index, m_moves.size(), [](auto &_m) { return true; });
                 if (m_move_index < m_moves.size())
