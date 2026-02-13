@@ -9,6 +9,7 @@ struct tb_cache_entry
 {
     uint64_t hash = 0;
     int16_t score = 0;
+    int16_t move50 = 0;
 };
 
 constexpr int TB_MASK_BITS = 16;
@@ -173,9 +174,22 @@ struct endgame_table
 
     int16_t probe_wdl(const chess::Board &position)
     {
+        // technically this is wrong, since we don't have dtz data, but yolo
+
         tb_cache_entry &cache = m_entries[position.hash() & TB_MASK];
         if (cache.hash == position.hash())
-            return cache.score;
+        {
+            // assuming the wdl is computed against the dtz clock, fix later if needed
+
+            if (std::abs(cache.score) == 2 && position.halfMoveClock() <= cache.move50)
+                return cache.score;
+
+            if (std::abs(cache.score) == 1 && position.halfMoveClock() >= cache.move50)
+                return cache.score;
+
+            if (cache.score == 0)
+                return cache.score;
+        }
 
         unsigned ep =
             position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
@@ -218,8 +232,10 @@ struct endgame_table
             throw std::runtime_error{"impossible wdl value"};
         }
 
+
         cache.hash = position.hash();
         cache.score = ret;
+        cache.move50 = position.halfMoveClock();
 
         return ret;
     }

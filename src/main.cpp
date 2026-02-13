@@ -28,10 +28,10 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
     openbook book{"../book/baron30.bin"};
     std::string baseline_prefix = "../builds/" + baseline;
     std::string latest_prefix = "../builds/" + latest;
-    const agent_settings base{
-        baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin", "../syzygy", 512};
-    const agent_settings late{latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin",
-                              "../syzygy", 512, false};
+    const agent_settings base{baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin",
+                              "../syzygy", 512};
+    const agent_settings late{
+        latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 512, false};
     std::vector<agent_settings> agents{late, base};
 
     arena_settings settings;
@@ -99,96 +99,32 @@ int evaluate_bucket(const chess::Board &position)
     return (position.occ().count() - 2) / divisor;
 }
 
+void position_test()
+{
+    std::vector<std::pair<std::string, std::string>> positions{
+        {"2r2rk1/1q2bp2/4p1pp/1N2P3/np5P/6Q1/P4PP1/1B1RR1K1 b - - 1 28", "b7b5, negative eval 1"}};
+
+    for (auto &[pos, target] : positions)
+    {
+        nnue nnue{};
+        nnue.load_network("../nets/2026-02-08-1800-370.bin");
+        chess::Board start{pos};
+        table tt{512};
+        engine engine{nullptr, &nnue, &tt};
+        search_param param;
+        param.movetime = 10000;
+        engine.search(start, param, true);
+
+        std::cout << "oracle " << target << std::endl;
+    }
+
+
+}
+
 int main()
 {
 
-    // search_param param{};
-    // param.wtime = 238699;
-    // param.winc = 2000;
-    // param.move_overhead = 1300;
-    //
-    // std::cout << param.time_control(5, 0).time << std::endl;
-
-    // agent_settings settings{"test",
-    //                         "../builds/1.0.8-delta/tdchess",
-    //                         "../builds/1.0.8-delta/nnue.bin",
-    //                         "../syzygy",
-    //                         128,
-    //                         true};
-    // agent agent{settings};
-    //
-    // agent.new_game();
-    // int64_t movetime = 50;
-    //
-    // chess::Board position{};
-    // std::vector<chess::Move> moves{};
-    //
-    // // arena_clock clock0{60*1000, 100};
-    // // arena_clock clock1{60*1000, 100};
-    //
-    // // random position
-    // while (true)
-    // {
-    //     auto is_over = position.isGameOver();
-    //     if (is_over.second != chess::GameResult::NONE)
-    //         break;
-    //
-    //     search_param param{};
-    //     param.movetime = movetime;
-    //
-    //     chess::Move move;
-    //     agent.new_game();
-    //     auto start = std::chrono::high_resolution_clock::now();
-    //     move = agent.search(moves, param, 1);
-    //     auto end = std::chrono::high_resolution_clock::now();
-    //     std::cout << "movetime " << movetime <<  " actual time "
-    //               << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
-    //               << std::endl;
-    //
-    //     // always make the move
-    //     moves.push_back(move);
-    //     position.makeMove(move);
-    // }
-
-    nnue nnue{};
-    nnue.load_network("../nets/2026-02-08-1800-370.bin");
-    // chess::Board start;
-    // chess::Board start{"8/3q4/8/1kpr2PP/p4Q2/4Q1K1/8/8 w - - 3 59"};
-    // chess::Board start{"5B2/2b3p1/2k2pP1/4pP2/2P1P3/prPR1K2/8/8 w - - 0 57"};
-    // chess::Board start{"8/4B3/p7/1p3p1p/1P2k1b1/P3P3/5K2/8 w - - 4 57"};
-    // chess::Board start{"8/8/8/1p6/1P6/P3R1pP/1k2p1K1/5r2 b - - 11 71"};
-    // chess::Board start{"8/5pk1/p5p1/1p1Rpq2/1P5p/P3PPnP/Q5P1/1r1B2K1 b - - 1 36"};
-
-    // chess::Board start{"8/8/p7/1pB2p1p/1P2k1b1/P3P3/5K2/8 b - - 5 57"};
-    // chess::Board start{"8/8/4Bb1p/2k2PpP/1p2K1P1/8/8/8 b - - 1 89"};
-    // should be e3e2
-
-    // chess::Board start{"1r6/6k1/ppQ1nrp1/4p3/P1Pp1bP1/1N1B4/1P6/1K6 b - - 1 34"};
-    chess::Board start{"5rk1/pr3pp1/1bq4p/2pN4/PPQR4/8/6PP/5RK1 b - - 0 31"};
-    // chess::Board start{"8/6pk/Pp4qp/1Pp1Rp2/7P/3Q2P1/r7/5K2 b - - 8 58"};
-    // chess::Board start{"8/6pk/Pp4qp/1Pp1Rp2/7P/3Q2P1/1r6/5K2 w - - 9 59"};
-    // chess::Board start{"7r/8/pQ2nrpk/4p3/P1Pp1bP1/1N1B4/1P6/1K6 b - - 0 36"};
-
-
-    // nnue.initialize(start);
-    // constexpr int n = 8;
-    // constexpr int divisor = 32 / n;
-    // int bucket= (start.occ().count() - 2) / divisor;
-    //
-    // std::cout << nnue.evaluate(start.sideToMove(), bucket) << std::endl;
-    // exit(0);
-
-    // chess::Board start{"8/8/p7/Bp5b/1P6/3k1pK1/8/8 w - - 52 109"};
-
-
-    // endgame_table etable{};
-    // etable.load_file("../syzygy");
-    table tt{512};
-    engine engine{nullptr, &nnue, &tt};
-    search_param param;
-    param.movetime = 100000;
-    engine.search(start, param, true);
-
+    position_test();
     return 0;
 }
 #endif
