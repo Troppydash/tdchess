@@ -96,16 +96,10 @@ struct heuristics
 
     void store_killer(const chess::Move &killer, int32_t ply, bool is_mate)
     {
-        std::pair<chess::Move, bool> insert = {killer, is_mate};
-        for (size_t i = 0; i < param::NUMBER_KILLERS && insert.first != chess::Move::NO_MOVE; ++i)
+        if (killers[ply][0].first != killer)
         {
-            if (killer == killers[ply][i].first)
-            {
-                killers[ply][i] = insert;
-                break;
-            }
-
-            std::swap(killers[ply][i], insert);
+            killers[ply][1] = killers[ply][0];
+            killers[ply][0] = {killer, is_mate};
         }
     }
 

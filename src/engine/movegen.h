@@ -261,7 +261,7 @@ class movegen
 
                     if (m_continuation2 != nullptr)
                         score += (*m_continuation2)[m_position.at(move.from())][move.to().index()]
-                                     .get_value() / 4;
+                                     .get_value() / 2;
 
                     score = score / 8;
                     score = std::clamp(score, -31000, 31000);

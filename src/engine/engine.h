@@ -330,7 +330,7 @@ struct engine
             assert(m_position.at(move.from()) < 12);
             assert(move.to().index() < 64);
             ss->continuation =
-                &(m_heuristics->continuation)[m_position.at(move.from())][move.to().index()];
+                &(m_heuristics->continuation[m_position.at(move.from())][move.to().index()]);
 
             if (m_nnue != nullptr)
                 m_nnue->make_move(m_position, move);
@@ -681,12 +681,32 @@ struct engine
                              ? tt_result.move
                              : chess::Move::NO_MOVE;
         bool is_tt_capture =
-            tt_result.move != chess::Move::NO_MOVE && m_position.isCapture(tt_result.move);
+            tt_result.move != chess::Move::NO_MOVE && m_heuristics->is_capture(m_position, tt_result.move);
 
         // [tt early return]
         if (!is_pv_node && tt_result.can_use &&
             (cut_node == (tt_result.score >= beta) || depth > 5) && !has_excluded)
         {
+            if (tt_result.move != chess::Move::NO_MOVE && tt_result.score >= beta)
+            {
+                // update history on cutoff
+                const int16_t main_history_bonus = 64 * depth;
+                if (!m_heuristics->is_capture(m_position, tt_result.move))
+                {
+                    // don't store if early cutoff at low depth
+                    if (depth > 3)
+                        m_heuristics->update_main_history(m_position, tt_result.move, ply,
+                                                          main_history_bonus);
+
+                    // [killer moves update]
+                    m_heuristics->store_killer(tt_result.move, ply, param::IS_WIN(tt_result.score));
+
+                    // [continuation history]
+                    update_continuation_history(ss, m_position.at(tt_result.move.from()),
+                                                tt_result.move.to(), main_history_bonus);
+                }
+            }
+
             // ignore tt for close to half move
             if (m_position.halfMoveClock() < 96)
                 return tt_result.score;
@@ -1142,13 +1162,13 @@ struct engine
                             // don't store if early cutoff at low depth
                             if (depth > 3 || quiet_count > 0)
                                 m_heuristics->update_main_history(m_position, move, ply,
-                                                                 main_history_bonus);
+                                                                  main_history_bonus);
 
                             // malus apply
                             for (int j = 0; j < quiet_count; ++j)
                             {
                                 m_heuristics->update_main_history(m_position, quiet_moves[j], ply,
-                                                                 -main_history_malus);
+                                                                  -main_history_malus);
                             }
 
                             // [killer moves update]
@@ -1171,13 +1191,13 @@ struct engine
                             // don't store if early cutoff at low depth
                             if (depth > 3 || capture_count > 0)
                                 m_heuristics->update_capture_history(m_position, move,
-                                                                    main_history_bonus);
+                                                                     main_history_bonus);
 
                             // malus apply
                             for (int j = 0; j < capture_count; ++j)
                             {
                                 m_heuristics->update_capture_history(m_position, capture_moves[j],
-                                                                    -main_history_malus);
+                                                                     -main_history_malus);
                             }
                         }
 
