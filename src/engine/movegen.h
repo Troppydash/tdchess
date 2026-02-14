@@ -138,6 +138,7 @@ class movegen
                 chess::movegen::legalmoves(m_moves, m_position);
 
                 // score
+                // uint64_t pawn_key = m_heuristics.get_pawn_key(m_position);
                 for (auto &move : m_moves)
                 {
                     if (move == m_pv_move)
@@ -154,11 +155,17 @@ class movegen
                     }
                     else
                     {
-                        int16_t score = m_heuristics
+                        int32_t score = m_heuristics
                                             .main_history[m_position.sideToMove()]
                                                          [move.from().index()][move.to().index()]
                                             .get_value();
 
+                        // score += m_heuristics
+                        //             .pawn[pawn_key & PAWN_STRUCTURE_SIZE_M1][m_position.at(move.from())]
+                        //                  [move.to().index()]
+                        //             .get_value();
+
+                        score = std::clamp(score, -30000, 30000);
                         move.setScore(score);
                     }
                 }
@@ -197,6 +204,7 @@ class movegen
 
                 // m_moves = [bad captures, quiets]
                 m_bad_quiet_end = m_bad_capture_end;
+                uint64_t pawn_key = m_heuristics.get_pawn_key(m_position);
                 for (int i = m_bad_capture_end; i < m_moves.size(); ++i)
                 {
                     chess::Move &move = m_moves[i];
@@ -249,8 +257,7 @@ class movegen
 
                     // pawn history
                     score += m_heuristics
-                                     .pawn[m_position.pieces(chess::PieceType::PAWN).getBits() %
-                                           PAWN_STRUCTURE_SIZE][m_position.at(move.from())]
+                                     .pawn[pawn_key & PAWN_STRUCTURE_SIZE_M1][m_position.at(move.from())]
                                           [move.to().index()]
                                      .get_value();
 
@@ -263,12 +270,10 @@ class movegen
                         score += (*m_continuation2)[m_position.at(move.from())][move.to().index()]
                                      .get_value() / 2;
 
-                    score = score / 8;
                     score = std::clamp(score, -31000, 31000);
-
                     move.setScore(score);
 
-                    if (score < -1000)
+                    if (score < -5000)
                     {
                         std::swap(m_moves[m_bad_quiet_end], m_moves[i]);
                         m_bad_quiet_end++;

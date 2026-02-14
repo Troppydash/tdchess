@@ -537,16 +537,16 @@ struct engine
         }
 
         // [draw check]
-        if (move_count == -1)
-        {
-            // we've explored all capture moves, only care about quiet moves
-            chess::Movelist moves;
-            chess::movegen::legalmoves<chess::movegen::MoveGenType::QUIET>(moves, m_position);
-            if (moves.empty())
-            {
-                return param::VALUE_DRAW;
-            }
-        }
+        // if (move_count == -1)
+        // {
+        //     // we've explored all capture moves, only care about quiet moves
+        //     chess::Movelist moves;
+        //     chess::movegen::legalmoves<chess::movegen::MoveGenType::QUIET>(moves, m_position);
+        //     if (moves.empty())
+        //     {
+        //         return param::VALUE_DRAW;
+        //     }
+        // }
 
         // average out the best score
         if (!param::IS_DECISIVE(best_score) && best_score > beta)
@@ -680,8 +680,8 @@ struct engine
         tt_result.move = tt_result.hit && is_kinda_legal(tt_result.move) && !has_excluded
                              ? tt_result.move
                              : chess::Move::NO_MOVE;
-        bool is_tt_capture =
-            tt_result.move != chess::Move::NO_MOVE && m_heuristics->is_capture(m_position, tt_result.move);
+        bool is_tt_capture = tt_result.move != chess::Move::NO_MOVE &&
+                             m_heuristics->is_capture(m_position, tt_result.move);
 
         // [tt early return]
         if (!is_pv_node && tt_result.can_use &&
@@ -888,10 +888,10 @@ struct engine
                                                 ss + 1, !cut_node);
                     }
 
+                    unmake_move(move);
+
                     if (m_timer.is_stopped())
                         return 0;
-
-                    unmake_move(move);
 
                     // check if can cut at lower depth
                     if (score >= probcut_beta)
@@ -916,7 +916,7 @@ struct engine
         //     chess::Movelist actual_moves;
         //     chess::movegen::legalmoves(actual_moves, m_position);
         //
-        //     movegen gen{m_position, m_heuristics, tt_result.move, prev_move, ply};
+        //     movegen gen{m_position, *m_heuristics, tt_result.move, prev_move, ply};
         //     chess::Movelist found_moves;
         //     chess::Move move;
         //     while ((move = gen.next_move()) != chess::Move::NO_MOVE)

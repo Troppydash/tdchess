@@ -36,6 +36,7 @@ using continuation_history_full = history_entry<int16_t, 20000>[12][64][12][64];
 constexpr int NUM_CONTINUATION = 2;
 
 constexpr int PAWN_STRUCTURE_SIZE = 1 << 13;
+constexpr int PAWN_STRUCTURE_SIZE_M1 = PAWN_STRUCTURE_SIZE - 1;
 using pawn_history = history_entry<int16_t, 20000>[PAWN_STRUCTURE_SIZE][12][64];
 
 struct heuristics
@@ -82,9 +83,21 @@ struct heuristics
             bonus);
 
         // update pawn history
-        pawn[position.pieces(chess::PieceType::PAWN).getBits() % PAWN_STRUCTURE_SIZE]
+        pawn[get_pawn_key(position) & PAWN_STRUCTURE_SIZE_M1]
             [position.at(move.from())][move.to().index()]
                 .add_bonus(bonus);
+    }
+
+    [[nodiscard]] uint64_t get_pawn_key(const chess::Board &position) const
+    {
+        auto pieces = position.pieces(chess::PieceType::PAWN);
+        uint64_t pawn_key = 0;
+        while (pieces) {
+            const chess::Square sq = pieces.pop();
+            pawn_key ^= chess::Zobrist::piece(position.at(sq), sq);
+        }
+
+        return pawn_key;
     }
 
     void update_capture_history(const chess::Board &position, const chess::Move &move,
