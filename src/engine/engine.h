@@ -204,7 +204,7 @@ struct search_stack
     std::array<chess::Move, param::QUIET_MOVES> capture_moves{};
     continuation_history *continuation = nullptr;
 
-    void reset()
+    void reset(heuristics &heuristics)
     {
         ply = 0;
         static_eval = param::VALUE_NONE;
@@ -289,13 +289,13 @@ struct engine
         // reset stack
         for (int i = SEARCH_STACK_PREFIX; i >= 0; --i)
         {
-            m_stack[i].reset();
+            m_stack[i].reset(*m_heuristics);
             m_stack[i].ply = 0;
         }
 
         for (int i = 0; i < param::MAX_DEPTH; ++i)
         {
-            m_stack[i + SEARCH_STACK_PREFIX].reset();
+            m_stack[i + SEARCH_STACK_PREFIX].reset(*m_heuristics);
             m_stack[i + SEARCH_STACK_PREFIX].ply = i;
         }
     }
@@ -322,6 +322,8 @@ struct engine
         ss->move = move;
         if (move == chess::Move::NO_MOVE)
         {
+            // ss->continuation =
+            // &(m_heuristics->continuation[static_cast<uint8_t>(chess::Piece::NONE)][0]);
             ss->continuation = nullptr;
             m_position.makeNullMove();
         }
@@ -536,21 +538,21 @@ struct engine
             return param::MATED_IN(ply);
         }
 
-        // [draw check]
-        // if (move_count == -1)
-        // {
-        //     // we've explored all capture moves, only care about quiet moves
-        //     chess::Movelist moves;
-        //     chess::movegen::legalmoves<chess::movegen::MoveGenType::QUIET>(moves, m_position);
-        //     if (moves.empty())
-        //     {
-        //         return param::VALUE_DRAW;
-        //     }
-        // }
-
         // average out the best score
         if (!param::IS_DECISIVE(best_score) && best_score > beta)
             best_score += (beta - best_score) / 2;
+
+        // [draw check]
+        if (move_count == -1)
+        {
+            // we've explored all capture moves, only care about quiet moves
+            chess::Movelist moves;
+            chess::movegen::legalmoves<chess::movegen::MoveGenType::QUIET>(moves, m_position);
+            if (moves.empty())
+            {
+                best_score = param::VALUE_DRAW;
+            }
+        }
 
         if (!m_timer.is_stopped())
         {
@@ -988,6 +990,13 @@ struct engine
                     // [fut prune for captures]
                     if (!is_check && lmr_depth < 7 && param::IS_VALID(ss->static_eval))
                     {
+                        // int16_t capture_history = m_heuristics
+                        //                               ->capture_history[m_position.at(move.from())]
+                        //                                                [move.to().index()][captured]
+                        //                               .get_value();
+
+                        // int16_t fut_value = ss->static_eval + 300 + 300 * lmr_depth +
+                        // see::PIECE_VALUES[captured] + capture_history / 40;
                         int16_t fut_value =
                             ss->static_eval + 300 + 300 * lmr_depth + see::PIECE_VALUES[captured];
                         if (fut_value <= alpha)
@@ -1011,6 +1020,22 @@ struct engine
                 }
                 else
                 {
+
+                    // int16_t history =
+                    //     (*(ss - 1)->continuation)[m_position.at(move.from())][move.to().index()]
+                    //         .get_value() +
+                    //     (*(ss - 2)->continuation)[m_position.at(move.from())][move.to().index()]
+                    //         .get_value() +
+                    //     m_heuristics
+                    //         ->pawn[m_heuristics->get_pawn_key(m_position) &
+                    //         PAWN_STRUCTURE_SIZE_M1][move.from().index()]
+                    //               [move.to().index()]
+                    //         .get_value();
+                    //
+                    // // [cont history pruning]
+                    // if (history < -3000 * depth)
+                    //     continue;
+
                     // [fut prune for general]
                     if (!ss->in_check && lmr_depth < 12 && param::IS_VALID(ss->static_eval))
                     {
@@ -1265,7 +1290,7 @@ struct engine
             {
                 assert(piece < 12);
                 assert(to.index() < 64);
-                assert((ss - i)->move != chess::Move::NO_MOVE);
+                // assert((ss - i)->move != chess::Move::NO_MOVE);
                 (*(ss - i)->continuation)[piece][to.index()].add_bonus(bonus * weights[i - 1] /
                                                                        1024);
             }
