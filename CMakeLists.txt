@@ -93,3 +93,20 @@ target_compile_options(tdchess_pgo PRIVATE
         "-fprofile-dir=./pgo"
         "-fprofile-generate=./pgo"
 )
+
+add_executable(tdchess_tune src/main.cpp)
+target_link_libraries(tdchess_tune PRIVATE fathom)
+target_compile_definitions(tdchess_tune PRIVATE TDCHESS_TUNE)
+target_link_options(tdchess_tune PRIVATE
+        "-flto"
+)
+target_compile_options(tdchess_tune PRIVATE
+        "-Ofast"
+        "-march=native"
+        "-mtune=native"
+        "-funroll-loops"
+        "-fno-trapping-math"
+        "-fomit-frame-pointer"
+        "-Wall"
+        "-Wextra"
+)

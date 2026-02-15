@@ -88,9 +88,19 @@ int main()
     return 0;
 }
 
+#elif TDCHESS_TUNE
+
+#include "tuner/spsa.h"
+
+int main()
+{
+    spsa::loop();
+}
+
 #else
 #include "elo/agent.h"
 #include "engine/nnue.h"
+
 
 int evaluate_bucket(const chess::Board &position)
 {

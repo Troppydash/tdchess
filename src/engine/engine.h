@@ -7,6 +7,7 @@
 #include "../hpplib/chess.h"
 #include "endgame.h"
 #include "evaluation.h"
+#include "features.h"
 #include "movegen.h"
 #include "nnue.h"
 #include "param.h"
@@ -692,7 +693,7 @@ struct engine
             if (tt_result.move != chess::Move::NO_MOVE && tt_result.score >= beta)
             {
                 // update history on cutoff
-                const int16_t main_history_bonus = 64 * depth;
+                const int16_t main_history_bonus = features::HISTORY_MULT * depth + features::HISTORY_BASE;
                 if (!m_heuristics->is_capture(m_position, tt_result.move))
                 {
                     // don't store if early cutoff at low depth
@@ -1180,7 +1181,7 @@ struct engine
                     if (score >= beta)
                     {
                         // [main history update]
-                        const int16_t main_history_bonus = 64 * depth;
+                        const int16_t main_history_bonus = features::HISTORY_MULT * depth + features::HISTORY_BASE;
                         const int16_t main_history_malus = main_history_bonus;
                         if (!m_heuristics->is_capture(m_position, move))
                         {
@@ -1342,7 +1343,9 @@ struct engine
     {
         // timer info first
         const auto control = param.time_control(reference.fullMoveNumber(), reference.sideToMove());
-        std::cout << "info searchtime " << control.time << std::endl;
+        if (verbose)
+            std::cout << "info searchtime " << control.time << std::endl;
+
         m_timer.start(control.time);
 
         auto reference_time = timer::now();
