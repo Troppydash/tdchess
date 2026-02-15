@@ -1392,7 +1392,7 @@ struct engine
             if (score <= alpha || score >= beta)
             {
                 // limit delta
-                if (delta < 10 * 100)
+                if (delta < 20 * 100)
                     delta += delta / 2;
 
                 score = std::clamp(score, alpha, beta);

@@ -292,21 +292,20 @@ struct spsa
                 theta_minus[i] = theta[i].add(-ck[i] * delta[i]);
             }
 
-            int loss_plus = match(book, theta_plus, features);
-            int loss_minus = match(book, theta_minus, features);
+            int result = match(book, theta_plus, theta_minus);
 
             for (int i = 0; i < theta.size(); ++i)
             {
-                theta[i] = theta[i].add(ak[i] * (loss_plus - loss_minus) / (2 * ck[i] * delta[i]));
+                theta[i] = theta[i].add(ak[i] * result / (2 * ck[i] * delta[i]));
             }
 
             std::cout << "theta+\n";
             display_features(theta_plus);
             std::cout << "theta-\n";
             display_features(theta_minus);
-            std::cout << "result " << loss_plus << ", " << loss_minus << "\n";
+            std::cout << "result " << result << "\n";
 
-            if ((loss_plus - loss_minus) != 0)
+            if (result != 0)
             {
                 std::cout << "new\n";
                 display_features(theta);
