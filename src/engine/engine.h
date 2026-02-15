@@ -693,7 +693,8 @@ struct engine
             if (tt_result.move != chess::Move::NO_MOVE && tt_result.score >= beta)
             {
                 // update history on cutoff
-                const int16_t main_history_bonus = features::HISTORY_MULT * depth + features::HISTORY_BASE;
+                const int16_t main_history_bonus =
+                    features::HISTORY_MULT * depth + features::HISTORY_BASE;
                 if (!m_heuristics->is_capture(m_position, tt_result.move))
                 {
                     // don't store if early cutoff at low depth
@@ -836,7 +837,8 @@ struct engine
                 param::IS_VALID(adjusted_static_eval) && adjusted_static_eval >= beta &&
                 !param::IS_LOSS(beta) && !has_excluded && depth >= features::NMP_DEPTH)
             {
-                int32_t reduction = features::NMP_REDUCTION_BASE + depth / features::NMP_REDUCTION_MULT;
+                int32_t reduction =
+                    features::NMP_REDUCTION_BASE + depth / features::NMP_REDUCTION_MULT;
 
                 // since nmp uses ss+1, we fake that this move is nothing
                 make_move(chess::Move::NO_MOVE, ss);
@@ -1181,8 +1183,10 @@ struct engine
                     if (score >= beta)
                     {
                         // [main history update]
-                        const int16_t main_history_bonus = features::HISTORY_MULT * depth + features::HISTORY_BASE;
-                        const int16_t main_history_malus = features::HISTORY_MALUS_MULT * depth + features::HISTORY_MALUS_BASE;
+                        const int16_t main_history_bonus =
+                            features::HISTORY_MULT * depth + features::HISTORY_BASE;
+                        const int16_t main_history_malus =
+                            features::HISTORY_MALUS_MULT * depth + features::HISTORY_MALUS_BASE;
                         if (!m_heuristics->is_capture(m_position, move))
                         {
                             // don't store if early cutoff at low depth
@@ -1387,17 +1391,20 @@ struct engine
             // [asp window]
             if (score <= alpha || score >= beta)
             {
-                delta += delta / 2;
+                // limit delta
+                if (delta < 10 * 100)
+                    delta += delta / 2;
+
                 score = std::clamp(score, alpha, beta);
-                alpha = score - delta;
-                beta = score + delta;
+                alpha = std::max(-param::INF, score - delta);
+                beta = std::min(static_cast<int>(param::INF), score + delta);
                 continue;
             }
 
             if (!param::IS_DECISIVE(score))
             {
-                alpha = score - delta;
-                beta = score + delta;
+                alpha = std::max(-param::INF, score - delta);
+                beta = std::min(static_cast<int>(param::INF), score + delta);
             }
 
             result.score = score;

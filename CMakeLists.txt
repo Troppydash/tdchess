@@ -103,7 +103,7 @@ target_link_options(tdchess_tune PRIVATE
 
 )
 target_compile_options(tdchess_tune PRIVATE
-        "-O2"
+        "-Ofast"
         "-march=native"
         "-mtune=native"
         "-funroll-loops"
