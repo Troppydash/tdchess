@@ -114,8 +114,9 @@ struct endgame_table
         if (result == TB_RESULT_FAILED || result == TB_RESULT_STALEMATE ||
             result == TB_RESULT_CHECKMATE)
         {
-            std::cout << "info failed probe";
+            std::cout << "info failed probe dtz\n";
             std::cout << position << std::endl;
+            std::cout << position.getFen() << std::endl;
             throw std::runtime_error("failed probe");
         }
 
@@ -205,8 +206,9 @@ struct endgame_table
 
         if (result == TB_RESULT_FAILED)
         {
-            std::cout << "info failed probe";
+            std::cout << "info failed probe wdl\n";
             std::cout << position << std::endl;
+            std::cout << position.getFen() << std::endl;
             throw std::runtime_error("failed probe");
         }
 

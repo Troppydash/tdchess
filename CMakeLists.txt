@@ -99,9 +99,11 @@ target_link_libraries(tdchess_tune PRIVATE fathom)
 target_compile_definitions(tdchess_tune PRIVATE TDCHESS_TUNE)
 target_link_options(tdchess_tune PRIVATE
         "-flto"
+#        -fsanitize=undefined
+
 )
 target_compile_options(tdchess_tune PRIVATE
-        "-Ofast"
+        "-O2"
         "-march=native"
         "-mtune=native"
         "-funroll-loops"
@@ -109,4 +111,6 @@ target_compile_options(tdchess_tune PRIVATE
         "-fomit-frame-pointer"
         "-Wall"
         "-Wextra"
+#                -fsanitize=undefined
+#                -g
 )

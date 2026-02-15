@@ -370,7 +370,7 @@ struct engine
         if (m_timer.is_stopped())
             return 0;
 
-        if (ply >= param::MAX_DEPTH)
+        if (ply >= param::MAX_DEPTH - 10)
             return evaluate();
 
         // draw check
@@ -634,7 +634,7 @@ struct engine
         if (m_timer.is_stopped())
             return 0;
 
-        if (ply >= param::MAX_DEPTH)
+        if (ply >= param::MAX_DEPTH - 10)
             return evaluate();
 
         const bool is_root = ply == 0 && is_pv_node;
@@ -819,7 +819,7 @@ struct engine
 
         // [static null move pruning]
         {
-            int16_t margin = m_param.static_null_base_margin * depth;
+            int16_t margin = features::SNM_MARGIN * depth;
             if (!ss->tt_pv && param::IS_VALID(adjusted_static_eval) &&
                 adjusted_static_eval - margin >= beta && !param::IS_LOSS(beta) && depth <= 14 &&
                 (tt_result.move == chess::Move::NO_MOVE || is_tt_capture) &&
@@ -834,9 +834,9 @@ struct engine
             const bool has_non_pawns = m_position.hasNonPawnMaterial(m_position.sideToMove());
             if (cut_node && (ss - 1)->move != chess::Move::NO_MOVE && has_non_pawns &&
                 param::IS_VALID(adjusted_static_eval) && adjusted_static_eval >= beta &&
-                !param::IS_LOSS(beta) && !has_excluded)
+                !param::IS_LOSS(beta) && !has_excluded && depth >= features::NMP_DEPTH)
             {
-                int32_t reduction = m_param.nmp_depth_base + depth / m_param.nmp_depth_multiplier;
+                int32_t reduction = features::NMP_REDUCTION_BASE + depth / features::NMP_REDUCTION_MULT;
 
                 // since nmp uses ss+1, we fake that this move is nothing
                 make_move(chess::Move::NO_MOVE, ss);
@@ -1375,7 +1375,7 @@ struct engine
         }
 
         int delta = m_param.window_size;
-        while (depth <= control.depth)
+        while (depth <= std::min(param::MAX_DEPTH - 10, control.depth))
         {
             int16_t score = negamax<true>(alpha, beta, depth, &m_stack[SEARCH_STACK_PREFIX], false);
             m_timer.check();

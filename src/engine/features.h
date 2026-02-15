@@ -15,20 +15,25 @@ struct tunable_feature
 {
     std::string name;
     double value;
-    int delta;
+    double delta;
     int min;
     int max;
     int *ref;
 
     void apply() const
     {
-        *ref = std::round(value);
+        *ref = get();
+    }
+
+    int get() const
+    {
+        return std::clamp(std::round(value), (double)min, (double)max);
     }
 
     tunable_feature add(double bonus) const
     {
         return tunable_feature{
-            name, std::clamp(value + bonus, (double)min, (double)max), delta, min, max, ref};
+            name, value + bonus, delta, min, max, ref};
     }
 };
 
@@ -42,7 +47,7 @@ inline std::vector<tunable_feature> &tunable_features_list()
 // reg temp class
 struct tunable_feature_register
 {
-    tunable_feature_register(const std::string &name, double value, int delta, int min, int max,
+    tunable_feature_register(const std::string &name, double value, double delta, int min, int max,
                              int *ref)
     {
         tunable_features_list().push_back({name, value, delta, min, max, ref});
@@ -56,10 +61,29 @@ struct tunable_feature_register
 namespace features
 {
 
-TUNE(HISTORY_MULT, 43, 2, 16, 128);
-TUNE(HISTORY_BASE, 19, 3, -100, 100);
+TUNE(HISTORY_MULT, 64, 2, 16, 128);
+TUNE(HISTORY_BASE, 0, 3, -100, 100);
 
-TUNE(HISTORY_MALUS_MULT, 43, 2, 16, 128);
-TUNE(HISTORY_MALUS_BASE, 28, 3, -100, 100);
+TUNE(HISTORY_MALUS_MULT, 64, 2, 16, 128);
+TUNE(HISTORY_MALUS_BASE, 0, 3, -100, 100);
+
+TUNE(SNM_MARGIN, 85, 2, 25, 150);
+
+TUNE(NMP_DEPTH, 0, 0.2, 0, 10);
+TUNE(NMP_REDUCTION_MULT, 4, 0.2, 1, 10);
+TUNE(NMP_REDUCTION_BASE, 6, 0.2, 1, 10);
+
+
+// TUNE(HISTORY_MULT, 64, 2, 16, 128);
+// TUNE(HISTORY_BASE, 2, 3, -100, 100);
+//
+// TUNE(HISTORY_MALUS_MULT, 55, 2, 16, 128);
+// TUNE(HISTORY_MALUS_BASE, 15, 3, -100, 100);
+//
+// TUNE(SNM_MARGIN, 92, 2, 25, 150);
+//
+// TUNE(NMP_DEPTH, 6, 0.2, 0, 10);
+// TUNE(NMP_REDUCTION_MULT, 2, 0.2, 1, 10);
+// TUNE(NMP_REDUCTION_BASE, 8, 0.2, 1, 10);
 
 } // namespace features

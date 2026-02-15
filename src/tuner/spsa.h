@@ -37,7 +37,7 @@ struct spsa
     {
         for (auto &f : features)
         {
-            std::cout << f.name << " = " << f.value << " +- " << f.delta << " [" << f.min << ", "
+            std::cout << f.name << " = " << f.value << " (" << f.get() << ")" <<  " + " << f.delta << " [" << f.min << ", "
                       << f.max << "]" << std::endl;
         }
     }
@@ -59,21 +59,21 @@ struct spsa
         std::vector<int> scores{};
 
         std::unique_ptr<table> engine_new_table = std::make_unique<table>(256);
-        // std::unique_ptr<endgame_table> engine_new_endgame_table =
-        // std::make_unique<endgame_table>(); engine_new_endgame_table->load_file("../syzygy");
+        std::unique_ptr<endgame_table> engine_new_endgame_table =
+        std::make_unique<endgame_table>(); engine_new_endgame_table->load_file("../syzygy");
         std::unique_ptr<nnue> engine_new_nnue = std::make_unique<nnue>();
         engine_new_nnue->load_network("../nets/2026-02-08-1800-370.bin");
-        engine engine_new{nullptr, engine_new_nnue.get(), engine_new_table.get()};
+        engine engine_new{engine_new_endgame_table.get(), engine_new_nnue.get(), engine_new_table.get()};
 
         std::unique_ptr<table> engine_table = std::make_unique<table>(256);
-        // std::unique_ptr<endgame_table> engine_endgame_table = std::make_unique<endgame_table>();
-        // engine_endgame_table->load_file("../syzygy");
+        std::unique_ptr<endgame_table> engine_endgame_table = std::make_unique<endgame_table>();
+        engine_endgame_table->load_file("../syzygy");
         std::unique_ptr<nnue> engine_nnue = std::make_unique<nnue>();
         engine_nnue->load_network("../nets/2026-02-08-1800-370.bin");
-        engine engine{nullptr, engine_nnue.get(), engine_table.get()};
+        engine engine{engine_endgame_table.get(), engine_nnue.get(), engine_table.get()};
 
-        arena_clock engine_new_clock{2000, 100};
-        arena_clock engine_clock{2000, 100};
+        arena_clock engine_new_clock{1000, 100};
+        arena_clock engine_clock{1000, 100};
 
         search_param engine_new_param{};
         search_param engine_param{};
@@ -119,6 +119,7 @@ struct spsa
             }
 
             search_result search;
+            std::cout << position.getFen() << std::endl;
 
             if (side2move == new_side2move)
             {
@@ -164,7 +165,7 @@ struct spsa
 
             // check win
             int win_value = 1500;
-            int win_number = 5;
+            int win_number = 6;
             if (scores.size() >= win_number)
             {
                 bool sign = std::signbit(scores[scores.size() - 1]);
@@ -221,7 +222,7 @@ struct spsa
         std::atomic<int> score = 0;
         std::mutex lock{};
 
-        int n = 16;
+        int n = 2;
         int k = 1;
         std::vector<std::thread> threads(n);
         for (int i = 0; i < n; ++i)
@@ -263,25 +264,26 @@ struct spsa
             "HISTORY_MULT",
             "HISTORY_BASE",
             "HISTORY_MALUS_MULT",
-           "HISTORY_MALUS_BASE",
+            "HISTORY_MALUS_BASE",
         };
 
-        std::vector<tunable_feature> features{};
-        for (auto &name : tuned_features)
-        {
-            features.push_back(*std::find_if(all.begin(), all.end(),
-                                             [&](tunable_feature &f) { return f.name == name; }));
-        }
+        std::vector<tunable_feature> features = all;
+        // for (auto &name : tuned_features)
+        // {
+        //     features.push_back(*std::find_if(all.begin(), all.end(),
+        //                                      [&](tunable_feature &f) { return f.name == name;
+        //                                      }));
+        // }
 
         std::cout << "[startup] tuning " << features.size() << " features\n";
         display_features(features);
 
         // spsa
-        srand(42);
+        srand(3);
         openbook book{"../book/baron30.bin"};
         double alpha = 0.602;
         double gamma = 0.101;
-        int n = 50;
+        int n = 100;
         double A = 0.1 * n;
 
         std::vector<tunable_feature> theta = features;
@@ -301,7 +303,7 @@ struct spsa
 
             std::vector<double> delta(features.size());
             for (int i = 0; i < delta.size(); ++i)
-                delta[i] = rand() / (RAND_MAX + 1.0) > 0.5 ? 1 : -1;
+                delta[i] = rand() / ((double)RAND_MAX) > 0.5 ? 1 : -1;
 
             std::vector<tunable_feature> theta_plus(features.size());
             std::vector<tunable_feature> theta_minus(features.size());
@@ -311,19 +313,22 @@ struct spsa
                 theta_minus[i] = theta[i].add(-ck[i] * delta[i]);
             }
 
-            int result = match(book, theta_plus, theta_minus);
+            int loss_plus = match(book, theta_plus, features);
+            int loss_minus = match(book, theta_minus, features);
+
             for (int i = 0; i < theta.size(); ++i)
             {
-                theta[i] = theta[i].add(ak[i] * result / (2 * ck[i] * delta[i]));
+                theta[i] =
+                    theta[i].add(ak[i] * (loss_plus - loss_minus) / (2 * ck[i] * delta[i]));
             }
 
             std::cout << "theta+\n";
             display_features(theta_plus);
             std::cout << "theta-\n";
             display_features(theta_minus);
-            std::cout << "result " << result << "\n";
+            std::cout << "result " << loss_plus << ", " << loss_minus << "\n";
 
-            if (result != 0)
+            if ((loss_plus - loss_minus) != 0)
             {
                 std::cout << "new\n";
                 display_features(theta);
