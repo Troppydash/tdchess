@@ -7,7 +7,7 @@
 #ifdef TDCHESS_TUNE
 #define TUNE(name, value, delta, min, max)                                                         \
     inline int name = value;                                                                       \
-    inline __attribute__((used)) tunable_feature_register reg_##name{#name, value, delta,          \
+    inline volatile __attribute__((used)) tunable_feature_register reg_##name{#name, value, delta,          \
                                                                      min,   max,   &name};
 
 // actual feature representation
@@ -56,7 +56,10 @@ struct tunable_feature_register
 namespace features
 {
 
-TUNE(HISTORY_MULT, 64, 8, 16, 128);
-TUNE(HISTORY_BASE, 0, 10, -100, 100);
+TUNE(HISTORY_MULT, 43, 2, 16, 128);
+TUNE(HISTORY_BASE, 19, 3, -100, 100);
+
+TUNE(HISTORY_MALUS_MULT, 43, 2, 16, 128);
+TUNE(HISTORY_MALUS_BASE, 28, 3, -100, 100);
 
 } // namespace features

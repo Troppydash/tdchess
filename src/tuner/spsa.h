@@ -9,7 +9,28 @@
 
 #include "../engine/features.h"
 
-class openbook;
+inline int counter = 0;
+inline std::mutex mtx;
+inline std::condition_variable cv;
+
+inline void add_if(int value, const std::vector<tunable_feature> &features,
+                   const std::function<bool()> &fn)
+{
+    std::unique_lock<std::mutex> lock(mtx);
+    cv.wait(lock, fn);
+
+    // apply if first, this section is under mutex
+    bool is_root = counter == 0;
+    if (is_root)
+    {
+        for (auto &f : features)
+            f.apply();
+    }
+
+    counter += value;
+    cv.notify_all(); // wake other waiters
+}
+
 struct spsa
 {
     static void display_features(const std::vector<tunable_feature> &features)
@@ -33,27 +54,26 @@ struct spsa
 
     static int matchup(std::vector<chess::Move> moves, chess::Board position,
                        const std::vector<tunable_feature> &new_theta,
-                       const std::vector<tunable_feature> &baseline_theta)
+                       const std::vector<tunable_feature> &baseline_theta, int incr)
     {
         std::vector<int> scores{};
 
         std::unique_ptr<table> engine_new_table = std::make_unique<table>(256);
-        std::unique_ptr<endgame_table> engine_new_endgame_table = std::make_unique<endgame_table>();
-        engine_new_endgame_table->load_file("../syzygy");
+        // std::unique_ptr<endgame_table> engine_new_endgame_table =
+        // std::make_unique<endgame_table>(); engine_new_endgame_table->load_file("../syzygy");
         std::unique_ptr<nnue> engine_new_nnue = std::make_unique<nnue>();
         engine_new_nnue->load_network("../nets/2026-02-08-1800-370.bin");
-        engine engine_new{engine_new_endgame_table.get(), engine_new_nnue.get(),
-                          engine_new_table.get()};
+        engine engine_new{nullptr, engine_new_nnue.get(), engine_new_table.get()};
 
         std::unique_ptr<table> engine_table = std::make_unique<table>(256);
-        std::unique_ptr<endgame_table> engine_endgame_table = std::make_unique<endgame_table>();
-        engine_endgame_table->load_file("../syzygy");
+        // std::unique_ptr<endgame_table> engine_endgame_table = std::make_unique<endgame_table>();
+        // engine_endgame_table->load_file("../syzygy");
         std::unique_ptr<nnue> engine_nnue = std::make_unique<nnue>();
         engine_nnue->load_network("../nets/2026-02-08-1800-370.bin");
-        engine engine{engine_endgame_table.get(), engine_nnue.get(), engine_table.get()};
+        engine engine{nullptr, engine_nnue.get(), engine_table.get()};
 
-        arena_clock engine_new_clock{1000, 100};
-        arena_clock engine_clock{1000, 100};
+        arena_clock engine_new_clock{2000, 100};
+        arena_clock engine_clock{2000, 100};
 
         search_param engine_new_param{};
         search_param engine_param{};
@@ -102,10 +122,15 @@ struct spsa
 
             if (side2move == new_side2move)
             {
-                apply(new_theta);
+                // only enter if counter in direction of sign(incr), apply new_theta if counter = 0
+                add_if(incr, new_theta, [&]() { return incr * counter >= 0; });
+
                 engine_new_clock.start();
                 search = engine_new.search(position, engine_new_param, false);
                 bool timeout = engine_new_clock.stop();
+
+                add_if(-incr, {}, []() { return true; });
+
                 if (timeout)
                 {
                     std::cout << "[warning] timeout\n";
@@ -114,10 +139,16 @@ struct spsa
             }
             else
             {
-                apply(baseline_theta);
+                // only enter if counter in direction of sign(-incr), apply baseline_theta if
+                // counter = 0
+                add_if(-incr, baseline_theta, [&]() { return -incr * counter >= 0; });
+
                 engine_clock.start();
                 search = engine.search(position, engine_param, false);
                 bool timeout = engine_clock.stop();
+
+                add_if(incr, {}, []() { return true; });
+
                 if (timeout)
                 {
                     std::cout << "[warning] timeout\n";
@@ -136,7 +167,7 @@ struct spsa
             int win_number = 5;
             if (scores.size() >= win_number)
             {
-                int sign = std::signbit(scores[scores.size() - 1]);
+                bool sign = std::signbit(scores[scores.size() - 1]);
                 bool ok = true;
                 for (int i = 0; i < win_number; ++i)
                 {
@@ -161,9 +192,9 @@ struct spsa
             }
 
             // check draw
-            int draw_value = 30;
-            int draw_number = 6;
-            if (moves.size() > 50)
+            int draw_value = 10;
+            int draw_number = 8;
+            if (moves.size() > 34)
             {
                 bool ok = true;
                 for (int i = 0; i < draw_number; ++i)
@@ -187,18 +218,35 @@ struct spsa
     static int match(openbook &book, const std::vector<tunable_feature> &theta_plus,
                      const std::vector<tunable_feature> &theta_minus)
     {
+        std::atomic<int> score = 0;
+        std::mutex lock{};
 
-        int score = 0;
-        // TODO: multithread
-        for (int i = 0; i < 16; ++i)
+        int n = 16;
+        int k = 1;
+        std::vector<std::thread> threads(n);
+        for (int i = 0; i < n; ++i)
         {
-            auto [moves, position] = book.generate_game(16);
+            threads[i] = std::thread{[&, i, k]() {
+                for (int j = 0; j < k; ++j)
+                {
+                    lock.lock();
+                    auto [moves, position] = book.generate_game(12);
+                    lock.unlock();
 
-            int result = matchup(moves, position, theta_plus, theta_minus);
-            score += (result == DRAW) ? 0 : (result == NEW) ? 1 : -1;
+                    pin_thread_to_processor(i);
 
-            result = matchup(moves, position, theta_minus, theta_plus);
-            score += (result == DRAW) ? 0 : (result == NEW) ? -1 : 1;
+                    int result = matchup(moves, position, theta_plus, theta_minus, 1);
+                    score += (result == DRAW) ? 0 : (result == NEW) ? 1 : -1;
+
+                    result = matchup(moves, position, theta_minus, theta_plus, -1);
+                    score += (result == DRAW) ? 0 : (result == NEW) ? -1 : 1;
+                }
+            }};
+        }
+
+        for (int i = 0; i < n; ++i)
+        {
+            threads[i].join();
         }
 
         return score;
@@ -214,6 +262,8 @@ struct spsa
         std::vector<std::string> tuned_features{
             "HISTORY_MULT",
             "HISTORY_BASE",
+            "HISTORY_MALUS_MULT",
+           "HISTORY_MALUS_BASE",
         };
 
         std::vector<tunable_feature> features{};
@@ -227,10 +277,11 @@ struct spsa
         display_features(features);
 
         // spsa
+        srand(42);
         openbook book{"../book/baron30.bin"};
         double alpha = 0.602;
         double gamma = 0.101;
-        int n = 1000;
+        int n = 50;
         double A = 0.1 * n;
 
         std::vector<tunable_feature> theta = features;
@@ -263,7 +314,7 @@ struct spsa
             int result = match(book, theta_plus, theta_minus);
             for (int i = 0; i < theta.size(); ++i)
             {
-                theta[i] = theta[i].add(ak[i] * result / (ck[i] * delta[i]));
+                theta[i] = theta[i].add(ak[i] * result / (2 * ck[i] * delta[i]));
             }
 
             std::cout << "theta+\n";

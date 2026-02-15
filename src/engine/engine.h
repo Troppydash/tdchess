@@ -1182,7 +1182,7 @@ struct engine
                     {
                         // [main history update]
                         const int16_t main_history_bonus = features::HISTORY_MULT * depth + features::HISTORY_BASE;
-                        const int16_t main_history_malus = main_history_bonus;
+                        const int16_t main_history_malus = features::HISTORY_MALUS_MULT * depth + features::HISTORY_MALUS_BASE;
                         if (!m_heuristics->is_capture(m_position, move))
                         {
                             // don't store if early cutoff at low depth
