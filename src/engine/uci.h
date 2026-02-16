@@ -3,6 +3,7 @@
 #include "../helper.h"
 #include "../version.h"
 #include <thread>
+#include <iomanip>
 
 inline void pin_thread_to_processor(int logical_processor)
 {
