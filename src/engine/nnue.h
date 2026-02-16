@@ -34,7 +34,7 @@ struct alignas(64) network
     int16_t output_bias[BUCKET_SIZE];
 };
 
-inline int32_t screlu(int16_t x)
+constexpr int32_t screlu(int16_t x)
 {
     const int32_t val = std::clamp(x, static_cast<int16_t>(0), QA);
     return val * val;
@@ -165,13 +165,15 @@ class nnue
         __m128i x32 = _mm_add_epi32(x64, _mm_shuffle_epi32(x64, _MM_SHUFFLE(1, 1, 1, 1)));
         output += _mm_cvtsi128_si32(x32);
 #else
+        const int16_t *__restrict us = m_sides[side2move][m_ply].vals;
+        const int16_t *__restrict them = m_sides[side2move ^ 1][m_ply].vals;
+
+        const int16_t *__restrict weights1 = m_network.output_weights + bucket * 2 * HIDDEN_SIZE;
+        const int16_t *__restrict weights2 = m_network.output_weights + bucket * 2 * HIDDEN_SIZE + HIDDEN_SIZE;
+
         for (size_t i = 0; i < HIDDEN_SIZE; ++i)
         {
-            auto &us = m_sides[side2move][m_ply];
-            auto &them = m_sides[side2move ^ 1][m_ply];
-            output += screlu(us.vals[i]) * m_network.output_weights[bucket * 2 * HIDDEN_SIZE + i];
-            output += screlu(them.vals[i]) *
-                      m_network.output_weights[bucket * 2 * HIDDEN_SIZE + HIDDEN_SIZE + i];
+            output += screlu(us[i]) * weights1[i] + screlu(them[i]) * weights2[i];
         }
 #endif
 
