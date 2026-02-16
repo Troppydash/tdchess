@@ -28,7 +28,7 @@ enum class movegen_stage
     DONE
 };
 
-constexpr int16_t IGNORE_SCORE = -32000;
+constexpr int16_t IGNORE_SCORE = -32300;
 constexpr int16_t BAD_QUIET_THRESHOLD = -500;
 
 class movegen
@@ -123,7 +123,8 @@ class movegen
                                                                 [move.to().index()][captured]
                                                 .get_value();
 
-                    int16_t score = mvv + capture_score;
+
+                    int16_t score = std::clamp(mvv + capture_score, -32000, 32000);
                     move.setScore(score);
                 }
 
@@ -160,10 +161,9 @@ class movegen
                                                          [move.from().index()][move.to().index()]
                                             .get_value();
 
-                        // score += m_heuristics
-                        //             .pawn[pawn_key & PAWN_STRUCTURE_SIZE_M1][m_position.at(move.from())]
-                        //                  [move.to().index()]
-                        //             .get_value();
+                        if (m_continuation1 != nullptr)
+                            score += (*m_continuation1)[m_position.at(move.from())][move.to().index()]
+                                         .get_value() / 2;
 
                         score = std::clamp(score, -30000, 30000);
                         move.setScore(score);

@@ -43,12 +43,12 @@ constexpr int16_t MATE_IN(int32_t ply)
     return INF - ply;
 }
 
-constexpr bool IS_WIN(int16_t value)
+constexpr bool IS_WIN(int32_t value)
 {
     return value > CHECKMATE;
 }
 
-constexpr bool IS_LOSS(int16_t value)
+constexpr bool IS_LOSS(int32_t value)
 {
     return value < -CHECKMATE;
 }
@@ -56,6 +56,11 @@ constexpr bool IS_LOSS(int16_t value)
 constexpr bool IS_DECISIVE(int16_t value)
 {
     return IS_WIN(value) || IS_LOSS(value);
+}
+
+constexpr int16_t CLAMP_TO_EVAL(int16_t eval)
+{
+    return std::clamp((int)eval, -param::CHECKMATE, (int)param::CHECKMATE);
 }
 
 constexpr int64_t TIME_MAX = 1'000'000'000;
