@@ -12,7 +12,7 @@ template <typename I, I LIMIT> struct history_entry
     void add_bonus(I bonus)
     {
         I clamped_bonus = helper::clamp(bonus, -LIMIT, LIMIT);
-        value += clamped_bonus - value * std::abs(clamped_bonus) / LIMIT;
+        value += clamped_bonus - static_cast<int32_t>(value) * std::abs(clamped_bonus) / LIMIT;
     }
 
     void decay()
@@ -35,9 +35,10 @@ using continuation_history = history_entry<int16_t, 20000>[12][64];
 using continuation_history_full = history_entry<int16_t, 20000>[13][64][12][64];
 constexpr int NUM_CONTINUATION = 2;
 
-constexpr int PAWN_STRUCTURE_SIZE = 1 << 13;
+constexpr int PAWN_STRUCTURE_SIZE = 1 << 14;
 constexpr int PAWN_STRUCTURE_SIZE_M1 = PAWN_STRUCTURE_SIZE - 1;
 using pawn_history = history_entry<int16_t, 20000>[PAWN_STRUCTURE_SIZE][12][64];
+using pawn_correction_history = history_entry<int16_t, 20000>[2][PAWN_STRUCTURE_SIZE];
 
 struct heuristics
 {
@@ -48,9 +49,10 @@ struct heuristics
     low_ply_history low_ply;
     continuation_history_full continuation;
     pawn_history pawn;
+    pawn_correction_history correction_history;
 
     heuristics()
-        : main_history{}, capture_history{}, killers{}, counter{}, low_ply{}, continuation{}, pawn{}
+        : main_history{}, capture_history{}, killers{}, counter{}, low_ply{}, continuation{}, pawn{}, correction_history{}
     {
     }
 
@@ -116,6 +118,10 @@ struct heuristics
         }
     }
 
+    void update_corr_hist_score(const chess::Board &position, int bonus)
+    {
+        correction_history[position.sideToMove()][get_pawn_key(position) & PAWN_STRUCTURE_SIZE_M1].add_bonus(bonus);
+    }
     // void incr_counter(const chess::Board &position, const chess::Move &prev_move,
     //                   const chess::Move &move)
     // {

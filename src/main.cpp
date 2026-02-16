@@ -110,55 +110,53 @@ int evaluate_bucket(const chess::Board &position)
 
 void position_test()
 {
-    std::ifstream file{"/home/terry/Downloads/fastchess-linux-x86-64/popularpos_lichess.epd"};
-    std::vector<std::string> fens;
-    std::string line;
-    while (std::getline(file, line))
-    {
-        fens.push_back(line);
-    }
-
-    std::cout << "loaded " << fens.size() << " positions\n";
-
-    for (auto &pos : fens)
-    {
-        chess::Board start{pos};
-
-        std::cout << start << std::endl;
-        std::cout << start.getFen() << std::endl;
-
-
-        nnue nnue{};
-        nnue.load_network("../nets/2026-02-08-1800-370.bin");
-        endgame_table endgame{};
-        endgame.load_file("../syzygy");
-        table tt{64};
-        engine engine{&endgame, &nnue, &tt};
-        search_param param;
-        param.movetime = 10000;
-        auto result = engine.search(start, param, true);
-        std::cout << chess::uci::moveToUci(result.pv_line[0]) << std::endl;
-    }
-
-    // std::vector<std::pair<std::string, std::string>> positions{
-    //     {"5rk1/1q2bpp1/4p2p/1N2P3/np5P/2r5/P3QPP1/1B1RR1K1 b - - 1 26", "c3c5 not c3c8, zero
-    //     eval"},
-    //     {"2r2rk1/1q2bp2/4p1pp/1N2P3/np5P/6Q1/P4PP1/1B1RR1K1 b - - 1 28", "b7b5, negative eval
-    //     1"}};
-    //
-    // for (auto &[pos, target] : positions)
+    // std::ifstream file{"/home/terry/Downloads/fastchess-linux-x86-64/popularpos_lichess.epd"};
+    // std::vector<std::string> fens;
+    // std::string line;
+    // while (std::getline(file, line))
     // {
+    //     fens.push_back(line);
+    // }
+    //
+    // std::cout << "loaded " << fens.size() << " positions\n";
+    //
+    // for (auto &pos : fens)
+    // {
+    //     chess::Board start{pos};
+    //
+    //     std::cout << start << std::endl;
+    //     std::cout << start.getFen() << std::endl;
+    //
+    //
     //     nnue nnue{};
     //     nnue.load_network("../nets/2026-02-08-1800-370.bin");
-    //     chess::Board start{pos};
-    //     table tt{512};
-    //     engine engine{nullptr, &nnue, &tt};
+    //     endgame_table endgame{};
+    //     endgame.load_file("../syzygy");
+    //     table tt{64};
+    //     engine engine{&endgame, &nnue, &tt};
     //     search_param param;
-    //     param.movetime = 5000;
-    //     engine.search(start, param, true);
-    //
-    //     std::cout << "oracle " << target << std::endl;
+    //     param.movetime = 10000;
+    //     auto result = engine.search(start, param, true);
+    //     std::cout << chess::uci::moveToUci(result.pv_line[0]) << std::endl;
     // }
+
+    std::vector<std::pair<std::string, std::string>> positions{
+        {"5rk1/1q2bpp1/4p2p/1N2P3/np5P/2r5/P3QPP1/1B1RR1K1 b - - 1 26", "c3c5 not c3c8, zero eval"},
+        {"2r2rk1/1q2bp2/4p1pp/1N2P3/np5P/6Q1/P4PP1/1B1RR1K1 b - - 1 28", "b7b5, negative eval 1"}};
+
+    for (auto &[pos, target] : positions)
+    {
+        nnue nnue{};
+        nnue.load_network("../nets/2026-02-08-1800-370.bin");
+        chess::Board start{pos};
+        table tt{512};
+        engine engine{nullptr, &nnue, &tt};
+        search_param param;
+        param.movetime = 5000;
+        engine.search(start, param, true);
+
+        std::cout << "oracle " << target << std::endl;
+    }
 }
 
 int main()
