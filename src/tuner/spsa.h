@@ -73,8 +73,8 @@ struct spsa
         engine_nnue->load_network("../nets/2026-02-08-1800-370.bin");
         engine engine{engine_endgame_table.get(), engine_nnue.get(), engine_table.get()};
 
-        arena_clock engine_new_clock{1000, 100};
-        arena_clock engine_clock{1000, 100};
+        arena_clock engine_new_clock{3000, 100};
+        arena_clock engine_clock{3000, 100};
 
         search_param engine_new_param{};
         search_param engine_param{};
@@ -159,7 +159,7 @@ struct spsa
 
             // check win
             int win_value = 1500;
-            int win_number = 6;
+            int win_number = 3;
             if (scores.size() >= win_number)
             {
                 bool sign = std::signbit(scores[scores.size() - 1]);
@@ -187,8 +187,8 @@ struct spsa
             }
 
             // check draw
-            int draw_value = 10;
-            int draw_number = 8;
+            int draw_value = 30;
+            int draw_number = 6;
             if (moves.size() > 34)
             {
                 bool ok = true;
@@ -215,12 +215,10 @@ struct spsa
     {
         int score = 0;
 
-        int k = 2;
+        int k = 4;
         for (int j = 0; j < k; ++j)
         {
-            auto [moves, position] = book.generate_game(12);
-
-            pin_thread_to_processor(0);
+            auto [moves, position] = book.generate_game(14);
 
             int result = matchup(moves, position, theta_plus, theta_minus, 1);
             score += (result == DRAW) ? 0 : (result == NEW) ? 1 : -1;
@@ -292,8 +290,9 @@ struct spsa
                 theta_minus[i] = theta[i].add(-ck[i] * delta[i]);
             }
 
-            int result = match(book, theta_plus, theta_minus);
-
+            int loss_plus = match(book, theta_plus, features);
+            int loss_minus = match(book, theta_minus, features);
+            int result = (loss_plus - loss_minus);
             for (int i = 0; i < theta.size(); ++i)
             {
                 theta[i] = theta[i].add(ak[i] * result / (2 * ck[i] * delta[i]));

@@ -1136,9 +1136,9 @@ struct engine
 
                 // reduce/extend based on the history
                 if (is_quiet)
-                    reduction -= history_score / 10000;
+                    reduction -= history_score / features::QUIET_LMR_DIV;
                 else
-                    reduction -= capture_score / 10000;
+                    reduction -= capture_score / features::CAPTURE_LMR_DIV;
 
                 // reduce if promotion not queen
                 if (move.typeOf() == chess::Move::PROMOTION &&
@@ -1150,8 +1150,8 @@ struct engine
                 if (score > alpha && reduced_depth < new_depth)
                 {
                     // depth extend if score is good, reduce if score is bad
-                    new_depth += (score > best_score + 55 + new_depth * 2);
-                    new_depth -= (score < best_score + 10);
+                    new_depth += (score > best_score + features::RESEARCH_HIGH + new_depth * 2);
+                    new_depth -= (score < best_score + features::RESEARCH_LOW);
 
                     if (reduced_depth < new_depth)
                         score = -negamax<false>(-(alpha + 1), -alpha, new_depth, ss + 1, !cut_node);
