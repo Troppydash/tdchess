@@ -35,7 +35,7 @@ using continuation_history = history_entry<int16_t, 20000>[12][64];
 using continuation_history_full = history_entry<int16_t, 20000>[13][64][12][64];
 constexpr int NUM_CONTINUATION = 2;
 
-constexpr int PAWN_STRUCTURE_SIZE = 1 << 14;
+constexpr int PAWN_STRUCTURE_SIZE = 1 << 13;
 constexpr int PAWN_STRUCTURE_SIZE_M1 = PAWN_STRUCTURE_SIZE - 1;
 using pawn_history = history_entry<int16_t, 20000>[PAWN_STRUCTURE_SIZE][12][64];
 using pawn_correction_history = history_entry<int16_t, 20000>[2][PAWN_STRUCTURE_SIZE];
