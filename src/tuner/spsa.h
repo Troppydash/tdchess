@@ -9,28 +9,6 @@
 
 #include "../engine/features.h"
 
-inline int counter = 0;
-inline std::mutex mtx;
-inline std::condition_variable cv;
-
-inline void add_if(int value, const std::vector<tunable_feature> &features,
-                   const std::function<bool()> &fn)
-{
-    std::unique_lock<std::mutex> lock(mtx);
-    cv.wait(lock, fn);
-
-    // apply if first, this section is under mutex
-    bool is_root = counter == 0;
-    if (is_root)
-    {
-        for (auto &f : features)
-            f.apply();
-    }
-
-    counter += value;
-    cv.notify_all(); // wake other waiters
-}
-
 struct spsa
 {
     static void display_features(const std::vector<tunable_feature> &features)
@@ -63,18 +41,17 @@ struct spsa
         engine_new_endgame_table->load_file("../syzygy");
         std::unique_ptr<nnue> engine_new_nnue = std::make_unique<nnue>();
         engine_new_nnue->load_network("../nets/2026-02-08-1800-370.bin");
-        engine engine_new{engine_new_endgame_table.get(), engine_new_nnue.get(),
-                          engine_new_table.get()};
+        engine engine_new{nullptr, engine_new_nnue.get(), engine_new_table.get()};
 
         std::unique_ptr<table> engine_table = std::make_unique<table>(512);
         std::unique_ptr<endgame_table> engine_endgame_table = std::make_unique<endgame_table>();
         engine_endgame_table->load_file("../syzygy");
         std::unique_ptr<nnue> engine_nnue = std::make_unique<nnue>();
         engine_nnue->load_network("../nets/2026-02-08-1800-370.bin");
-        engine engine{engine_endgame_table.get(), engine_nnue.get(), engine_table.get()};
+        engine engine{nullptr, engine_nnue.get(), engine_table.get()};
 
-        arena_clock engine_new_clock{3000, 100};
-        arena_clock engine_clock{3000, 100};
+        arena_clock engine_new_clock{500, 30};
+        arena_clock engine_clock{500, 30};
 
         search_param engine_new_param{};
         search_param engine_param{};
@@ -210,14 +187,15 @@ struct spsa
         }
     }
 
-    static int match(openbook &book, const std::vector<tunable_feature> &theta_plus,
-                     const std::vector<tunable_feature> &theta_minus)
+    static double match(openbook &book, const std::vector<tunable_feature> &theta_plus,
+                        const std::vector<tunable_feature> &theta_minus)
     {
-        int score = 0;
+        double score = 0;
 
-        int k = 4;
+        int k = 2;
         for (int j = 0; j < k; ++j)
         {
+            std::cout << "game " << j << std::endl;
             auto [moves, position] = book.generate_game(14);
 
             int result = matchup(moves, position, theta_plus, theta_minus, 1);
@@ -227,7 +205,7 @@ struct spsa
             score += (result == DRAW) ? 0 : (result == NEW) ? -1 : 1;
         }
 
-        return score;
+        return score / (2 * k);
     }
 
     static void loop()
@@ -262,6 +240,8 @@ struct spsa
         double gamma = 0.101;
         int n = 100;
         double A = 0.1 * n;
+        double a_init = 0.01;
+        double c = 0.1;
 
         std::vector<tunable_feature> theta = features;
 
@@ -269,33 +249,26 @@ struct spsa
         {
             std::cout << "[round " << k << "]\n";
 
-            std::vector<double> ak(features.size());
-            std::vector<double> ck(features.size());
-            for (int i = 0; i < features.size(); ++i)
-            {
-                double a = features[i].delta * std::pow(A + 1, alpha);
-                ak[i] = a / std::pow(k + 1 + A, alpha);
-                ck[i] = features[i].delta / std::pow(k + 1, gamma);
-            }
+            double scale = a_init * std::pow(1 + A, alpha);
+            double ak = scale / std::pow(k + 1 + A, alpha);
+            double ck = c / std::pow(k + 1, gamma);
 
             std::vector<double> delta(features.size());
             for (int i = 0; i < delta.size(); ++i)
-                delta[i] = rand() / ((double)RAND_MAX) > 0.5 ? 1 : -1;
+                delta[i] = (rand() / ((double)RAND_MAX) > 0.5) ? 1 : -1;
 
             std::vector<tunable_feature> theta_plus(features.size());
             std::vector<tunable_feature> theta_minus(features.size());
             for (int i = 0; i < delta.size(); ++i)
             {
-                theta_plus[i] = theta[i].add(ck[i] * delta[i]);
-                theta_minus[i] = theta[i].add(-ck[i] * delta[i]);
+                theta_plus[i] = theta[i].add(ck * delta[i]);
+                theta_minus[i] = theta[i].add(-ck * delta[i]);
             }
 
-            int loss_plus = match(book, theta_plus, features);
-            int loss_minus = match(book, theta_minus, features);
-            int result = (loss_plus - loss_minus);
+            double result = match(book, theta_plus, theta_minus);
             for (int i = 0; i < theta.size(); ++i)
             {
-                theta[i] = theta[i].add(ak[i] * result / (2 * ck[i] * delta[i]));
+                theta[i] = theta[i].add(ak * result / (ck * delta[i]));
             }
 
             std::cout << "theta+\n";

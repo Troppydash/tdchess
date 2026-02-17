@@ -42,8 +42,11 @@ class arena_clock
     {
         int64_t diff = std::chrono::duration_cast<std::chrono::milliseconds>(now() - m_ref).count();
         m_time -= diff;
-        if (m_time < 0)
+        if (m_time < -2)
+        {
+            std::cout << "timeout with " << m_time << std::endl;
             return true;
+        }
 
         m_time += m_incr;
         return false;
@@ -230,7 +233,8 @@ template <typename Result = gsprt_results> class arena
                 bool timeout = agent0_clock.stop();
                 if (timeout)
                 {
-                    std::cout << "[warning] " <<  agent0_settings.m_alias << " out of time at move " << moves.size() << std::endl;
+                    std::cout << "[warning] " << agent0_settings.m_alias << " out of time at move "
+                              << moves.size() << std::endl;
                     return AGENT1;
                 }
             }
@@ -241,7 +245,8 @@ template <typename Result = gsprt_results> class arena
                 bool timeout = agent1_clock.stop();
                 if (timeout)
                 {
-                    std::cout << "[warning] " <<  agent1_settings.m_alias << " out of time at move " << moves.size() << std::endl;
+                    std::cout << "[warning] " << agent1_settings.m_alias << " out of time at move "
+                              << moves.size() << std::endl;
                     return AGENT0;
                 }
             }

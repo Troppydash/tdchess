@@ -29,9 +29,9 @@ void improvement_test(const std::string &baseline, const std::string &latest, bo
     std::string baseline_prefix = "../builds/" + baseline;
     std::string latest_prefix = "../builds/" + latest;
     const agent_settings base{baseline, baseline_prefix + "/tdchess", baseline_prefix + "/nnue.bin",
-                              "../syzygy", 512};
+                              "", 512};
     const agent_settings late{
-        latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "../syzygy", 512, false};
+        latest, latest_prefix + "/tdchess", latest_prefix + "/nnue.bin", "", 512, false};
     std::vector<agent_settings> agents{late, base};
 
     arena_settings settings;
@@ -61,7 +61,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.1.1", "1.2.0", true);
+    improvement_test("1.2.10", "1.2.15", true);
 
     return 0;
 }

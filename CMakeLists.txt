@@ -97,6 +97,7 @@ target_compile_options(tdchess_pgo PRIVATE
 add_executable(tdchess_tune src/main.cpp)
 target_link_libraries(tdchess_tune PRIVATE fathom)
 target_compile_definitions(tdchess_tune PRIVATE TDCHESS_TUNE)
+target_include_directories(tdchess_tune PRIVATE ${Boost_INCLUDE_DIRS})
 target_link_options(tdchess_tune PRIVATE
         "-flto"
 #        -fsanitize=undefined
