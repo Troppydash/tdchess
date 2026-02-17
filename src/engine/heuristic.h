@@ -38,21 +38,21 @@ constexpr int NUM_CONTINUATION = 2;
 constexpr int PAWN_STRUCTURE_SIZE = 1 << 13;
 constexpr int PAWN_STRUCTURE_SIZE_M1 = PAWN_STRUCTURE_SIZE - 1;
 using pawn_history = history_entry<int16_t, 20000>[PAWN_STRUCTURE_SIZE][12][64];
-using pawn_correction_history = history_entry<int16_t, 20000>[2][PAWN_STRUCTURE_SIZE];
+using pawn_correction_history = history_entry<int16_t, 8000>[2][PAWN_STRUCTURE_SIZE];
 
 struct heuristics
 {
     history_heuristic main_history;
     capture_heuristic capture_history;
     killer_heuristic killers;
-    counter_moves counter;
     low_ply_history low_ply;
     continuation_history_full continuation;
     pawn_history pawn;
     pawn_correction_history correction_history;
 
     heuristics()
-        : main_history{}, capture_history{}, killers{}, counter{}, low_ply{}, continuation{}, pawn{}, correction_history{}
+        : main_history{}, capture_history{}, killers{}, low_ply{}, continuation{}, pawn{},
+          correction_history{}
     {
     }
 
@@ -85,8 +85,8 @@ struct heuristics
             bonus);
 
         // update pawn history
-        pawn[get_pawn_key(position) & PAWN_STRUCTURE_SIZE_M1]
-            [position.at(move.from())][move.to().index()]
+        pawn[get_pawn_key(position) & PAWN_STRUCTURE_SIZE_M1][position.at(move.from())]
+            [move.to().index()]
                 .add_bonus(bonus);
     }
 
@@ -94,7 +94,8 @@ struct heuristics
     {
         auto pieces = position.pieces(chess::PieceType::PAWN);
         uint64_t pawn_key = 0;
-        while (pieces) {
+        while (pieces)
+        {
             const chess::Square sq = pieces.pop();
             pawn_key ^= chess::Zobrist::piece(position.at(sq), sq);
         }
@@ -120,7 +121,8 @@ struct heuristics
 
     void update_corr_hist_score(const chess::Board &position, int bonus)
     {
-        correction_history[position.sideToMove()][get_pawn_key(position) & PAWN_STRUCTURE_SIZE_M1].add_bonus(bonus);
+        correction_history[position.sideToMove()][get_pawn_key(position) & PAWN_STRUCTURE_SIZE_M1]
+            .add_bonus(bonus);
     }
     // void incr_counter(const chess::Board &position, const chess::Move &prev_move,
     //                   const chess::Move &move)
@@ -143,7 +145,7 @@ struct heuristics
         //     for (auto &b : a)
         //         for (auto &c : b)
         //             c.decay();
-
+        //
         // for (auto &a : continuation)
         //     for (auto &b : a)
         //         for (auto &c : b)
@@ -157,5 +159,20 @@ struct heuristics
         //         n = {chess::Move::NO_MOVE, false};
         //     }
         // }
+        //
+        // for (auto &a : pawn)
+        //     for (auto &b : a)
+        //         for (auto &c : b)
+        //             c.decay();
+        //
+        // for (auto &a : low_ply)
+        //     for (auto &b : a)
+        //         for (auto &c : b)
+        //             for (auto &d : c)
+        //                 d.decay();
+        //
+        // for (auto &a : correction_history)
+        //     for (auto &b : a)
+        //         b.decay();
     }
 };
