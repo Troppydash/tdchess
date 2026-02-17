@@ -1,5 +1,6 @@
 #pragma once
 
+#include "features.h"
 #include "heuristic.h"
 #include "see.h"
 
@@ -29,7 +30,6 @@ enum class movegen_stage
 };
 
 constexpr int16_t IGNORE_SCORE = -32300;
-constexpr int16_t BAD_QUIET_THRESHOLD = -500;
 
 class movegen
 {
@@ -115,7 +115,7 @@ class movegen
                     }
 
                     auto captured = m_heuristics.get_capture(m_position, move);
-                    int16_t mvv = see::PIECE_VALUES[captured] * 7;
+                    int16_t mvv = see::PIECE_VALUES[captured] * features::CAPTURE_MVV_SCALE;
 
                     // capture history
                     int16_t capture_score = m_heuristics
@@ -179,7 +179,7 @@ class movegen
             case movegen_stage::GOOD_CAPTURE: {
                 // see check, incr bad_capture_end
                 m_move_index = pick_move(m_moves, m_move_index, m_moves.size(), [&](auto &move) {
-                    if (!see::test_ge(m_position, move, -move.score() / 25))
+                    if (!see::test_ge(m_position, move, -move.score() / features::GOOD_CAPTURE_SEE_DIV))
                     {
                         std::swap(m_moves[m_bad_capture_end], move);
                         m_bad_capture_end++;
@@ -247,7 +247,7 @@ class movegen
                     // low ply
                     if (m_ply < LOW_PLY)
                     {
-                        score += 8 *
+                        score += features::QUIET_LOW_PLY_SCALE *
                                  m_heuristics
                                      .low_ply[m_position.sideToMove()][m_ply][move.from().index()]
                                              [move.to().index()]
@@ -273,7 +273,7 @@ class movegen
                     score = std::clamp(score, -31000, 31000);
                     move.setScore(score);
 
-                    if (score < -5000)
+                    if (score < features::QUIET_BAD_THRESHOLD)
                     {
                         std::swap(m_moves[m_bad_quiet_end], m_moves[i]);
                         m_bad_quiet_end++;
@@ -354,7 +354,7 @@ class movegen
                 // explore only see captures
             case movegen_stage::PROB_GOOD_CAPTURE: {
                 m_move_index = pick_move(m_moves, m_move_index, m_moves.size(), [&](auto &move) {
-                    return see::test_ge(m_position, move, -move.score() / 60);
+                    return see::test_ge(m_position, move, -move.score() / features::PROB_GOOD_CAPTURE_SEE_DIV);
                 });
                 if (m_move_index < m_moves.size())
                     return m_moves[m_move_index++];
