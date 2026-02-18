@@ -8,6 +8,10 @@
 #include <immintrin.h>
 #endif
 
+#ifdef __ARM_NEON
+#include <arm_neon.h>
+#endif
+
 #define TDCHESS_NNUE_INLINE
 
 constexpr size_t HIDDEN_SIZE = 1568;
@@ -21,7 +25,7 @@ struct alignas(64) accumulator
     int16_t vals[HIDDEN_SIZE];
 };
 
-struct alignas(64) network
+struct network
 {
     // QA quant, 64*3 -> hidden_size
     accumulator feature_weights[768];
@@ -164,12 +168,97 @@ class nnue
         __m128i x64 = _mm_add_epi32(x128, _mm_shuffle_epi32(x128, _MM_SHUFFLE(1, 0, 3, 2)));
         __m128i x32 = _mm_add_epi32(x64, _mm_shuffle_epi32(x64, _MM_SHUFFLE(1, 1, 1, 1)));
         output += _mm_cvtsi128_si32(x32);
+#elifdef __ARM_NEON
+        // Thanks gemini
+        const int16_t *__restrict us = m_sides[side2move][m_ply].vals;
+        const int16_t *__restrict them = m_sides[side2move ^ 1][m_ply].vals;
+
+        const int16_t *__restrict weights1 = m_network.output_weights + bucket * 2 * HIDDEN_SIZE;
+        const int16_t *__restrict weights2 =
+            m_network.output_weights + bucket * 2 * HIDDEN_SIZE + HIDDEN_SIZE;
+
+        const int16x8_t v_zero = vdupq_n_s16(0);
+        const int16x8_t v_qa = vdupq_n_s16(QA);
+
+        // 8 accumulators to fully saturate the 4 SIMD pipelines
+        int32x4_t acc0 = vdupq_n_s32(0);
+        int32x4_t acc1 = vdupq_n_s32(0);
+        int32x4_t acc2 = vdupq_n_s32(0);
+        int32x4_t acc3 = vdupq_n_s32(0);
+        int32x4_t acc4 = vdupq_n_s32(0);
+        int32x4_t acc5 = vdupq_n_s32(0);
+        int32x4_t acc6 = vdupq_n_s32(0);
+        int32x4_t acc7 = vdupq_n_s32(0);
+
+        for (size_t i = 0; i < HIDDEN_SIZE; i += 32)
+        {
+            // --- LOAD & CLAMP US ---
+            int16x8_t u0 = vld1q_s16(us + i);
+            int16x8_t u1 = vld1q_s16(us + i + 8);
+            int16x8_t u2 = vld1q_s16(us + i + 16);
+            int16x8_t u3 = vld1q_s16(us + i + 24);
+
+            int16x8_t cu0 = vminq_s16(vmaxq_s16(u0, v_zero), v_qa);
+            int16x8_t cu1 = vminq_s16(vmaxq_s16(u1, v_zero), v_qa);
+            int16x8_t cu2 = vminq_s16(vmaxq_s16(u2, v_zero), v_qa);
+            int16x8_t cu3 = vminq_s16(vmaxq_s16(u3, v_zero), v_qa);
+
+            // --- LOAD & CLAMP THEM ---
+            int16x8_t t0 = vld1q_s16(them + i);
+            int16x8_t t1 = vld1q_s16(them + i + 8);
+            int16x8_t t2 = vld1q_s16(them + i + 16);
+            int16x8_t t3 = vld1q_s16(them + i + 24);
+
+            int16x8_t ct0 = vminq_s16(vmaxq_s16(t0, v_zero), v_qa);
+            int16x8_t ct1 = vminq_s16(vmaxq_s16(t1, v_zero), v_qa);
+            int16x8_t ct2 = vminq_s16(vmaxq_s16(t2, v_zero), v_qa);
+            int16x8_t ct3 = vminq_s16(vmaxq_s16(t3, v_zero), v_qa);
+
+            // --- WEIGHTS & MULTIPLY ---
+            // Interleaving US and THEM here to help the scheduler
+            int16x8_t mu0 = vmulq_s16(vld1q_s16(weights1 + i), cu0);
+            int16x8_t mt0 = vmulq_s16(vld1q_s16(weights2 + i), ct0);
+            int16x8_t mu1 = vmulq_s16(vld1q_s16(weights1 + i + 8), cu1);
+            int16x8_t mt1 = vmulq_s16(vld1q_s16(weights2 + i + 8), ct1);
+            int16x8_t mu2 = vmulq_s16(vld1q_s16(weights1 + i + 16), cu2);
+            int16x8_t mt2 = vmulq_s16(vld1q_s16(weights2 + i + 16), ct2);
+            int16x8_t mu3 = vmulq_s16(vld1q_s16(weights1 + i + 24), cu3);
+            int16x8_t mt3 = vmulq_s16(vld1q_s16(weights2 + i + 24), ct3);
+
+            // --- ACCUMULATE ---
+            acc0 = vmlal_s16(acc0, vget_low_s16(mu0), vget_low_s16(cu0));
+            acc1 = vmlal_s16(acc1, vget_high_s16(mu0), vget_high_s16(cu0));
+            acc2 = vmlal_s16(acc2, vget_low_s16(mt0), vget_low_s16(ct0));
+            acc3 = vmlal_s16(acc3, vget_high_s16(mt0), vget_high_s16(ct0));
+
+            acc4 = vmlal_s16(acc4, vget_low_s16(mu1), vget_low_s16(cu1));
+            acc5 = vmlal_s16(acc5, vget_high_s16(mu1), vget_high_s16(cu1));
+            acc6 = vmlal_s16(acc6, vget_low_s16(mt1), vget_low_s16(ct1));
+            acc7 = vmlal_s16(acc7, vget_high_s16(mt1), vget_high_s16(ct1));
+
+            // Second half of 32
+            acc0 = vmlal_s16(acc0, vget_low_s16(mu2), vget_low_s16(cu2));
+            acc1 = vmlal_s16(acc1, vget_high_s16(mu2), vget_high_s16(cu2));
+            acc2 = vmlal_s16(acc2, vget_low_s16(mt2), vget_low_s16(ct2));
+            acc3 = vmlal_s16(acc3, vget_high_s16(mt2), vget_high_s16(ct2));
+
+            acc4 = vmlal_s16(acc4, vget_low_s16(mu3), vget_low_s16(cu3));
+            acc5 = vmlal_s16(acc5, vget_high_s16(mu3), vget_high_s16(cu3));
+            acc6 = vmlal_s16(acc6, vget_low_s16(mt3), vget_low_s16(ct3));
+            acc7 = vmlal_s16(acc7, vget_high_s16(mt3), vget_high_s16(ct3));
+        }
+
+        // Final sum reduction
+        int32x4_t sum_l = vaddq_s32(vaddq_s32(acc0, acc1), vaddq_s32(acc2, acc3));
+        int32x4_t sum_h = vaddq_s32(vaddq_s32(acc4, acc5), vaddq_s32(acc6, acc7));
+        output += vaddvq_s32(vaddq_s32(sum_l, sum_h));
 #else
         const int16_t *__restrict us = m_sides[side2move][m_ply].vals;
         const int16_t *__restrict them = m_sides[side2move ^ 1][m_ply].vals;
 
         const int16_t *__restrict weights1 = m_network.output_weights + bucket * 2 * HIDDEN_SIZE;
-        const int16_t *__restrict weights2 = m_network.output_weights + bucket * 2 * HIDDEN_SIZE + HIDDEN_SIZE;
+        const int16_t *__restrict weights2 =
+            m_network.output_weights + bucket * 2 * HIDDEN_SIZE + HIDDEN_SIZE;
 
         for (size_t i = 0; i < HIDDEN_SIZE; ++i)
         {

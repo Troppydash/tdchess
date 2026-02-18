@@ -46,16 +46,16 @@ target_link_options(tdchess_test PRIVATE
 )
 target_compile_options(tdchess_test PRIVATE
         "-Ofast"
-        "-march=native"
         "-Wall"
-        "-march=native"
         "-mtune=native"
         "-funroll-loops"
         "-fno-trapping-math"
         "-fomit-frame-pointer"
         "-Wall"
+        "-march=native"
         -DNDEBUG -fno-rtti
-        -mcpu=native -funroll-loops -frename-registers
+        -mcpu=native
+        -frename-registers
         -Rpass=loop-vectorize -Rpass-missed=loop-vectorize
 #        "-Wextra"
 #        -fsanitize=undefined
