@@ -1993,6 +1993,11 @@ class Board {
         return ss;
     }
 
+    std::vector<State> &get_prev_state()
+    {
+        return prev_states_;
+    }
+
     /**
      * @brief Make a move on the board. The move must be legal otherwise the
      * behavior is undefined. EXACT can be set to true to only record
