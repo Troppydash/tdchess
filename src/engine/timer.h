@@ -6,6 +6,7 @@ class timer
 {
   private:
     std::chrono::milliseconds m_target{};
+    std::chrono::milliseconds m_start{};
     bool m_is_stopped = false;
     bool m_forced_stopped = false;
 
@@ -22,9 +23,15 @@ class timer
 
     void start(int64_t ms)
     {
-        m_target = now() + std::chrono::milliseconds(ms);
+        m_start = now();
+        m_target = m_start + std::chrono::milliseconds(ms);
         m_is_stopped = false;
         m_forced_stopped = false;
+    }
+
+    bool is_delta(int64_t ms) const
+    {
+        return now() - m_start >= std::chrono::milliseconds(ms);
     }
 
     void add(int ms)

@@ -21,6 +21,7 @@ struct search_param
     {
         int32_t depth;
         int64_t time;
+        int64_t opt_time;
     };
 
     explicit search_param()
@@ -71,33 +72,19 @@ struct search_param
 
         // ignore if time and inc are invalid
         if (time == param::TIME_MAX || inc == param::TIME_MAX)
-            return {depth, movetime};
+            return {depth, movetime, movetime};
 
-        // sf style, movestogo = 0
-        int ply = (moves - 1) * 2;
-        int64_t scaled_time = time;
-        int64_t cent_mtg = 5051;
-        if (scaled_time < 1000)
-            cent_mtg = static_cast<int64_t>(scaled_time * 5.051);
+        if (movetime != param::TIME_MAX)
+            return {depth, movetime, movetime};
 
-        int64_t time_left =
-            std::max(static_cast<int64_t>(1), time + (inc * (cent_mtg - 100) - move_overhead * (200 + cent_mtg)) / 100);
+        // https://github.com/gab8192/Obsidian/blob/main/src/timeman.cpp
+        int mtg = 50;
+        int64_t time_left = std::max(1LL, time + inc * (mtg - 1) - move_overhead * (2 + mtg));
 
-        if (original_time_adjust < 0)
-            original_time_adjust = 0.3128 * std::log10(time_left) - 0.4354;
+        double opt_scale = std::min(0.025, 0.214 * time / double(time_left));
+        int64_t max_time = time * 0.8 - move_overhead;
+        int64_t optimum_time = opt_scale * time_left;
 
-        double logtime_in_sec = std::log10(scaled_time / 1000.0);
-        double opt_constant = std::min(0.0032116 + 0.000321123 * logtime_in_sec, 0.00508017);
-        double opt_scale = std::min(0.0121431 + std::pow(ply + 2.94693, 0.461073) * opt_constant,
-                                    0.213035 * (double)time / (double)time_left) *
-                           original_time_adjust;
-
-        int64_t optimum_time = std::max(static_cast<int64_t>(100), static_cast<int64_t>(opt_scale * time_left));
-        if (time - move_overhead < 0)
-            throw std::runtime_error{"uh oh"};
-
-        int64_t overhead_sub = std::max(static_cast<int64_t>(10), time - move_overhead);
-        int64_t true_time = std::min(std::min(optimum_time, overhead_sub), movetime);
-        return {depth, true_time};
+        return {depth, max_time, optimum_time};
     }
 };
