@@ -43,13 +43,13 @@ target_link_options(tdchess_test PRIVATE
         -fsanitize=undefined
 )
 target_compile_options(tdchess_test PRIVATE
-#        "-Ofast"
-#        "-march=native"
-#        "-Wall"
-#        "-march=native"
-#        "-mtune=native"
-#        "-funroll-loops"
-#        "-fno-trapping-math"
+        "-Ofast"
+        "-march=native"
+        "-Wall"
+        "-march=native"
+        "-mtune=native"
+        "-funroll-loops"
+        "-fno-trapping-math"
         "-fomit-frame-pointer"
         "-Wall"
         -DNDEBUG -fno-rtti

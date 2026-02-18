@@ -18,13 +18,11 @@ struct see
 
     constexpr static std::array<int16_t, 7> PIECE_VALUES = {
         // pawn, knight, bishop, rook, queen, king, none
-        PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, 0, 0
-    };
+        PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, 0, 0};
 
     constexpr static std::array<int16_t, 7> PROMOTION_PIECE_VALUES = {
         // pawn, knight, bishop, rook, queen, king, none
-        QUEEN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, 0, 0
-    };
+        QUEEN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, 0, 0};
 
     template <chess::Color::underlying Pinner>
     static chess::Bitboard remove_pinned(const chess::Board &board, chess::Bitboard occ_pinner,
@@ -58,7 +56,7 @@ struct see
      * @param threshold
      * @return
      */
-    static bool test_ge(const chess::Board &position, const chess::Move &move, int16_t threshold)
+    static bool test_ge(chess::Board &position, const chess::Move &move, int16_t threshold)
     {
 
         if (move.typeOf() != chess::Move::NORMAL)
@@ -71,6 +69,8 @@ struct see
 
         chess::Square from = move.from();
         chess::Square to = move.to();
+        chess::Piece from_piece = position.at(from);
+        chess::Piece to_piece = position.at(to);
 
         int32_t swap = PIECE_VALUES[position.at(to).type()] - threshold;
         if (swap < 0)
@@ -81,6 +81,10 @@ struct see
             return true;
 
         chess::Bitboard fil = chess::Bitboard::fromSquare(from) | chess::Bitboard::fromSquare(to);
+        if (from_piece != chess::Piece::NONE)
+            position.removePiece(from_piece, from);
+        if (to_piece != chess::Piece::NONE)
+            position.removePiece(to_piece, to);
         chess::Bitboard occ = position.occ() ^ fil;
         chess::Color stm = position.sideToMove();
         chess::Bitboard attackers = (chess::attacks::attackers(position, chess::Color::WHITE, to) |
@@ -162,19 +166,30 @@ struct see
             }
             else
             {
+                if (from_piece != chess::Piece::NONE)
+                    position.placePiece(from_piece, from);
+                if (to_piece != chess::Piece::NONE)
+                    position.placePiece(to_piece, to);
+
                 // king
                 return (attackers & position.them(stm)) ? res ^ 1 : res;
             }
         }
 
+        if (from_piece != chess::Piece::NONE)
+            position.placePiece(from_piece, from);
+        if (to_piece != chess::Piece::NONE)
+            position.placePiece(to_piece, to);
         return static_cast<bool>(res);
     }
 
-
-    static bool test_ge_promote(const chess::Board &position, const chess::Move &move, int16_t threshold)
+    static bool test_ge_promote(chess::Board &position, const chess::Move &move,
+                                int16_t threshold)
     {
         chess::Square from = move.from();
         chess::Square to = move.to();
+        chess::Piece from_piece = position.at(from);
+        chess::Piece to_piece = position.at(to);
 
         int32_t swap = PROMOTION_PIECE_VALUES[position.at(to).type()] - threshold;
         if (swap < 0)
@@ -185,6 +200,10 @@ struct see
             return true;
 
         chess::Bitboard fil = chess::Bitboard::fromSquare(from) | chess::Bitboard::fromSquare(to);
+        if (from_piece != chess::Piece::NONE)
+            position.removePiece(from_piece, from);
+        if (to_piece != chess::Piece::NONE)
+            position.removePiece(to_piece, to);
         chess::Bitboard occ = position.occ() ^ fil;
         chess::Color stm = position.sideToMove();
         chess::Bitboard attackers = (chess::attacks::attackers(position, chess::Color::WHITE, to) |
@@ -215,7 +234,6 @@ struct see
                 break;
 
             res ^= 1;
-
 
             if ((bb = stm_attackers & position.pieces(chess::PieceType::KNIGHT)))
             {
@@ -267,10 +285,20 @@ struct see
             }
             else
             {
+                if (from_piece != chess::Piece::NONE)
+                    position.placePiece(from_piece, from);
+                if (to_piece != chess::Piece::NONE)
+                    position.placePiece(to_piece, to);
+
                 // king
                 return (attackers & position.them(stm)) ? res ^ 1 : res;
             }
         }
+
+        if (from_piece != chess::Piece::NONE)
+            position.placePiece(from_piece, from);
+        if (to_piece != chess::Piece::NONE)
+            position.placePiece(to_piece, to);
 
         return static_cast<bool>(res);
     }

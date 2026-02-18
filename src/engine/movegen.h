@@ -41,7 +41,7 @@ class movegen
     int m_bad_quiet_end{0};
     int m_move_index{0};
 
-    const chess::Board &m_position;
+    chess::Board &m_position;
     const heuristics &m_heuristics;
     chess::Move m_pv_move;
     chess::Move m_prev_move;
@@ -123,7 +123,6 @@ class movegen
                                                                 [move.to().index()][captured]
                                                 .get_value();
 
-
                     int16_t score = std::clamp(mvv + capture_score, -32000, 32000);
                     move.setScore(score);
                 }
@@ -162,8 +161,10 @@ class movegen
                                             .get_value();
 
                         if (m_continuation1 != nullptr)
-                            score += (*m_continuation1)[m_position.at(move.from())][move.to().index()]
-                                         .get_value() / 2;
+                            score +=
+                                (*m_continuation1)[m_position.at(move.from())][move.to().index()]
+                                    .get_value() /
+                                2;
 
                         score = std::clamp(score, -30000, 30000);
                         move.setScore(score);
@@ -179,7 +180,8 @@ class movegen
             case movegen_stage::GOOD_CAPTURE: {
                 // see check, incr bad_capture_end
                 m_move_index = pick_move(m_moves, m_move_index, m_moves.size(), [&](auto &move) {
-                    if (!see::test_ge(m_position, move, -move.score() / features::GOOD_CAPTURE_SEE_DIV))
+                    if (!see::test_ge(m_position, move,
+                                      -move.score() / features::GOOD_CAPTURE_SEE_DIV))
                     {
                         std::swap(m_moves[m_bad_capture_end], move);
                         m_bad_capture_end++;
@@ -240,9 +242,9 @@ class movegen
                     // normal
                     int32_t score = 0;
                     score += m_heuristics
-                                     .main_history[m_position.sideToMove()][move.from().index()]
-                                                  [move.to().index()]
-                                     .get_value();
+                                 .main_history[m_position.sideToMove()][move.from().index()]
+                                              [move.to().index()]
+                                 .get_value();
 
                     // low ply
                     if (m_ply < LOW_PLY)
@@ -257,18 +259,20 @@ class movegen
 
                     // pawn history
                     score += m_heuristics
-                                     .pawn[pawn_key & PAWN_STRUCTURE_SIZE_M1][m_position.at(move.from())]
-                                          [move.to().index()]
-                                     .get_value();
+                                 .pawn[pawn_key & PAWN_STRUCTURE_SIZE_M1]
+                                      [m_position.at(move.from())][move.to().index()]
+                                 .get_value();
 
                     // continuation
                     if (m_continuation1 != nullptr)
                         score += (*m_continuation1)[m_position.at(move.from())][move.to().index()]
-                                     .get_value() / 2;
+                                     .get_value() /
+                                 2;
 
                     if (m_continuation2 != nullptr)
                         score += (*m_continuation2)[m_position.at(move.from())][move.to().index()]
-                                     .get_value() / 2;
+                                     .get_value() /
+                                 2;
 
                     score = std::clamp(score, -31000, 31000);
                     move.setScore(score);
@@ -354,7 +358,8 @@ class movegen
                 // explore only see captures
             case movegen_stage::PROB_GOOD_CAPTURE: {
                 m_move_index = pick_move(m_moves, m_move_index, m_moves.size(), [&](auto &move) {
-                    return see::test_ge(m_position, move, -move.score() / features::PROB_GOOD_CAPTURE_SEE_DIV);
+                    return see::test_ge(m_position, move,
+                                        -move.score() / features::PROB_GOOD_CAPTURE_SEE_DIV);
                 });
                 if (m_move_index < m_moves.size())
                     return m_moves[m_move_index++];
