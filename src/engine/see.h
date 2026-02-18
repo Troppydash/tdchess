@@ -104,6 +104,7 @@ struct see
                 break;
 
             // remove opp pinned pieces
+            // TODO: verify that this is correct
             if (stm == chess::Color::WHITE)
                 stm_attackers = remove_pinned<chess::Color::BLACK>(
                     position, occ & position.us(~stm), occ & position.us(stm), stm_attackers);

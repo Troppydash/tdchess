@@ -221,7 +221,7 @@ class movegen
                     }
 
                     if (move.typeOf() == chess::Move::PROMOTION &&
-                        move.promotionType() == chess::PieceType::QUEEN)
+                        (move.promotionType() == chess::PieceType::QUEEN || move.promotionType() == chess::PieceType::KNIGHT))
                     {
                         move.setScore(IGNORE_SCORE);
                         continue;
