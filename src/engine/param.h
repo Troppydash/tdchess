@@ -26,7 +26,7 @@ constexpr uint8_t BETA_FLAG = 2;
 constexpr uint8_t ALPHA_FLAG = 1;
 constexpr uint8_t NO_FLAG = 0;
 
-constexpr int32_t QUIET_MOVES = 32;
+constexpr int32_t QUIET_MOVES = 64;
 
 constexpr bool IS_VALID(int16_t value)
 {

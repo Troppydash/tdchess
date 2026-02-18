@@ -308,6 +308,13 @@ class table
         return m_buckets[index];
     }
 
+    bucket *probe_ptr(const uint64_t hash)
+    {
+        using uint128 = unsigned __int128;
+        uint64_t index = (uint128(hash) * uint128(m_size)) >> 64;
+        return &m_buckets[index];
+    }
+
     int16_t occupied() const
     {
         size_t count = 0;
@@ -322,5 +329,9 @@ class table
         }
 
         return count / NUM_BUCKETS;
+    }
+
+    void prefetch(uint64_t key) {
+        __builtin_prefetch(probe_ptr(key));
     }
 };
