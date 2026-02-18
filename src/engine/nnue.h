@@ -351,8 +351,7 @@ class nnue
             const chess::Piece piece = entry.piece;
             const chess::Piece promote_piece =
                 chess::Piece{piece.color(), entry.move.promotionType()};
-            remove_piece(piece, entry.move.from());
-            add_piece(promote_piece, entry.move.to());
+            remove_add_piece(piece, entry.move.from(), promote_piece, entry.move.to());
 
             // handle capture
             const chess::Piece captured_piece = entry.captured;
@@ -430,6 +429,86 @@ class nnue
 #endif
     }
 
+    void remove_add_piece(const chess::Piece &removed_piece, const chess::Square &removed_square,
+                          const chess::Piece &added_piece, const chess::Square &added_square)
+    {
+#ifdef __ARM_NEON
+        int white_removed_feature_idx =
+            translate(chess::Color::WHITE, removed_piece, removed_square);
+        int black_removed_feature_idx =
+            translate(chess::Color::BLACK, removed_piece, removed_square);
+        const int16_t *__restrict white_removed_weights =
+            m_network.feature_weights[white_removed_feature_idx].vals;
+        const int16_t *__restrict black_removed_weights =
+            m_network.feature_weights[black_removed_feature_idx].vals;
+
+        int white_feature_idx = translate(chess::Color::WHITE, added_piece, added_square);
+        int black_feature_idx = translate(chess::Color::BLACK, added_piece, added_square);
+
+        const int16_t *__restrict white_weights = m_network.feature_weights[white_feature_idx].vals;
+        const int16_t *__restrict black_weights = m_network.feature_weights[black_feature_idx].vals;
+
+        int16_t *__restrict white_values = m_sides[0][m_ply].vals;
+        int16_t *__restrict black_values = m_sides[1][m_ply].vals;
+
+        for (size_t i = 0; i < HIDDEN_SIZE; i += 32)
+        {
+            // Prefetching weights only (since they are the most likely to be outside L1)
+            __builtin_prefetch(white_weights + i + 64, 0, 3);
+            __builtin_prefetch(white_removed_weights + i + 64, 0, 3);
+            __builtin_prefetch(black_weights + i + 64, 0, 3);
+            __builtin_prefetch(black_removed_weights + i + 64, 0, 3);
+
+            // --- PHASE 1: Structured Loads ---
+            // Loads 32 elements (64 bytes) per side in one instruction
+            int16x8x4_t wv = vld1q_s16_x4(white_values + i);
+            int16x8x4_t wa = vld1q_s16_x4(white_weights + i);
+            int16x8x4_t wr = vld1q_s16_x4(white_removed_weights + i);
+
+            int16x8x4_t bv = vld1q_s16_x4(black_values + i);
+            int16x8x4_t ba = vld1q_s16_x4(black_weights + i);
+            int16x8x4_t br = vld1q_s16_x4(black_removed_weights + i);
+
+            // --- PHASE 2: Math and Interleaved Stores ---
+            // We compute the delta (wa - wr) first to hide wv load latency
+            int16x8x4_t w_res, b_res;
+
+#pragma unroll
+            for (int j = 0; j < 4; ++j) {
+                w_res.val[j] = vaddq_s16(wv.val[j], vsubq_s16(wa.val[j], wr.val[j]));
+                b_res.val[j] = vaddq_s16(bv.val[j], vsubq_s16(ba.val[j], br.val[j]));
+            }
+
+            // --- PHASE 3: Structured Stores ---
+            vst1q_s16_x4(white_values + i, w_res);
+            vst1q_s16_x4(black_values + i, b_res);
+        }
+#else
+        int white_removed_feature_idx =
+            translate(chess::Color::WHITE, removed_piece, removed_square);
+        int black_removed_feature_idx =
+            translate(chess::Color::BLACK, removed_piece, removed_square);
+        const int16_t *__restrict white_removed_weights =
+            m_network.feature_weights[white_removed_feature_idx].vals;
+        const int16_t *__restrict black_removed_weights =
+            m_network.feature_weights[black_removed_feature_idx].vals;
+
+        int white_feature_idx = translate(chess::Color::WHITE, added_piece, added_square);
+        int black_feature_idx = translate(chess::Color::BLACK, added_piece, added_square);
+
+        const int16_t *__restrict white_weights = m_network.feature_weights[white_feature_idx].vals;
+        const int16_t *__restrict black_weights = m_network.feature_weights[black_feature_idx].vals;
+
+        int16_t *__restrict white_values = m_sides[0][m_ply].vals;
+        int16_t *__restrict black_values = m_sides[1][m_ply].vals;
+        for (size_t i = 0; i < HIDDEN_SIZE; ++i)
+        {
+            white_values[i] += white_weights[i] - white_removed_weights[i];
+            black_values[i] += black_weights[i] - black_removed_weights[i];
+        }
+#endif
+    }
+
     void remove_piece(const chess::Piece &piece, const chess::Square &square)
     {
 #ifdef TDCHESS_NNUE_INLINE
@@ -457,6 +536,63 @@ class nnue
     void move_piece(const chess::Piece &piece, const chess::Square &start, const chess::Square &end)
     {
 #ifdef TDCHESS_NNUE_INLINE
+#ifdef __ARM_NEON
+        int white_remove_feature_idx = translate(chess::Color::WHITE, piece, start);
+        int black_remove_feature_idx = translate(chess::Color::BLACK, piece, start);
+        int white_add_feature_idx = translate(chess::Color::WHITE, piece, end);
+        int black_add_feature_idx = translate(chess::Color::BLACK, piece, end);
+
+        const int16_t *__restrict white_remove_weights =
+            m_network.feature_weights[white_remove_feature_idx].vals;
+        const int16_t *__restrict white_add_weights =
+            m_network.feature_weights[white_add_feature_idx].vals;
+        const int16_t *__restrict black_remove_weights =
+            m_network.feature_weights[black_remove_feature_idx].vals;
+        const int16_t *__restrict black_add_weights =
+            m_network.feature_weights[black_add_feature_idx].vals;
+        int16_t *__restrict white_values = m_sides[0][m_ply].vals;
+        int16_t *__restrict black_values = m_sides[1][m_ply].vals;
+
+        for (size_t i = 0; i < HIDDEN_SIZE; i += 32)
+        {
+            // Prefetching the weight blocks (usually the bottleneck)
+            __builtin_prefetch(white_add_weights + i + 64, 0, 3);
+            __builtin_prefetch(white_remove_weights + i + 64, 0, 3);
+            __builtin_prefetch(black_add_weights + i + 64, 0, 3);
+            __builtin_prefetch(black_remove_weights + i + 64, 0, 3);
+
+            // --- LOAD PHASE (Each call loads 32 elements/64 bytes) ---
+            // White loads
+            int16x8x4_t wv = vld1q_s16_x4(white_values + i);
+            int16x8x4_t wa = vld1q_s16_x4(white_add_weights + i);
+            int16x8x4_t wr = vld1q_s16_x4(white_remove_weights + i);
+
+            // Black loads
+            int16x8x4_t bv = vld1q_s16_x4(black_values + i);
+            int16x8x4_t ba = vld1q_s16_x4(black_add_weights + i);
+            int16x8x4_t br = vld1q_s16_x4(black_remove_weights + i);
+
+            // --- MATH & STORE PHASE ---
+            // We process the 4 sub-registers (val.val[0...3])
+            // Strategy: value + (add - remove)
+
+            // Process White
+            int16x8x4_t w_res;
+            w_res.val[0] = vaddq_s16(wv.val[0], vsubq_s16(wa.val[0], wr.val[0]));
+            w_res.val[1] = vaddq_s16(wv.val[1], vsubq_s16(wa.val[1], wr.val[1]));
+            w_res.val[2] = vaddq_s16(wv.val[2], vsubq_s16(wa.val[2], wr.val[2]));
+            w_res.val[3] = vaddq_s16(wv.val[3], vsubq_s16(wa.val[3], wr.val[3]));
+            vst1q_s16_x4(white_values + i, w_res);
+
+            // Process Black
+            int16x8x4_t b_res;
+            b_res.val[0] = vaddq_s16(bv.val[0], vsubq_s16(ba.val[0], br.val[0]));
+            b_res.val[1] = vaddq_s16(bv.val[1], vsubq_s16(ba.val[1], br.val[1]));
+            b_res.val[2] = vaddq_s16(bv.val[2], vsubq_s16(ba.val[2], br.val[2]));
+            b_res.val[3] = vaddq_s16(bv.val[3], vsubq_s16(ba.val[3], br.val[3]));
+            vst1q_s16_x4(black_values + i, b_res);
+        }
+#else
         // hand roll simd
         int white_remove_feature_idx = translate(chess::Color::WHITE, piece, start);
         int black_remove_feature_idx = translate(chess::Color::BLACK, piece, start);
@@ -478,6 +614,7 @@ class nnue
             white_values[i] += white_add_weights[i] - white_remove_weights[i];
             black_values[i] += black_add_weights[i] - black_remove_weights[i];
         }
+#endif
 #else
         remove_piece(piece, start);
         add_piece(piece, end);
@@ -489,6 +626,71 @@ class nnue
                                  const chess::Square removed)
     {
 #ifdef TDCHESS_NNUE_INLINE
+
+#ifdef __ARM_NEON
+        // MOVE PIECE
+        int white_remove_feature_idx = translate(chess::Color::WHITE, moved_piece, start);
+        int black_remove_feature_idx = translate(chess::Color::BLACK, moved_piece, start);
+        int white_add_feature_idx = translate(chess::Color::WHITE, moved_piece, end);
+        int black_add_feature_idx = translate(chess::Color::BLACK, moved_piece, end);
+        const int16_t *__restrict white_remove_weights =
+            m_network.feature_weights[white_remove_feature_idx].vals;
+        const int16_t *__restrict white_add_weights =
+            m_network.feature_weights[white_add_feature_idx].vals;
+        const int16_t *__restrict black_remove_weights =
+            m_network.feature_weights[black_remove_feature_idx].vals;
+        const int16_t *__restrict black_add_weights =
+            m_network.feature_weights[black_add_feature_idx].vals;
+
+        // REMOVE PIECE
+        int white_feature_idx = translate(chess::Color::WHITE, removed_piece, removed);
+        int black_feature_idx = translate(chess::Color::BLACK, removed_piece, removed);
+        const int16_t *__restrict white_weights = m_network.feature_weights[white_feature_idx].vals;
+        const int16_t *__restrict black_weights = m_network.feature_weights[black_feature_idx].vals;
+
+        int16_t *__restrict white_values = m_sides[0][m_ply].vals;
+        int16_t *__restrict black_values = m_sides[1][m_ply].vals;
+
+        for (size_t i = 0; i < HIDDEN_SIZE; i += 32)
+        {
+            // Prefetching the four weight arrays (likely the bottleneck)
+            __builtin_prefetch(white_add_weights + i + 64, 0, 3);
+            __builtin_prefetch(white_remove_weights + i + 64, 0, 3);
+            __builtin_prefetch(black_add_weights + i + 64, 0, 3);
+            __builtin_prefetch(black_remove_weights + i + 64, 0, 3);
+
+            // --- WHITE SIDE ---
+            // Load current values and the 3 weight sources
+            int16x8x4_t wv = vld1q_s16_x4(white_values + i);
+            int16x8x4_t wa = vld1q_s16_x4(white_add_weights + i);
+            int16x8x4_t wr = vld1q_s16_x4(white_remove_weights + i);
+            int16x8x4_t wc = vld1q_s16_x4(white_weights + i);
+
+            int16x8x4_t w_res;
+            // (Val + Add) - (Remove_Moved + Remove_Captured)
+            w_res.val[0] = vsubq_s16(vaddq_s16(wv.val[0], wa.val[0]), vaddq_s16(wr.val[0], wc.val[0]));
+            w_res.val[1] = vsubq_s16(vaddq_s16(wv.val[1], wa.val[1]), vaddq_s16(wr.val[1], wc.val[1]));
+            w_res.val[2] = vsubq_s16(vaddq_s16(wv.val[2], wa.val[2]), vaddq_s16(wr.val[2], wc.val[2]));
+            w_res.val[3] = vsubq_s16(vaddq_s16(wv.val[3], wa.val[3]), vaddq_s16(wr.val[3], wc.val[3]));
+
+            // Store White immediately to free registers for Black
+            vst1q_s16_x4(white_values + i, w_res);
+
+            // --- BLACK SIDE ---
+            int16x8x4_t bv = vld1q_s16_x4(black_values + i);
+            int16x8x4_t ba = vld1q_s16_x4(black_add_weights + i);
+            int16x8x4_t br = vld1q_s16_x4(black_remove_weights + i);
+            int16x8x4_t bc = vld1q_s16_x4(black_weights + i);
+
+            int16x8x4_t b_res;
+            b_res.val[0] = vsubq_s16(vaddq_s16(bv.val[0], ba.val[0]), vaddq_s16(br.val[0], bc.val[0]));
+            b_res.val[1] = vsubq_s16(vaddq_s16(bv.val[1], ba.val[1]), vaddq_s16(br.val[1], bc.val[1]));
+            b_res.val[2] = vsubq_s16(vaddq_s16(bv.val[2], ba.val[2]), vaddq_s16(br.val[2], bc.val[2]));
+            b_res.val[3] = vsubq_s16(vaddq_s16(bv.val[3], ba.val[3]), vaddq_s16(br.val[3], bc.val[3]));
+
+            vst1q_s16_x4(black_values + i, b_res);
+        }
+#else
         // MOVE PIECE
         int white_remove_feature_idx = translate(chess::Color::WHITE, moved_piece, start);
         int black_remove_feature_idx = translate(chess::Color::BLACK, moved_piece, start);
@@ -516,6 +718,7 @@ class nnue
             white_values[i] += white_add_weights[i] - white_remove_weights[i] - white_weights[i];
             black_values[i] += black_add_weights[i] - black_remove_weights[i] - black_weights[i];
         }
+#endif
 #else
         move_piece(moved_piece, start, end);
         remove_piece(removed_piece, removed);
@@ -524,10 +727,39 @@ class nnue
 
     void clone_ply(int a, int b)
     {
+#ifdef __ARM_NEON
+        const int16_t* __restrict sw = m_sides[0][a].vals;
+        const int16_t* __restrict sb = m_sides[1][a].vals;
+        int16_t* __restrict dw = m_sides[0][b].vals;
+        int16_t* __restrict db = m_sides[1][b].vals;
+
+        for (size_t i = 0; i < HIDDEN_SIZE; i += 64)
+        {
+            // Prefetching even further ahead (256 bytes) because we are moving so much data
+            __builtin_prefetch(sw + i + 128, 0, 3);
+            __builtin_prefetch(sb + i + 128, 0, 3);
+
+            // --- WHITE SIDE (64 bytes / 32 elements) ---
+            int16x8x4_t w_block1 = vld1q_s16_x4(sw + i);      // Loads 64 bytes into 4 registers
+            int16x8x4_t w_block2 = vld1q_s16_x4(sw + i + 32); // Loads next 64 bytes
+
+            // --- BLACK SIDE (64 bytes / 32 elements) ---
+            int16x8x4_t b_block1 = vld1q_s16_x4(sb + i);
+            int16x8x4_t b_block2 = vld1q_s16_x4(sb + i + 32);
+
+            // --- STORES ---
+            vst1q_s16_x4(dw + i, w_block1);
+            vst1q_s16_x4(dw + i + 32, w_block2);
+
+            vst1q_s16_x4(db + i, b_block1);
+            vst1q_s16_x4(db + i + 32, b_block2);
+        }
+#else
         for (size_t i = 0; i < HIDDEN_SIZE; ++i)
         {
             m_sides[0][b].vals[i] = m_sides[0][a].vals[i];
             m_sides[1][b].vals[i] = m_sides[1][a].vals[i];
         }
+#endif
     }
 };
