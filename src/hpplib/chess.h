@@ -2995,11 +2995,11 @@ class Board {
                && castling_path == other.castling_path;
     }
 
-   protected:
     virtual void placePiece(Piece piece, Square sq) { placePieceInternal(piece, sq); }
 
     virtual void removePiece(Piece piece, Square sq) { removePieceInternal(piece, sq); }
 
+   protected:
     std::vector<State> prev_states_;
 
     std::array<Bitboard, 6> pieces_bb_ = {};
@@ -3068,6 +3068,7 @@ class Board {
         return ss;
     }
 
+public:
     void removePieceInternal(Piece piece, Square sq) {
         assert(board_[sq.index()] == piece && piece != Piece::NONE);
 

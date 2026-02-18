@@ -274,6 +274,8 @@ class agent
                                            std::to_string(settings.m_tt_mb) + "\n");
         pipe_helpers::write_line(m_in,
                                  "setoption name NNUEPath value " + settings.m_nnue_file + "\n");
+        pipe_helpers::write_line(m_in,
+                         "setoption name MoveOverhead value 10\n");
         if (!settings.m_endgame_file.empty())
             pipe_helpers::write_line(m_in, "setoption name SyzygyPath value " +
                                                settings.m_endgame_file + "\n");

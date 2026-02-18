@@ -60,10 +60,14 @@ struct see
      */
     static bool test_ge(const chess::Board &position, const chess::Move &move, int16_t threshold)
     {
+
         if (move.typeOf() != chess::Move::NORMAL)
         {
             return 0 >= threshold;
         }
+
+        if (move.to().rank() == chess::Rank::RANK_1 || move.to().rank() == chess::Rank::RANK_8)
+            return test_ge_promote(position, move, threshold);
 
         chess::Square from = move.from();
         chess::Square to = move.to();
@@ -169,11 +173,6 @@ struct see
 
     static bool test_ge_promote(const chess::Board &position, const chess::Move &move, int16_t threshold)
     {
-        if (move.typeOf() != chess::Move::NORMAL && move.typeOf() != chess::Move::PROMOTION)
-        {
-            return 0 >= threshold;
-        }
-
         chess::Square from = move.from();
         chess::Square to = move.to();
 
