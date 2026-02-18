@@ -79,11 +79,11 @@ inline void init() {
     }
 }
 
-inline bool is_upcoming_rep(chess::Board &pos)
+inline bool is_upcoming_rep(const chess::Board &pos)
 {
     const chess::Bitboard occ = pos.occ();
     const int maxDist = pos.halfMoveClock();
-    auto &states = pos.get_prev_state();
+    const auto &states = pos.get_prev_state();
 
     for (int i = 3; i <= maxDist && (int(states.size()) - i) >= 0; i += 2) {
         uint64_t moveKey = pos.hash() ^ states[states.size() - i].hash;

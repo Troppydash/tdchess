@@ -1993,7 +1993,7 @@ class Board {
         return ss;
     }
 
-    std::vector<State> &get_prev_state()
+    const std::vector<State> &get_prev_state() const
     {
         return prev_states_;
     }
