@@ -54,10 +54,10 @@ constexpr uint8_t SET_AGE(uint8_t age)
 
 constexpr bool MATCHES(uint64_t hash, uint32_t partial)
 {
-    return (hash >> 32) == partial;
+    return uint32_t(hash) == partial;
 }
 
-class table_entry
+class alignas(16) table_entry
 {
   public:
     uint32_t m_hash;
@@ -129,7 +129,7 @@ class table_entry
         if (flag == param::EXACT_FLAG || !MATCHES(hash, m_hash) ||
             depth + 4 + 2 * is_pv > m_depth || age_diff >= 1)
         {
-            m_hash = hash >> 32;
+            m_hash = uint32_t(hash);
             m_depth = depth;
             m_static_eval = static_eval;
 
@@ -197,7 +197,7 @@ struct alignas(64) bucket
 
     table_entry &probe(const uint64_t hash, bool &bucket_hit)
     {
-        const uint32_t key = hash >> 32;
+        const uint32_t key = hash;
         for (int i = 0; i < NUM_BUCKETS; ++i)
         {
             if (key == m_entries[i].m_hash)
@@ -240,7 +240,7 @@ struct alignas(64) bucket
     {
         int best_slot = -1;
         int32_t worst_score = std::numeric_limits<int32_t>::max();
-        uint32_t key = hash >> 32;
+        uint32_t key = hash;
         for (int i = 0; i < NUM_BUCKETS; ++i)
         {
             const auto &entry = m_entries[i];
@@ -270,17 +270,11 @@ class table
   public:
     bucket *m_buckets = nullptr;
     size_t m_size;
-    int m_power;
-    uint64_t m_mask;
     uint8_t m_generation;
 
     explicit table(size_t size_in_mb)
     {
-        const size_t max_size = size_in_mb * 1024 * 1024 / sizeof(bucket);
-        m_power = std::floor(std::log2(max_size));
-        m_size = 1ull << m_power;
-        m_mask = m_size - 1;
-
+        m_size = size_in_mb * 1024 * 1024 / sizeof(bucket);
         m_buckets = static_cast<bucket *>(std::aligned_alloc(64, m_size * sizeof(bucket)));
         clear();
     }
@@ -309,7 +303,9 @@ class table
 
     bucket &probe(const uint64_t hash)
     {
-        return m_buckets[hash & m_mask];
+        using uint128 = unsigned __int128;
+        uint64_t index = (uint128(hash) * uint128(m_size)) >> 64;
+        return m_buckets[index];
     }
 
     int16_t occupied() const

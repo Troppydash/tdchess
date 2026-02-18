@@ -61,7 +61,7 @@ int main()
     // sq.save("../test.bin");
     // sq.load("../test.bin");
 
-    improvement_test("1.2.20", "1.2.21", true);
+    improvement_test("1.2.21", "1.2.22", true);
 
     return 0;
 }

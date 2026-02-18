@@ -33,6 +33,8 @@ target_compile_options(tdchess_uci PRIVATE
         "-fomit-frame-pointer"
         "-Wall"
         "-Wextra"
+        -fno-rtti
+        -mcpu=native
 #        "-fprofile-dir=./pgo"
 #        "-fprofile-correction"
 )
@@ -115,6 +117,8 @@ target_compile_options(tdchess_tune PRIVATE
         "-fomit-frame-pointer"
         "-Wall"
         "-Wextra"
+        -fno-rtti
+        -mcpu=native
 #                -fsanitize=undefined
 #                -g
 )

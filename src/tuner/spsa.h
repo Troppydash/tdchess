@@ -37,23 +37,23 @@ struct spsa
     {
         std::vector<int> scores{};
 
-        std::unique_ptr<table> engine_new_table = std::make_unique<table>(512);
+        std::unique_ptr<table> engine_new_table = std::make_unique<table>(64);
         std::unique_ptr<endgame_table> engine_new_endgame_table = std::make_unique<endgame_table>();
         engine_new_endgame_table->load_file("../syzygy");
         std::unique_ptr<nnue> engine_new_nnue = std::make_unique<nnue>();
         engine_new_nnue->load_network("../nets/2026-02-08-1800-370.bin");
-        engine engine_new{engine_new_endgame_table.get(), engine_new_nnue.get(),
+        engine engine_new{nullptr, engine_new_nnue.get(),
                           engine_new_table.get()};
 
-        std::unique_ptr<table> engine_table = std::make_unique<table>(512);
+        std::unique_ptr<table> engine_table = std::make_unique<table>(64);
         std::unique_ptr<endgame_table> engine_endgame_table = std::make_unique<endgame_table>();
         engine_endgame_table->load_file("../syzygy");
         std::unique_ptr<nnue> engine_nnue = std::make_unique<nnue>();
         engine_nnue->load_network("../nets/2026-02-08-1800-370.bin");
-        engine engine{engine_endgame_table.get(), engine_nnue.get(), engine_table.get()};
+        engine engine{nullptr, engine_nnue.get(), engine_table.get()};
 
-        arena_clock engine_new_clock{1000, 100};
-        arena_clock engine_clock{1000, 100};
+        arena_clock engine_new_clock{5000, 100};
+        arena_clock engine_clock{5000, 100};
 
         search_param engine_new_param{};
         search_param engine_param{};
@@ -130,11 +130,13 @@ struct spsa
                 std::cout << "empty pvline\n";
                 std::terminate();
             }
-            moves.push_back(search.pv_line[0]);
-            position.makeMove(search.pv_line[0]);
+
 
             // always from white's perspective
             scores.push_back(side2move == chess::Color::WHITE ? search.score : -search.score);
+            moves.push_back(search.pv_line[0]);
+            position.makeMove(search.pv_line[0]);
+
 
             // check win
             int win_value = 1500;
@@ -156,7 +158,7 @@ struct spsa
                 if (ok)
                 {
                     // white win
-                    if (sign > 0)
+                    if (scores[scores.size()-1] > 0)
                     {
                         return new_side2move == chess::Color::WHITE ? NEW : BASELINE;
                     }
@@ -194,7 +196,7 @@ struct spsa
     {
         double score = 0;
 
-        int k = 4;
+        int k = 2;
         for (int j = 0; j < k; ++j)
         {
             std::cout << "game " << j << std::endl;
@@ -236,14 +238,14 @@ struct spsa
         display_features(features);
 
         // spsa
-        srand(42);
+        srand(2);
         openbook book{"../book/baron30.bin"};
         double alpha = 0.602;
         double gamma = 0.101;
-        int n = 25;
+        int n = 50;
         double A = 0.1 * n;
-        double a_init = 0.01;
-        double c_init = 0.1;
+        double a_init = 0.005;
+        double c_init = 0.05;
 
         std::vector<tunable_feature> theta = features;
 
