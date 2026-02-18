@@ -144,12 +144,7 @@ class table_entry
 
             m_score = score;
 
-            m_mask &= ~AGE_MASK;
-            m_mask |= SET_AGE(age);
-            m_mask &= ~FLAG_MASK;
-            m_mask |= SET_FLAG(flag);
-            m_mask &= ~PV_MASK;
-            m_mask |= SET_PV(is_pv);
+            m_mask = SET_AGE(age) | SET_FLAG(flag) | SET_PV(is_pv);
         }
 
         // m_hash = hash >> 32;
@@ -257,7 +252,7 @@ struct alignas(64) bucket
 
             uint8_t entry_age = GET_AGE(entry.m_mask);
             uint8_t age_diff = (age - entry_age) & AGE_MASK;
-            int32_t replacement_score = entry.m_depth - age_diff;
+            int32_t replacement_score = entry.m_depth - age_diff * 8;
 
             if (replacement_score < worst_score)
             {

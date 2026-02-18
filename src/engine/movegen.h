@@ -123,7 +123,11 @@ class movegen
                                                                 [move.to().index()][captured]
                                                 .get_value();
 
-                    int16_t score = std::clamp(mvv + capture_score, -32000, 32000);
+                    int32_t score = mvv + capture_score;
+                    if (m_position.givesCheck(move) != chess::CheckType::NO_CHECK)
+                        score += 100;
+
+                    score = std::clamp(score, -32000, 32000);
                     move.setScore(score);
                 }
 
