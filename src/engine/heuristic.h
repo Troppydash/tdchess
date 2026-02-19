@@ -79,8 +79,7 @@ struct heuristics
             if (position.at(move.to()).type() != chess::PieceType::NONE)
                 return position.at(move.to()).type();
 
-            // fake a knight capture
-            return chess::PieceType::KNIGHT;
+            return chess::PieceType::QUEEN;
         }
 
         return position.at(move.to()).type();
