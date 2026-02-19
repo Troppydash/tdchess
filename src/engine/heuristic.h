@@ -140,11 +140,9 @@ struct heuristics
 
     uint64_t get_corrhist_key(const chess::Board &position, chess::Color color) const
     {
-        auto pieces = position.pieces(chess::PieceType::KING, chess::PieceType::QUEEN,
-                                      chess::PieceType::KNIGHT, chess::PieceType::BISHOP,
-                                      chess::PieceType::ROOK);
-        auto c = position.us(color);
-        pieces &= c;
+        auto pieces = position.us(color);
+        auto pawns = position.pieces(chess::PieceType::PAWN);
+        pieces = pieces & ~pawns;
 
         uint64_t key = 0;
         while (pieces)
