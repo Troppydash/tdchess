@@ -21,42 +21,38 @@ target_link_libraries(tdchess_uci PRIVATE fathom)
 target_compile_definitions(tdchess_uci PRIVATE TDCHESS_UCI)
 target_link_options(tdchess_uci PRIVATE
         "-flto"
-#        "-fprofile-use=./pgo"
 )
 target_compile_options(tdchess_uci PRIVATE
         "-Ofast"
         "-march=native"
         "-mtune=native"
-        "-funroll-loops"
-        "-fno-trapping-math"
-#        "-fipa-pta"
+        "-flto"
         "-fomit-frame-pointer"
         "-Wall"
         "-Wextra"
-        -fno-rtti
+        -DNDEBUG
         -mcpu=native
-#        "-fprofile-dir=./pgo"
-#        "-fprofile-correction"
 )
 
 add_executable(tdchess_test src/main.cpp)
 target_link_libraries(tdchess_test PRIVATE fathom)
 target_link_options(tdchess_test PRIVATE
         -fsanitize=undefined
+        "-flto"
 )
 target_compile_options(tdchess_test PRIVATE
         "-Ofast"
-        "-Wall"
+        "-march=native"
         "-mtune=native"
+        "-flto"
         "-funroll-loops"
         "-fno-trapping-math"
         "-fomit-frame-pointer"
         "-Wall"
-        "-march=native"
-        -DNDEBUG -fno-rtti
+        "-Wextra"
+        -DNDEBUG
         -mcpu=native
         -frename-registers
-        -Rpass=loop-vectorize -Rpass-missed=loop-vectorize
 #        "-Wextra"
 #        -fsanitize=undefined
 #        -g

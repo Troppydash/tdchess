@@ -57,6 +57,16 @@ constexpr bool MATCHES(uint64_t hash, uint32_t partial)
     return uint32_t(hash) == partial;
 }
 
+class test
+{
+    uint16_t m_hash;
+    int16_t m_score;
+    int16_t m_static_eval;
+    uint8_t m_mask = 1;
+    int16_t m_depth;
+    uint16_t m_best_move;
+};
+
 class alignas(16) table_entry
 {
   public:
@@ -230,7 +240,6 @@ struct alignas(64) bucket
         //     }
         // }
 
-
         bucket_hit = false;
         return m_entries[0];
     }
@@ -331,7 +340,8 @@ class table
         return count / NUM_BUCKETS;
     }
 
-    void prefetch(uint64_t key) {
+    void prefetch(uint64_t key)
+    {
         __builtin_prefetch(probe_ptr(key));
     }
 };
