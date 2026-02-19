@@ -40,6 +40,10 @@ constexpr int PAWN_STRUCTURE_SIZE_M1 = PAWN_STRUCTURE_SIZE - 1;
 using pawn_history = history_entry<int16_t, 20000>[PAWN_STRUCTURE_SIZE][12][64];
 using pawn_correction_history = history_entry<int16_t, 8000>[2][PAWN_STRUCTURE_SIZE];
 
+constexpr int NON_PAWN_SIZE = 1 << 13;
+constexpr int NON_PAWN_SIZE_M1 = NON_PAWN_SIZE - 1;
+using non_pawn_correction_history = history_entry<int16_t, 8000>[2][NON_PAWN_SIZE];
+
 struct heuristics
 {
     history_heuristic main_history;
@@ -49,17 +53,20 @@ struct heuristics
     continuation_history_full continuation;
     pawn_history pawn;
     pawn_correction_history correction_history;
+    non_pawn_correction_history white_corrhist;
+    non_pawn_correction_history black_corrhist;
 
     heuristics()
         : main_history{}, capture_history{}, killers{}, low_ply{}, continuation{}, pawn{},
-          correction_history{}
+          correction_history{}, white_corrhist{}, black_corrhist{}
     {
     }
 
     bool is_capture(const chess::Board &position, const chess::Move &move) const
     {
         return position.isCapture(move) || (move.typeOf() == chess::Move::PROMOTION &&
-                                            (move.promotionType() == chess::PieceType::QUEEN || move.promotionType() == chess::PieceType::KNIGHT));
+                                            (move.promotionType() == chess::PieceType::QUEEN ||
+                                             move.promotionType() == chess::PieceType::KNIGHT));
     }
 
     chess::PieceType get_capture(const chess::Board &position, const chess::Move &move) const
@@ -123,56 +130,33 @@ struct heuristics
     {
         correction_history[position.sideToMove()][get_pawn_key(position) & PAWN_STRUCTURE_SIZE_M1]
             .add_bonus(bonus);
+        white_corrhist[position.sideToMove()]
+                      [get_corrhist_key(position, chess::Color::WHITE) & NON_PAWN_SIZE_M1]
+                          .add_bonus(bonus);
+        black_corrhist[position.sideToMove()]
+                      [get_corrhist_key(position, chess::Color::BLACK) & NON_PAWN_SIZE_M1]
+                          .add_bonus(bonus);
     }
-    // void incr_counter(const chess::Board &position, const chess::Move &prev_move,
-    //                   const chess::Move &move)
-    // {
-    //     if (is_quiet(position, move) && prev_move != chess::Move::NO_MOVE &&
-    //         position.at(prev_move.to()) != chess::Piece::NONE)
-    //     {
-    //         counter[position.at(prev_move.to())][prev_move.to().index()] = move;
-    //     }
-    // }
+
+    uint64_t get_corrhist_key(const chess::Board &position, chess::Color color) const
+    {
+        auto pieces = position.pieces(chess::PieceType::KING, chess::PieceType::QUEEN,
+                                      chess::PieceType::KNIGHT, chess::PieceType::BISHOP,
+                                      chess::PieceType::ROOK);
+        auto c = position.us(color);
+        pieces &= c;
+
+        uint64_t key = 0;
+        while (pieces)
+        {
+            const chess::Square sq = pieces.pop();
+            key ^= chess::Zobrist::piece(position.at(sq), sq);
+        }
+
+        return key;
+    }
 
     void begin()
     {
-        // for (auto &a : main_history)
-        //     for (auto &b : a)
-        //         for (auto &c : b)
-        //             c.decay();
-        //
-        // for (auto &a : capture_history)
-        //     for (auto &b : a)
-        //         for (auto &c : b)
-        //             c.decay();
-        //
-        // for (auto &a : continuation)
-        //     for (auto &b : a)
-        //         for (auto &c : b)
-        //             for (auto &d : c)
-        //                 d.decay();
-        //
-        // for (auto &k : killers)
-        // {
-        //     for (auto &n : k)
-        //     {
-        //         n = {chess::Move::NO_MOVE, false};
-        //     }
-        // }
-        //
-        // for (auto &a : pawn)
-        //     for (auto &b : a)
-        //         for (auto &c : b)
-        //             c.decay();
-        //
-        // for (auto &a : low_ply)
-        //     for (auto &b : a)
-        //         for (auto &c : b)
-        //             for (auto &d : c)
-        //                 d.decay();
-        //
-        // for (auto &a : correction_history)
-        //     for (auto &b : a)
-        //         b.decay();
     }
 };
