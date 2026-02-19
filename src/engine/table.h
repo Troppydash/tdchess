@@ -52,30 +52,32 @@ constexpr uint8_t SET_AGE(uint8_t age)
     return age & AGE_MASK;
 }
 
-constexpr bool MATCHES(uint64_t hash, uint32_t partial)
+using BUCKET_HASH = uint32_t;
+
+constexpr bool MATCHES(uint64_t hash, BUCKET_HASH partial)
 {
-    return uint32_t(hash) == partial;
+    return BUCKET_HASH(hash) == partial;
 }
 
-class test
-{
-    uint16_t m_hash;
-    int16_t m_score;
-    int16_t m_static_eval;
-    uint8_t m_mask = 1;
-    int16_t m_depth;
-    uint16_t m_best_move;
-};
+// class test
+// {
+//     uint16_t m_hash;
+//     int16_t m_score;
+//     int16_t m_static_eval;
+//     int16_t m_depth;
+//     chess::Move m_best_move;
+//     uint8_t m_mask = 1;
+// };
 
-class alignas(16) table_entry
+class table_entry
 {
   public:
-    uint32_t m_hash;
-    int16_t m_depth;
+    BUCKET_HASH m_hash;
     int16_t m_score;
     int16_t m_static_eval;
+    uint16_t m_best_move;
+    int8_t m_depth;
     uint8_t m_mask = 1;
-    chess::Move m_best_move;
 
     [[nodiscard]] table_entry_result get(uint64_t hash, int32_t ply, int32_t depth, int16_t alpha,
                                          int16_t beta, bool bucket_hit) const
@@ -133,14 +135,15 @@ class alignas(16) table_entry
              const chess::Move &best_move, int16_t static_eval, bool is_pv, uint8_t age)
     {
         if (best_move != chess::Move::NO_MOVE || !MATCHES(hash, m_hash))
-            m_best_move = best_move;
+            m_best_move = best_move.move();
 
         uint8_t age_diff = (age - GET_AGE(m_mask)) & AGE_MASK;
         if (flag == param::EXACT_FLAG || !MATCHES(hash, m_hash) ||
             depth + 4 + 2 * is_pv > m_depth || age_diff >= 1)
         {
-            m_hash = uint32_t(hash);
-            m_depth = depth;
+            m_hash = BUCKET_HASH(hash);
+            assert(depth > -10 && depth <= 255);
+            m_depth = int8_t(depth);
             m_static_eval = static_eval;
 
             // to absolute depth
@@ -184,7 +187,7 @@ class alignas(16) table_entry
     }
 };
 
-constexpr int NUM_BUCKETS = 4;
+constexpr int NUM_BUCKETS = 5;
 
 struct alignas(64) bucket
 {
@@ -207,7 +210,7 @@ struct alignas(64) bucket
 
     table_entry &probe(const uint64_t hash, bool &bucket_hit)
     {
-        const uint32_t key = hash;
+        const BUCKET_HASH key = hash;
         for (int i = 0; i < NUM_BUCKETS; ++i)
         {
             if (key == m_entries[i].m_hash)
@@ -249,7 +252,7 @@ struct alignas(64) bucket
     {
         int best_slot = -1;
         int32_t worst_score = std::numeric_limits<int32_t>::max();
-        uint32_t key = hash;
+        BUCKET_HASH key = hash;
         for (int i = 0; i < NUM_BUCKETS; ++i)
         {
             const auto &entry = m_entries[i];
