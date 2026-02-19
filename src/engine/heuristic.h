@@ -74,6 +74,15 @@ struct heuristics
         if (move.typeOf() == chess::Move::ENPASSANT)
             return chess::PieceType::PAWN;
 
+        if (move.typeOf() == chess::Move::PROMOTION)
+        {
+            if (position.at(move.to()).type() != chess::PieceType::NONE)
+                return position.at(move.to()).type();
+
+            // fake a knight capture
+            return chess::PieceType::KNIGHT;
+        }
+
         return position.at(move.to()).type();
     }
 
