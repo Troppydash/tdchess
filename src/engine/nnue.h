@@ -125,7 +125,7 @@ class nnue
         }
     }
 
-    [[nodiscard]] int16_t evaluate(int side2move, int bucket)
+    [[nodiscard]] int32_t evaluate(int side2move, int bucket)
     {
         catchup();
 
