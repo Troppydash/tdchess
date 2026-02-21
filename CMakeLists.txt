@@ -38,7 +38,7 @@ add_executable(tdchess_test src/main.cpp)
 target_link_libraries(tdchess_test PRIVATE fathom)
 target_link_options(tdchess_test PRIVATE
         -fsanitize=undefined
-        "-flto"
+#        "-flto"
 )
 target_compile_options(tdchess_test PRIVATE
         "-Ofast"
@@ -52,8 +52,8 @@ target_compile_options(tdchess_test PRIVATE
         "-Wextra"
         -DNDEBUG
         -mcpu=native
-#        -frename-registers
-#        "-Wextra"
+        -frename-registers
+        "-Wextra"
 #        -fsanitize=undefined
 #        -g
 #        "-ftrapv"
