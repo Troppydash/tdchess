@@ -47,7 +47,7 @@ class uci_handler
     endgame_table *m_endgame_table = nullptr;
     nnue *m_nnue = nullptr;
     int m_thread_aff = -1;
-    int64_t m_move_overhead = 75;
+    int64_t m_move_overhead = 10;
     search_param m_param{};
 
     std::unique_ptr<engine> m_engine;
@@ -104,7 +104,7 @@ class uci_handler
                 std::cout << "option name TTSizeMB type spin default 128 min 8 max 4096\n";
                 std::cout << "option name CoreAff type spin default -1 min -1 max "
                           << total_threads - 1 << "\n";
-                std::cout << "option name MoveOverhead type spin default 75 min 0 max 2000\n";
+                std::cout << "option name MoveOverhead type spin default 10 min 0 max 2000\n";
                 std::cout << "uciok\n";
             }
             else if (lead == "setoption")
