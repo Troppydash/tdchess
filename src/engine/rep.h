@@ -74,7 +74,6 @@ class rep_filter
     void prefetch(uint64_t key) const
     {
         __builtin_prefetch(filter + h1(key));
-        __builtin_prefetch(filter + h2(key));
     }
 
     void add(const chess::Board &x)
