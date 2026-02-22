@@ -41,21 +41,21 @@ target_link_options(tdchess_test PRIVATE
 #        "-flto"
 )
 target_compile_options(tdchess_test PRIVATE
-        "-Ofast"
-        "-march=native"
-        "-mtune=native"
-        "-flto"
-        "-funroll-loops"
-        "-fno-trapping-math"
-        "-fomit-frame-pointer"
-        "-Wall"
-        "-Wextra"
-        -DNDEBUG
-        -mcpu=native
-        -frename-registers
-        "-Wextra"
-#        -fsanitize=undefined
-#        -g
+#        "-Ofast"
+#        "-march=native"
+#        "-mtune=native"
+#        "-flto"
+#        "-funroll-loops"
+#        "-fno-trapping-math"
+#        "-fomit-frame-pointer"
+#        "-Wall"
+#        "-Wextra"
+#        -DNDEBUG
+#        -mcpu=native
+#        -frename-registers
+#        "-Wextra"
+        -fsanitize=undefined
+        -g
 #        "-ftrapv"
 )
 
