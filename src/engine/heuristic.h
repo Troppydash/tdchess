@@ -79,7 +79,7 @@ struct heuristics
             if (position.at(move.to()).type() != chess::PieceType::NONE)
                 return position.at(move.to()).type();
 
-            return chess::PieceType::QUEEN;
+            return chess::PieceType::PAWN;
         }
 
         return position.at(move.to()).type();
