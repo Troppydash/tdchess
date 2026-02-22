@@ -66,6 +66,8 @@ struct see
         if (move.to().rank() == chess::Rank::RANK_1 || move.to().rank() == chess::Rank::RANK_8)
             return test_ge_promote(position, move, threshold);
 
+
+
         chess::Square from = move.from();
         chess::Square to = move.to();
         chess::Piece from_piece = position.at(from);
@@ -183,8 +185,7 @@ struct see
         return static_cast<bool>(res);
     }
 
-    static bool test_ge_promote(chess::Board &position, const chess::Move &move,
-                                int16_t threshold)
+    static bool test_ge_promote(chess::Board &position, const chess::Move &move, int16_t threshold)
     {
         chess::Square from = move.from();
         chess::Square to = move.to();
