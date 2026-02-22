@@ -18,10 +18,12 @@ class rep_filter
   private:
     uint64_t *filter;
 
-public:
+  public:
     rep_filter()
     {
         filter = new uint64_t[REP_FILTER_SIZE];
+        for (int i = 0; i < REP_FILTER_SIZE; ++i)
+            filter[i] = 0;
     }
 
     ~rep_filter()
@@ -29,7 +31,7 @@ public:
         delete[] filter;
     }
 
-private:
+  private:
     // returns if exists
     bool set(uint64_t key)
     {
@@ -69,6 +71,12 @@ private:
     }
 
   public:
+    void prefetch(uint64_t key) const
+    {
+        __builtin_prefetch(filter + h1(key));
+        __builtin_prefetch(filter + h2(key));
+    }
+
     void add(const chess::Board &x)
     {
         set(x.hash());
