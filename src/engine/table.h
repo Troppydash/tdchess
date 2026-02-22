@@ -89,35 +89,27 @@ class table_entry
         {
             is_hit = true;
 
-            if (m_depth >= depth)
+            if (param::IS_VALID(m_score))
             {
-                if (param::IS_VALID(m_score))
-                {
-                    int16_t score = m_score;
+                adj_score = m_score;
 
-                    // normalize for depth
-                    if (score > param::CHECKMATE)
-                        score -= ply;
-                    if (score < -param::CHECKMATE)
-                        score += ply;
+                // normalize for depth
+                if (adj_score > param::CHECKMATE)
+                    adj_score -= ply;
+                if (adj_score < -param::CHECKMATE)
+                    adj_score += ply;
+            }
 
-                    uint8_t flag = GET_FLAG(m_mask);
-                    if (flag == param::EXACT_FLAG)
-                    {
-                        adj_score = score;
-                        can_use = true;
-                    }
-                    else if (flag == param::ALPHA_FLAG && score <= alpha)
-                    {
-                        adj_score = score;
-                        can_use = true;
-                    }
-                    else if (flag == param::BETA_FLAG && score >= beta)
-                    {
-                        adj_score = score;
-                        can_use = true;
-                    }
-                }
+            // note that if depth exceeds and hit, def valid
+            if (m_depth >= depth && param::IS_VALID(m_score))
+            {
+                uint8_t flag = GET_FLAG(m_mask);
+                if (flag == param::EXACT_FLAG)
+                    can_use = true;
+                else if (flag == param::ALPHA_FLAG && adj_score <= alpha)
+                    can_use = true;
+                else if (flag == param::BETA_FLAG && adj_score >= beta)
+                    can_use = true;
             }
         }
 
