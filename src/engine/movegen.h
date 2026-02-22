@@ -125,6 +125,9 @@ class movegen
 
                     int32_t score = mvv + capture_score;
 
+                    if (move.typeOf() == chess::Move::PROMOTION)
+                        score += 10000;
+
                     score = std::clamp(score, -32000, 32000);
                     move.setScore(score);
                 }
@@ -140,7 +143,6 @@ class movegen
                 chess::movegen::legalmoves(m_moves, m_position);
 
                 // score
-                // uint64_t pawn_key = m_heuristics.get_pawn_key(m_position);
                 for (auto &move : m_moves)
                 {
                     if (move == m_pv_move)
