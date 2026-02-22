@@ -276,6 +276,10 @@ class movegen
                                      .get_value() /
                                  2;
 
+                    // penalty for weak promotion
+                    if (move.typeOf() == chess::Move::PROMOTION)
+                        score -= 1000;
+
                     score = std::clamp(score, -31000, 31000);
                     move.setScore(score);
 

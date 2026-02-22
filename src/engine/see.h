@@ -58,7 +58,6 @@ struct see
      */
     static bool test_ge(chess::Board &position, const chess::Move &move, int16_t threshold)
     {
-
         if (move.typeOf() != chess::Move::NORMAL)
         {
             return 0 >= threshold;
