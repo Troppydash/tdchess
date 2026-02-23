@@ -83,7 +83,7 @@ class uci_handler
             param.depth = 22;
             chess::Board position{};
             search_param temp_param = param;
-            m_engine->search(position, temp_param, true);
+            m_engine->search(position, temp_param, false);
 
             std::cout << m_engine->m_stats.nodes_searched << " nodes "
                       << m_engine->m_stats.get_nps() << " nps" << std::endl;
