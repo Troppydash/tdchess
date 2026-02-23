@@ -12,7 +12,7 @@ find_package(Boost REQUIRED)
 
 # static link with fathom
 set(FATHOM_SRC lib/Fathom/src/tbprobe.c)
-add_library(fathom SHARED ${FATHOM_SRC})
+add_library(fathom STATIC ${FATHOM_SRC})
 target_include_directories(fathom PUBLIC lib/Fathom/src)
 set_target_properties(fathom PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
