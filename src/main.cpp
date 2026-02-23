@@ -141,6 +141,7 @@ void position_test()
     // }
 
     std::vector<std::pair<std::string, std::string>> positions{
+        {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "default"},
         {"5rk1/1q2bpp1/4p2p/1N2P3/np5P/2r5/P3QPP1/1B1RR1K1 b - - 1 26", "c3c5 not c3c8, zero eval"},
         {"2r2rk1/1q2bp2/4p1pp/1N2P3/np5P/6Q1/P4PP1/1B1RR1K1 b - - 1 28", "b7b5, negative eval 1"}};
 
