@@ -10,10 +10,16 @@
 #include "engine/uci.h"
 
 #ifdef TDCHESS_UCI
-int main()
+int main(int argc, char **argv)
 {
+    bool bench = false;
+    if (argc == 2 && std::strcmp(argv[1], "bench") == 0)
+    {
+        bench = true;
+    }
+
     uci_handler handler{};
-    handler.loop();
+    handler.loop(bench);
 
     return 0;
 }

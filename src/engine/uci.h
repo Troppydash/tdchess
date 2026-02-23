@@ -68,11 +68,25 @@ class uci_handler
         delete m_tt;
     }
 
-    void loop()
+    void loop(bool bench)
     {
         std::cout << "Tdchess made by Troppydash\n";
         std::ios::sync_with_stdio(false);
         std::cout << std::unitbuf; // auto-flush after each output
+
+        if (bench)
+        {
+            // depth x
+            search_param param{};
+            param.depth = 22;
+            chess::Board position{};
+            search_param temp_param = param;
+            m_engine->search(position, temp_param, true);
+
+            std::cout << m_engine->m_stats.nodes_searched << " nodes "
+                      << m_engine->m_stats.get_nps() << " nps" << std::endl;
+            return;
+        }
 
         std::string buffer{};
         while (true)
@@ -365,7 +379,8 @@ class uci_handler
             search_param temp_param = param;
             m_engine->search(position, temp_param, true);
 
-            std::cout << "info finalnps " << m_engine->m_stats.get_nps() << std::endl;
+            std::cout << m_engine->m_stats.nodes_searched << " nodes "
+                      << m_engine->m_stats.get_nps() << " nps" << std::endl;
         });
     }
 };
