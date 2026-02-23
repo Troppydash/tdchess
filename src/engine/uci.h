@@ -70,6 +70,7 @@ class uci_handler
 
     void loop()
     {
+        std::cout << "Tdchess made by Troppydash\n";
         std::ios::sync_with_stdio(false);
         std::cout << std::unitbuf; // auto-flush after each output
 
@@ -100,8 +101,9 @@ class uci_handler
                 std::cout << "id name TDchess " << version << "\n";
                 std::cout << "id author troppydash\n";
                 std::cout << "option name SyzygyPath type string default <empty>\n";
-                std::cout << "option name NNUEPath type string default <empty>\n";
-                std::cout << "option name TTSizeMB type spin default 128 min 8 max 4096\n";
+                std::cout << "option name EVALFILE type string default <empty>\n";
+                std::cout << "option name Hash type spin default 128 min 8 max 4096\n";
+                std::cout << "option name Threads type spin default 1 min 1 max 1\n";
                 std::cout << "option name CoreAff type spin default -1 min -1 max "
                           << total_threads - 1 << "\n";
                 std::cout << "option name MoveOverhead type spin default 10 min 0 max 2000\n";
@@ -123,7 +125,7 @@ class uci_handler
                         m_engine->m_endgame = m_endgame_table;
                     }
                 }
-                else if (parts[2] == "NNUEPath")
+                else if (parts[2] == "EVALFILE")
                 {
                     delete m_nnue;
                     m_nnue = new nnue{};
@@ -137,7 +139,7 @@ class uci_handler
                         m_engine->m_nnue = m_nnue;
                     }
                 }
-                else if (parts[2] == "TTSizeMB")
+                else if (parts[2] == "Hash")
                 {
                     size_t tt_size = parse_i32(parts[4]);
                     delete m_tt;
@@ -151,6 +153,10 @@ class uci_handler
                 else if (parts[2] == "MoveOverhead")
                 {
                     m_move_overhead = parse_i64(parts[4]);
+                }
+                else if (parts[2] == "Threads")
+                {
+                    std::cout << "to be impl\n";
                 }
                 else
                 {
