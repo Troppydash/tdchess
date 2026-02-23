@@ -16,7 +16,8 @@ add_library(fathom SHARED ${FATHOM_SRC})
 target_include_directories(fathom PUBLIC lib/Fathom/src)
 set_target_properties(fathom PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-add_executable(tdchess_uci src/main.cpp)
+add_executable(tdchess_uci src/main.cpp
+        src/hpplib/incbin.h)
 target_link_libraries(tdchess_uci PRIVATE fathom)
 target_compile_definitions(tdchess_uci PRIVATE TDCHESS_UCI)
 target_link_options(tdchess_uci PRIVATE
@@ -34,7 +35,8 @@ target_compile_options(tdchess_uci PRIVATE
         -mcpu=native
 )
 
-add_executable(tdchess_test src/main.cpp)
+add_executable(tdchess_test src/main.cpp
+        src/hpplib/incbin.h)
 target_link_libraries(tdchess_test PRIVATE fathom)
 target_link_options(tdchess_test PRIVATE
         -fsanitize=undefined
@@ -59,7 +61,8 @@ target_compile_options(tdchess_test PRIVATE
 #        "-ftrapv"
 )
 
-add_executable(tdchess_elo src/main.cpp)
+add_executable(tdchess_elo src/main.cpp
+        src/hpplib/incbin.h)
 target_link_libraries(tdchess_elo PRIVATE fathom)
 target_compile_definitions(tdchess_elo PRIVATE TDCHESS_ELO)
 target_include_directories(tdchess_elo PRIVATE ${Boost_INCLUDE_DIRS})
@@ -75,7 +78,8 @@ target_compile_options(tdchess_elo PRIVATE
         "-Wextra"
 )
 
-add_executable(tdchess_pgo src/main.cpp)
+add_executable(tdchess_pgo src/main.cpp
+        src/hpplib/incbin.h)
 target_link_libraries(tdchess_pgo PRIVATE fathom)
 target_compile_definitions(tdchess_pgo PRIVATE TDCHESS_PGO)
 target_link_options(tdchess_pgo PRIVATE
@@ -95,7 +99,8 @@ target_compile_options(tdchess_pgo PRIVATE
         "-fprofile-generate=./pgo"
 )
 
-add_executable(tdchess_tune src/main.cpp)
+add_executable(tdchess_tune src/main.cpp
+        src/hpplib/incbin.h)
 target_link_libraries(tdchess_tune PRIVATE fathom)
 target_compile_definitions(tdchess_tune PRIVATE TDCHESS_TUNE)
 target_include_directories(tdchess_tune PRIVATE ${Boost_INCLUDE_DIRS})

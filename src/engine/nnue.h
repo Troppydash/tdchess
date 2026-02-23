@@ -38,6 +38,9 @@ struct network
     int16_t output_bias[BUCKET_SIZE];
 };
 
+#include "../hpplib/incbin.h"
+INCBIN(Embed, "../nets/2026-02-08-1800-370.bin");
+
 constexpr int32_t screlu(int16_t x)
 {
     const int32_t val = std::clamp(x, static_cast<int16_t>(0), QA);
@@ -65,6 +68,18 @@ class nnue
 
   public:
     explicit nnue() = default;
+
+    bool incbin_load()
+    {
+        const unsigned char *data = gEmbedData;
+        if (gEmbedSize != sizeof(network))
+        {
+            return false;
+        }
+
+        std::memcpy(&m_network, data, gEmbedSize);
+        return true;
+    }
 
     bool load_network(const std::string &path)
     {
@@ -474,7 +489,8 @@ class nnue
             int16x8x4_t w_res, b_res;
 
 #pragma unroll
-            for (int j = 0; j < 4; ++j) {
+            for (int j = 0; j < 4; ++j)
+            {
                 w_res.val[j] = vaddq_s16(wv.val[j], vsubq_s16(wa.val[j], wr.val[j]));
                 b_res.val[j] = vaddq_s16(bv.val[j], vsubq_s16(ba.val[j], br.val[j]));
             }
@@ -668,10 +684,14 @@ class nnue
 
             int16x8x4_t w_res;
             // (Val + Add) - (Remove_Moved + Remove_Captured)
-            w_res.val[0] = vsubq_s16(vaddq_s16(wv.val[0], wa.val[0]), vaddq_s16(wr.val[0], wc.val[0]));
-            w_res.val[1] = vsubq_s16(vaddq_s16(wv.val[1], wa.val[1]), vaddq_s16(wr.val[1], wc.val[1]));
-            w_res.val[2] = vsubq_s16(vaddq_s16(wv.val[2], wa.val[2]), vaddq_s16(wr.val[2], wc.val[2]));
-            w_res.val[3] = vsubq_s16(vaddq_s16(wv.val[3], wa.val[3]), vaddq_s16(wr.val[3], wc.val[3]));
+            w_res.val[0] =
+                vsubq_s16(vaddq_s16(wv.val[0], wa.val[0]), vaddq_s16(wr.val[0], wc.val[0]));
+            w_res.val[1] =
+                vsubq_s16(vaddq_s16(wv.val[1], wa.val[1]), vaddq_s16(wr.val[1], wc.val[1]));
+            w_res.val[2] =
+                vsubq_s16(vaddq_s16(wv.val[2], wa.val[2]), vaddq_s16(wr.val[2], wc.val[2]));
+            w_res.val[3] =
+                vsubq_s16(vaddq_s16(wv.val[3], wa.val[3]), vaddq_s16(wr.val[3], wc.val[3]));
 
             // Store White immediately to free registers for Black
             vst1q_s16_x4(white_values + i, w_res);
@@ -683,10 +703,14 @@ class nnue
             int16x8x4_t bc = vld1q_s16_x4(black_weights + i);
 
             int16x8x4_t b_res;
-            b_res.val[0] = vsubq_s16(vaddq_s16(bv.val[0], ba.val[0]), vaddq_s16(br.val[0], bc.val[0]));
-            b_res.val[1] = vsubq_s16(vaddq_s16(bv.val[1], ba.val[1]), vaddq_s16(br.val[1], bc.val[1]));
-            b_res.val[2] = vsubq_s16(vaddq_s16(bv.val[2], ba.val[2]), vaddq_s16(br.val[2], bc.val[2]));
-            b_res.val[3] = vsubq_s16(vaddq_s16(bv.val[3], ba.val[3]), vaddq_s16(br.val[3], bc.val[3]));
+            b_res.val[0] =
+                vsubq_s16(vaddq_s16(bv.val[0], ba.val[0]), vaddq_s16(br.val[0], bc.val[0]));
+            b_res.val[1] =
+                vsubq_s16(vaddq_s16(bv.val[1], ba.val[1]), vaddq_s16(br.val[1], bc.val[1]));
+            b_res.val[2] =
+                vsubq_s16(vaddq_s16(bv.val[2], ba.val[2]), vaddq_s16(br.val[2], bc.val[2]));
+            b_res.val[3] =
+                vsubq_s16(vaddq_s16(bv.val[3], ba.val[3]), vaddq_s16(br.val[3], bc.val[3]));
 
             vst1q_s16_x4(black_values + i, b_res);
         }
@@ -728,10 +752,10 @@ class nnue
     void clone_ply(int a, int b)
     {
 #ifdef __ARM_NEON
-        const int16_t* __restrict sw = m_sides[0][a].vals;
-        const int16_t* __restrict sb = m_sides[1][a].vals;
-        int16_t* __restrict dw = m_sides[0][b].vals;
-        int16_t* __restrict db = m_sides[1][b].vals;
+        const int16_t *__restrict sw = m_sides[0][a].vals;
+        const int16_t *__restrict sb = m_sides[1][a].vals;
+        int16_t *__restrict dw = m_sides[0][b].vals;
+        int16_t *__restrict db = m_sides[1][b].vals;
 
         for (size_t i = 0; i < HIDDEN_SIZE; i += 64)
         {

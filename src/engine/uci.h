@@ -58,8 +58,10 @@ class uci_handler
     explicit uci_handler()
     {
         m_tt = new table{128};
+        m_nnue = new nnue{};
+        m_nnue->incbin_load();
         m_engine = std::make_unique<engine>(m_endgame_table, m_nnue, m_tt);
-    };
+    }
 
     ~uci_handler()
     {
