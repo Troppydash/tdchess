@@ -72,7 +72,7 @@ class uci_handler
 
     void loop(bool bench)
     {
-        std::cout << "Tdchess made by Troppydash\n";
+        std::cout << "TDchess made by Troppydash\n";
         std::ios::sync_with_stdio(false);
         std::cout << std::unitbuf; // auto-flush after each output
 
