@@ -49,6 +49,8 @@ class movegen
 
     const continuation_history *m_continuation1 = nullptr;
     const continuation_history *m_continuation2 = nullptr;
+    const continuation_history *m_continuation3 = nullptr;
+    const continuation_history *m_continuation4 = nullptr;
 
     bool m_skip_quiet = false;
 
@@ -63,10 +65,21 @@ class movegen
     explicit movegen(chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
                      chess::Move prev_move, int32_t ply, const continuation_history *continuation1,
                      const continuation_history *continuation2,
+                     const continuation_history *continuation3,
+                     const continuation_history *continuation4,
                      movegen_stage stage = movegen_stage::PV)
         : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
           m_pv_move(pv_move), m_prev_move(prev_move), m_ply(ply), m_continuation1(continuation1),
-          m_continuation2(continuation2)
+          m_continuation2(continuation2), m_continuation3(continuation3),
+          m_continuation4(continuation4)
+    {
+    }
+
+    explicit movegen(chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
+                     chess::Move prev_move, int32_t ply, const continuation_history *continuation1,
+                     movegen_stage stage = movegen_stage::PV)
+        : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
+          m_pv_move(pv_move), m_prev_move(prev_move), m_ply(ply), m_continuation1(continuation1)
     {
     }
 
@@ -221,7 +234,8 @@ class movegen
                     }
 
                     if (move.typeOf() == chess::Move::PROMOTION &&
-                        (move.promotionType() == chess::PieceType::QUEEN || move.promotionType() == chess::PieceType::KNIGHT))
+                        (move.promotionType() == chess::PieceType::QUEEN ||
+                         move.promotionType() == chess::PieceType::KNIGHT))
                     {
                         move.setScore(IGNORE_SCORE);
                         continue;
@@ -275,6 +289,16 @@ class movegen
 
                     if (m_continuation2 != nullptr)
                         score += (*m_continuation2)[m_position.at(move.from())][move.to().index()]
+                                     .get_value() /
+                                 2;
+
+                    if (m_continuation3 != nullptr)
+                        score += (*m_continuation3)[m_position.at(move.from())][move.to().index()]
+                                     .get_value() /
+                                 2;
+
+                    if (m_continuation4 != nullptr)
+                        score += (*m_continuation4)[m_position.at(move.from())][move.to().index()]
                                      .get_value() /
                                  2;
 
