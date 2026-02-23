@@ -1,12 +1,13 @@
 #pragma once
 #include <random>
+#include <cstring>
 
 namespace util
 {
 inline uint64_t ZOBRIST_50MR[150];
 inline bool ZOB_INIT = false;
 
-constexpr void init() {
+inline void init() {
     if (ZOB_INIT)
         return;
 

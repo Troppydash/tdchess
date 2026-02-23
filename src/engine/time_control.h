@@ -79,7 +79,7 @@ struct search_param
 
         // https://github.com/gab8192/Obsidian/blob/main/src/timeman.cpp
         int mtg = 50;
-        int64_t time_left = std::max(1LL, time + inc * (mtg - 1) - move_overhead * (2 + mtg));
+        int64_t time_left = std::max(int64_t(1), time + inc * (mtg - 1) - move_overhead * (2 + mtg));
 
         double opt_scale = std::min(0.025, 0.214 * time / double(time_left));
         int64_t max_time = time * 0.8 - move_overhead;
