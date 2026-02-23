@@ -16,8 +16,7 @@ add_library(fathom STATIC ${FATHOM_SRC})
 target_include_directories(fathom PUBLIC lib/Fathom/src)
 set_target_properties(fathom PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-add_executable(tdchess_uci src/main.cpp
-        src/hpplib/incbin.h)
+add_executable(tdchess_uci src/main.cpp)
 target_link_libraries(tdchess_uci PRIVATE fathom)
 target_compile_definitions(tdchess_uci PRIVATE TDCHESS_UCI)
 target_link_options(tdchess_uci PRIVATE
@@ -35,30 +34,51 @@ target_compile_options(tdchess_uci PRIVATE
         -mcpu=native
 )
 
-add_executable(tdchess_test src/main.cpp
-        src/hpplib/incbin.h)
+if (PGOGEN)
+    message("generating profile")
+    target_link_options(tdchess_uci PRIVATE
+            "-fprofile-generate"
+    )
+    target_compile_options(tdchess_uci PRIVATE
+            "-fprofile-generate"
+    )
+else ()
+#    if (EXISTS "${CMAKE_BINARY_DIR}/tdchess_uci.profdata")
+#        target_link_options(tdchess_uci PRIVATE
+#                "-fprofile-use=${CMAKE_BINARY_DIR}/tdchess_uci.profdata"
+#        )
+#        target_compile_options(tdchess_uci PRIVATE
+#                "-fprofile-use=${CMAKE_BINARY_DIR}/tdchess_uci.profdata"
+#        )
+#    else()
+#        message("warning, no profdata")
+#    endif ()
+endif ()
+
+
+add_executable(tdchess_test src/main.cpp)
 target_link_libraries(tdchess_test PRIVATE fathom)
 target_link_options(tdchess_test PRIVATE
         -fsanitize=undefined
-#        "-flto"
+        #        "-flto"
 )
 target_compile_options(tdchess_test PRIVATE
-#        "-Ofast"
-#        "-march=native"
-#        "-mtune=native"
-#        "-flto"
-#        "-funroll-loops"
-#        "-fno-trapping-math"
-#        "-fomit-frame-pointer"
-#        "-Wall"
-#        "-Wextra"
-#        -DNDEBUG
-#        -mcpu=native
-#        -frename-registers
-#        "-Wextra"
+        #        "-Ofast"
+        #        "-march=native"
+        #        "-mtune=native"
+        #        "-flto"
+        #        "-funroll-loops"
+        #        "-fno-trapping-math"
+        #        "-fomit-frame-pointer"
+        #        "-Wall"
+        #        "-Wextra"
+        #        -DNDEBUG
+        #        -mcpu=native
+        #        -frename-registers
+        #        "-Wextra"
         -fsanitize=undefined
         -g
-#        "-ftrapv"
+        #        "-ftrapv"
 )
 
 add_executable(tdchess_elo src/main.cpp
@@ -70,8 +90,8 @@ target_include_directories(tdchess_elo PRIVATE ${Boost_INCLUDE_DIRS})
 #        -fsanitize=undefined
 #)
 target_compile_options(tdchess_elo PRIVATE
-#                -fsanitize=undefined
-#                -g
+        #                -fsanitize=undefined
+        #                -g
         "-O3"
         "-march=native"
         "-Wall"
@@ -91,7 +111,6 @@ target_compile_options(tdchess_pgo PRIVATE
         "-mtune=native"
         "-funroll-loops"
         "-fno-trapping-math"
-        "-fipa-pta"
         "-fomit-frame-pointer"
         "-Wall"
         "-Wextra"
@@ -106,7 +125,7 @@ target_compile_definitions(tdchess_tune PRIVATE TDCHESS_TUNE)
 target_include_directories(tdchess_tune PRIVATE ${Boost_INCLUDE_DIRS})
 target_link_options(tdchess_tune PRIVATE
         "-flto"
-#        -fsanitize=undefined
+        #        -fsanitize=undefined
 
 )
 target_compile_options(tdchess_tune PRIVATE
@@ -120,6 +139,6 @@ target_compile_options(tdchess_tune PRIVATE
         "-Wextra"
         -fno-rtti
         -mcpu=native
-#                -fsanitize=undefined
-#                -g
+        #                -fsanitize=undefined
+        #                -g
 )

@@ -12,14 +12,14 @@
 #ifdef TDCHESS_UCI
 int main(int argc, char **argv)
 {
-    bool bench = false;
-    if (argc == 2 && std::strcmp(argv[1], "bench") == 0)
+    std::string variant{};
+    if (argc == 2)
     {
-        bench = true;
+        variant = argv[1];
     }
 
     uci_handler handler{};
-    handler.loop(bench);
+    handler.loop(variant);
 
     return 0;
 }

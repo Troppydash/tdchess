@@ -70,12 +70,12 @@ class uci_handler
         delete m_tt;
     }
 
-    void loop(bool bench)
+    void loop(const std::string &variant)
     {
         std::ios::sync_with_stdio(false);
         std::cout << std::unitbuf; // auto-flush after each output
 
-        if (bench)
+        if (variant == "bench")
         {
             // depth x
             search_param param{};
@@ -86,6 +86,36 @@ class uci_handler
 
             std::cout << m_engine->m_stats.nodes_searched << " nodes "
                       << m_engine->m_stats.get_nps() << " nps" << std::endl;
+            return;
+        }
+
+        if (variant == "pgo")
+        {
+            std::vector<std::string> positions{};
+
+            std::ifstream file{"./pgo/STS1-STS15_LAN_v3.epd"};
+            if (!file.is_open())
+                exit(0);
+
+            std::string line;
+            while (std::getline(file, line))
+            {
+                int index = line.find("bm");
+                positions.push_back(line.substr(0, index - 1));
+            }
+            std::cout << "loaded " << positions.size() << " positions\n";
+
+            for (int i = 0; i < positions.size(); i += 10)
+            {
+                search_param param{};
+                param.movetime = 400;
+                chess::Board position{positions[i]};
+
+                m_tt->clear();
+                m_engine = std::make_unique<engine>(m_endgame_table, m_nnue, m_tt);
+                m_engine->search(position, param, true);
+            }
+
             return;
         }
 
