@@ -134,7 +134,7 @@ class table_entry
             depth + 4 + 2 * is_pv > m_depth || age_diff >= 1)
         {
             m_hash = BUCKET_HASH(hash);
-            assert(depth > -10 && depth <= 255);
+            assert(depth > -30 && depth <= 255);
             m_depth = int8_t(depth);
             m_static_eval = static_eval;
 

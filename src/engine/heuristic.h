@@ -31,9 +31,9 @@ constexpr int LOW_PLY = 5;
 using low_ply_history = history_entry<int16_t, 20000>[2][LOW_PLY][64][64];
 
 // indexed by [piece][to]
-using continuation_history = history_entry<int16_t, 20000>[12][64];
-using continuation_history_full = history_entry<int16_t, 20000>[2][2][13][64][12][64];
-constexpr int NUM_CONTINUATION = 4;
+using continuation_history = history_entry<int16_t, 8000>[12][64];
+using continuation_history_full = history_entry<int16_t, 8000>[2][2][13][64][12][64];
+constexpr int NUM_CONTINUATION = 6;
 
 constexpr int PAWN_STRUCTURE_SIZE = 1 << 13;
 constexpr int PAWN_STRUCTURE_SIZE_M1 = PAWN_STRUCTURE_SIZE - 1;
