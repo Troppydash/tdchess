@@ -2487,10 +2487,10 @@ class Board {
      * If you are writing a chess engine you should not use this function.
      * @return
      */
-    [[nodiscard]] std::pair<GameResultReason, GameResult> isGameOver() const noexcept {
+    [[nodiscard]] std::pair<GameResultReason, GameResult> isGameOver(int count = 2) const noexcept {
         if (isHalfMoveDraw()) return getHalfMoveDrawType();
         if (isInsufficientMaterial()) return {GameResultReason::INSUFFICIENT_MATERIAL, GameResult::DRAW};
-        if (isRepetition()) return {GameResultReason::THREEFOLD_REPETITION, GameResult::DRAW};
+        if (isRepetition(count)) return {GameResultReason::THREEFOLD_REPETITION, GameResult::DRAW};
 
         Movelist movelist;
         movegen::legalmoves(movelist, *this);
