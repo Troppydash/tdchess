@@ -40,6 +40,11 @@ class timer
         m_is_stopped = false;
     }
 
+    long delta()
+    {
+        return (now() - m_start).count();
+    }
+
     bool is_force_stopped() const
     {
         return m_forced_stopped;
