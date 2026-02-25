@@ -27,7 +27,7 @@ fi
 
 mkdir ./builds/${version}
 cp ./cmake-build-release/tdchess_uci ./builds/${version}/tdchess
-cp ./nets/${nnue_name}.bin ./builds/${version}/nnue.bin
+#cp ./nets/${nnue_name}.bin ./builds/${version}/nnue.bin
 
 #echo "zipping into ./builds/${version}_linux.zip"
 #zip -r ./builds/${version}_linux.zip ./builds/${version}

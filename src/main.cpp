@@ -157,21 +157,21 @@ void position_test()
         {"2r2rk1/1q2bp2/4p1pp/1N2P3/np5P/6Q1/P4PP1/1B1RR1K1 b - - 1 28", "b7b5, negative eval 1"}};
     for (auto &[pos, target] : positions)
     {
-        mcts_engine engine{};
-
-        search_param param;
-        param.movetime = 5000;
-        auto result = engine.search(chess::Board{pos}, param, true);
-        // nnue nnue{};
-        // nnue.load_network("../nets/2026-02-08-1800-370.bin");
-        // chess::Board start{pos};
-        // table tt{512};
-        // engine engine{nullptr, &nnue, &tt};
+        // mcts_engine engine{};
+        //
         // search_param param;
         // param.movetime = 5000;
-        // engine.search(start, param, true);
-        //
-        // std::cout << "oracle " << target << std::endl;
+        // auto result = engine.search(chess::Board{pos}, param, true);
+        nnue nnue{};
+        nnue.load_network("../nets/2026-02-08-1800-370.bin");
+        chess::Board start{pos};
+        table tt{512};
+        engine engine{nullptr, &nnue, &tt};
+        search_param param;
+        param.movetime = 5000;
+        engine.search(start, param, true);
+
+        std::cout << "oracle " << target << std::endl;
     }
 }
 

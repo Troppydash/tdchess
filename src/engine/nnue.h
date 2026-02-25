@@ -289,13 +289,7 @@ class nnue
         output *= SCALE;
         output /= static_cast<int32_t>(QA) * static_cast<int32_t>(QB);
 
-        if (output <= -param::NNUE_MAX)
-            return -param::NNUE_MAX;
-
-        if (output >= param::NNUE_MAX)
-            return param::NNUE_MAX;
-
-        return output;
+        return std::clamp(output, -param::NNUE_MAX, int32_t(param::NNUE_MAX));
     }
 
     void make_move(const chess::Board &board, const chess::Move &move)
@@ -757,26 +751,18 @@ class nnue
         int16_t *__restrict dw = m_sides[0][b].vals;
         int16_t *__restrict db = m_sides[1][b].vals;
 
-        for (size_t i = 0; i < HIDDEN_SIZE; i += 64)
+        for (size_t i = 0; i < HIDDEN_SIZE; i += 32)
         {
-            // Prefetching even further ahead (256 bytes) because we are moving so much data
-            __builtin_prefetch(sw + i + 128, 0, 3);
-            __builtin_prefetch(sb + i + 128, 0, 3);
-
             // --- WHITE SIDE (64 bytes / 32 elements) ---
-            int16x8x4_t w_block1 = vld1q_s16_x4(sw + i);      // Loads 64 bytes into 4 registers
-            int16x8x4_t w_block2 = vld1q_s16_x4(sw + i + 32); // Loads next 64 bytes
+            int16x8x4_t w_block1 = vld1q_s16_x4(sw + i); // Loads 64 bytes into 4 registers
 
             // --- BLACK SIDE (64 bytes / 32 elements) ---
             int16x8x4_t b_block1 = vld1q_s16_x4(sb + i);
-            int16x8x4_t b_block2 = vld1q_s16_x4(sb + i + 32);
 
             // --- STORES ---
             vst1q_s16_x4(dw + i, w_block1);
-            vst1q_s16_x4(dw + i + 32, w_block2);
 
             vst1q_s16_x4(db + i, b_block1);
-            vst1q_s16_x4(db + i + 32, b_block2);
         }
 #else
         for (size_t i = 0; i < HIDDEN_SIZE; ++i)
