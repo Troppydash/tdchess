@@ -19,7 +19,8 @@ inline uint64_t keys[8192];
 inline chess::Move moves[8192];
 inline bool IS_INIT = false;
 
-inline void init() {
+inline void init()
+{
     if (IS_INIT)
         return;
 
@@ -31,13 +32,19 @@ inline void init() {
     // Only used to check integrity of cuckoo tables
     int count = 0;
 
-    for (chess::PieceType pt : {chess::PieceType::KNIGHT, chess::PieceType::BISHOP, chess::PieceType::ROOK, chess::PieceType::QUEEN, chess::PieceType::KING}) {
-        for (chess::Color color : {chess::Color::WHITE, chess::Color::BLACK}) {
+    for (chess::PieceType pt :
+         {chess::PieceType::KNIGHT, chess::PieceType::BISHOP, chess::PieceType::ROOK,
+          chess::PieceType::QUEEN, chess::PieceType::KING})
+    {
+        for (chess::Color color : {chess::Color::WHITE, chess::Color::BLACK})
+        {
 
             chess::Piece piece{color, pt};
 
-            for (chess::Square s1 = chess::Square::SQ_A1; s1 < 64; ++s1) {
-                for (chess::Square s2 = s1+1; s2 < 64; ++s2) {
+            for (chess::Square s1 = chess::Square::SQ_A1; s1 < 64; ++s1)
+            {
+                for (chess::Square s2 = s1 + 1; s2 < 64; ++s2)
+                {
 
                     chess::Bitboard attacks{0};
                     if (pt == chess::PieceType::KNIGHT)
@@ -51,13 +58,17 @@ inline void init() {
                     else if (pt == chess::PieceType::KING)
                         attacks = chess::attacks::king(s1);
 
-                    if (attacks.check(s2.index())) {
+                    if (attacks.check(s2.index()))
+                    {
                         chess::Move move = chess::Move::make(s1, s2);
-                        uint64_t key = chess::Zobrist::piece(piece, s1) ^ chess::Zobrist::piece(piece, s2) ^ chess::Zobrist::sideToMove();
+                        uint64_t key = chess::Zobrist::piece(piece, s1) ^
+                                       chess::Zobrist::piece(piece, s2) ^
+                                       chess::Zobrist::sideToMove();
 
                         int slot = h1(key);
 
-                        while (true) {
+                        while (true)
+                        {
                             std::swap(keys[slot], key);
                             std::swap(moves[slot], move);
 
@@ -75,19 +86,21 @@ inline void init() {
         }
     }
 
-    if (count != 3668) {
+    if (count != 3668)
+    {
         std::cout << "uh oh rip cuckoo" << std::endl;
         exit(-1);
     }
 }
 
-inline bool is_upcoming_rep(const chess::Board &pos)
+inline bool is_upcoming_rep(const chess::Board &pos, int ply)
 {
     const chess::Bitboard occ = pos.occ();
     const int maxDist = pos.halfMoveClock();
     const auto &states = pos.get_prev_state();
 
-    for (int i = 3; i <= maxDist && (int(states.size()) - i) >= 0; i += 2) {
+    for (int i = 3; i <= maxDist && (int(states.size()) - i) >= 0; i += 2)
+    {
         uint64_t moveKey = pos.hash() ^ states[states.size() - i].hash;
 
         int hash = h1(moveKey);
@@ -97,24 +110,35 @@ inline bool is_upcoming_rep(const chess::Board &pos)
             hash = h2(moveKey);
 
         if (keys[hash] != moveKey)
-             continue; // neither slot matches
+            continue; // neither slot matches
 
         chess::Move move = moves[hash];
         chess::Square from = move.from();
         chess::Square to = move.to();
 
-        // check color
-        if (pos.at(move.from()).color() != pos.sideToMove())
-            continue;
-
         // Check if the move is obstructed
         if ((chess::movegen::between(from, to) ^ chess::Bitboard::fromSquare(to)) & occ)
             continue;
 
-        return true;
+        // check color. ap the colors are guaranteed correct if within search but it's not here?
+        if (pos.at(move.from()).color() != pos.sideToMove())
+            continue;
+
+        // rep if within search tree
+        if (ply > i)
+        {
+            return true;
+        }
+
+        // otherwise need another
+        for (int j = i + 4; j <= maxDist; ++j)
+        {
+            if (states[states.size() - j].hash == states[states.size() - i].hash)
+                return true;
+        }
     }
 
     return false;
 }
 
-} // namespace Cuckoo
+} // namespace cuckoo
