@@ -34,26 +34,26 @@ target_compile_options(tdchess_uci PRIVATE
         -mcpu=native
 )
 
-if (PGOGEN)
-    message("generating profile")
-    target_link_options(tdchess_uci PRIVATE
-            "-fprofile-generate"
-    )
-    target_compile_options(tdchess_uci PRIVATE
-            "-fprofile-generate"
-    )
-else ()
-#    if (EXISTS "${CMAKE_BINARY_DIR}/tdchess_uci.profdata")
-#        target_link_options(tdchess_uci PRIVATE
-#                "-fprofile-use=${CMAKE_BINARY_DIR}/tdchess_uci.profdata"
-#        )
-#        target_compile_options(tdchess_uci PRIVATE
-#                "-fprofile-use=${CMAKE_BINARY_DIR}/tdchess_uci.profdata"
-#        )
-#    else()
-#        message("warning, no profdata")
-#    endif ()
-endif ()
+#if (PGOGEN)
+#    message("generating profile")
+#    target_link_options(tdchess_uci PRIVATE
+#            "-fprofile-generate"
+#    )
+#    target_compile_options(tdchess_uci PRIVATE
+#            "-fprofile-generate"
+#    )
+#else ()
+##    if (EXISTS "${CMAKE_BINARY_DIR}/tdchess_uci.profdata")
+##        target_link_options(tdchess_uci PRIVATE
+##                "-fprofile-use=${CMAKE_BINARY_DIR}/tdchess_uci.profdata"
+##        )
+##        target_compile_options(tdchess_uci PRIVATE
+##                "-fprofile-use=${CMAKE_BINARY_DIR}/tdchess_uci.profdata"
+##        )
+##    else()
+##        message("warning, no profdata")
+##    endif ()
+#endif ()
 
 
 add_executable(tdchess_test src/main.cpp)

@@ -5,6 +5,12 @@
 
 inline int16_t wdl_to_cp(double wdl)
 {
+    if (wdl == 0.0)
+        return -32000;
+
+    if (wdl == 1.0)
+        return 32000;
+
     return std::clamp((int)std::round(std::log(wdl / (1 - wdl)) * 400), -32000, 32000);
 }
 
@@ -24,6 +30,7 @@ struct mcts_node
     // win/nodes is the prob that the move led to winning
     double wins = 0;
     double nodes = 0;
+    double prior = 0.5;
     std::vector<mcts_node> children{};
     mcts_node *parent = nullptr;
     chess::Move move{};
@@ -38,18 +45,23 @@ struct mcts_node
         if (is_terminal)
             return true;
 
-        for (auto &c : children)
-        {
-            if (c.nodes == 0)
-                return true;
-        }
-
-        return false;
+        return children.empty();
     }
 
-    void expand(const chess::Board &board)
+    void expand(chess::Board &board, nnue *net)
     {
+        if (is_terminal)
+            return;
+        
         assert(children.empty());
+
+        if (board.isInsufficientMaterial() || board.isRepetition(1) || board.isHalfMoveDraw())
+        {
+            is_terminal = true;
+            return;
+        }
+
+        // net->initialize(board);
 
         chess::Movelist moves;
         chess::movegen::legalmoves(moves, board);
@@ -58,11 +70,17 @@ struct mcts_node
             mcts_node child{};
             child.move = move;
             child.parent = this;
+
+            // net->make_move(board, move);
+            // // TODO: fix bucket
+            // auto cp = net->evaluate(board.sideToMove() ^ 1, (board.occ().count() - 2) / 4);
+            // child.prior = 1.0 - cp_to_wdl(cp);
+            // net->unmake_move();
+
             children.push_back(child);
         }
 
-        if (moves.empty() || board.isInsufficientMaterial() || board.isRepetition(1) ||
-            board.isHalfMoveDraw())
+        if (moves.empty())
         {
             is_terminal = true;
         }
@@ -79,7 +97,7 @@ struct mcts_node
         return parent != nullptr;
     }
 
-    int16_t get_cp()
+    int16_t get_cp() const
     {
         double win_prob = wins / nodes;
         return wdl_to_cp(win_prob);
@@ -88,15 +106,14 @@ struct mcts_node
 
 class mcts_engine
 {
-    mcts_node root;
-    timer clock;
-
-    nnue network;
+    mcts_node root{};
+    timer clock{};
+    std::unique_ptr<nnue> network = std::make_unique<nnue>();
 
   public:
     mcts_engine()
     {
-        network.incbin_load();
+        network->incbin_load();
     }
 
   private:
@@ -106,12 +123,12 @@ class mcts_engine
         mcts_node *selection = &node->children[0];
         for (auto &child : node->children)
         {
-            double w = child.wins;
-            double n = std::max(0.01, child.nodes);
-            double N = child.parent->nodes;
-            assert(n > 0);
-            assert(N > 0);
-            double ucb1 = w / n + std::sqrt(2.0) * std::sqrt(std::log(N) / n);
+            if (child.nodes == 0)
+                return &child;
+
+            double q = child.wins / child.nodes;
+            double u = std::sqrt(2.0) * std::sqrt(std::log(node->nodes) / child.nodes);
+            double ucb1 = q + u;
             if (ucb1 > best_ucb1)
             {
                 best_ucb1 = ucb1;
@@ -122,23 +139,11 @@ class mcts_engine
         return selection;
     }
 
-    mcts_node *tree_policy_expand(mcts_node *node)
-    {
-        // try to pick a node that is not explored
-        for (auto &child : node->children)
-        {
-            if (child.nodes == 0)
-                return &child;
-        }
-
-        assert(false);
-    }
-
     double evaluate_policy(chess::Board &state)
     {
         int bucket = (state.occ().count() - 2) / 4;
-        network.initialize(state);
-        int32_t cp = network.evaluate(state.sideToMove(), bucket);
+        network->initialize(state);
+        int32_t cp = network->evaluate(state.sideToMove(), bucket);
         return cp_to_wdl(cp);
     }
 
@@ -160,11 +165,11 @@ class mcts_engine
     search_result search(const chess::Board &reference, search_param &param, bool verbose = false)
     {
         int depth = 0;
+        int last_depth = 0;
         auto control = param.time_control(0, reference.sideToMove());
         clock.start(control.opt_time);
 
         root = mcts_node{};
-        root.expand(reference);
 
         // do mcts
         chess::Board board;
@@ -192,11 +197,11 @@ class mcts_engine
             }
 
             // expansion
+            node->expand(board, network.get());
             if (!node->is_terminal)
             {
-                node = tree_policy_expand(node);
+                node = tree_policy_child(node);
                 board.makeMove(node->move);
-                node->expand(board);
                 seldepth += 1;
                 if (seldepth > depth)
                     depth = seldepth;
@@ -206,17 +211,16 @@ class mcts_engine
             double win;
             if (node->is_terminal)
             {
-                auto state = board.isGameOver(2).second;
+                auto state = board.isGameOver(1).second;
                 if (state == chess::GameResult::DRAW)
                     win = 0.5;
                 else
-                    win = 0.0;
+                    win = 1.0;
             }
             else
             {
-                win = evaluate_policy(board);
+                win = 1.0 - evaluate_policy(board);
             }
-            win = 1.0 - win;
 
             // propagate
             while (node->has_parent())
@@ -227,13 +231,14 @@ class mcts_engine
             }
             node->update(win);
 
-            if (i % freq == 0)
+            if (depth > last_depth)
             {
+                last_depth = depth;
                 if (verbose)
                 {
                     const mcts_node *best_node = best_move();
                     std::cout << "info " << "depth " << depth << " nodes " << int64_t(root.nodes)
-                              << " score cp " << root.get_cp() << " time " << clock.delta()
+                              << " score cp " << best_node->get_cp() << " time " << clock.delta()
                               << " pv " << chess::uci::moveToUci(best_node->move) << std::endl;
                 }
             }
@@ -241,6 +246,6 @@ class mcts_engine
 
         // best move
         const mcts_node *best_node = best_move();
-        return {{best_node->move}, 1, root.get_cp()};
+        return {{best_node->move}, depth, best_node->get_cp()};
     }
 };
