@@ -5,11 +5,6 @@
 
 struct see
 {
-    // constexpr static std::array<int32_t, 7> TRADITIONAL_PIECE_VALUES = {
-    //     // pawn, knight, bishop, rook, queen, king, none
-    //     100, 320, 330, 500, 900, 1000, 0,
-    // };
-
     static constexpr int16_t PAWN_VALUE = 208;
     static constexpr int16_t KNIGHT_VALUE = 781;
     static constexpr int16_t BISHOP_VALUE = 825;
@@ -65,8 +60,6 @@ struct see
 
         if (move.to().rank() == chess::Rank::RANK_1 || move.to().rank() == chess::Rank::RANK_8)
             return test_ge_promote(position, move, threshold);
-
-
 
         chess::Square from = move.from();
         chess::Square to = move.to();

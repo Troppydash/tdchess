@@ -71,7 +71,7 @@ target_compile_options(tdchess_test PRIVATE
         "-Wall"
         "-Wextra"
         -DNDEBUG
-        -mcpu=native+sme
+        -mcpu=native
         #        -fsanitize=undefined
         #        -g
         #                "-ftrapv"
