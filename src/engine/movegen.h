@@ -243,8 +243,7 @@ class movegen
                         const auto &entry = m_heuristics.killers[m_ply][j];
                         if (move == entry.first)
                         {
-                            // mate killers first
-                            move.setScore(32100 + entry.second - j * 100);
+                            move.setScore(32100 - j);
                             found = true;
                             break;
                         }
@@ -290,7 +289,7 @@ class movegen
                     if (move.typeOf() == chess::Move::PROMOTION)
                         score -= 1000;
 
-                    score = std::clamp(score, -31000, 31000);
+                    score = std::clamp(score, -32000, 32000);
                     move.setScore(score);
 
                     if (score < features::QUIET_BAD_THRESHOLD)
