@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cstdint>
 
-constexpr uint64_t REP_FILTER_SIZE = 1 << 14;
+constexpr uint64_t REP_FILTER_SIZE = 1 << 15;
 constexpr uint64_t REP_FILTER_SIZE_M1 = REP_FILTER_SIZE - 1;
 constexpr size_t h1(uint64_t key)
 {

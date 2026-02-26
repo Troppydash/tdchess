@@ -3,6 +3,7 @@
 #include "features.h"
 #include "heuristic.h"
 #include "see.h"
+#include "sorting.h"
 
 enum class movegen_stage
 {
@@ -389,23 +390,26 @@ class movegen
         }
     }
 
+    bool static_sort_quiet = false;
+
     template <typename Pred>
     int pick_move(chess::Movelist &moves, const int start, const int end, Pred filter)
     {
+        // static_sort good quiet array if length < 16
+        // if (m_stage == int(movegen_stage::GOOD_QUIET) && start == m_bad_quiet_end && end - start < 8)
+        // {
+        //     assert(!static_sort_quiet);
+        //     static_sort_quiet = true;
+        //     static_sort<8>(end - start, &m_moves[start]);
+        // }
+
         for (int i = start; i < end; ++i)
         {
-            // if (m_stage == int(movegen_stage::GOOD_QUIET))
-            // {
-            //     if (i == m_bad_quiet_end)
-            //     {
-            //         // fast sort
-            //         std::sort(&m_moves[i], m_moves.end(),
-            //                   [](const chess::Move &a, const chess::Move &b) {
-            //                       return a.score() > b.score();
-            //                   });
-            //     }
-            // }
-            // else
+            if (m_stage == int(movegen_stage::GOOD_QUIET) && static_sort_quiet)
+            {
+                // ignore
+            }
+            else
                 sort_moves(moves, i, end);
 
             // ignore specific moves
