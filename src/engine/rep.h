@@ -65,9 +65,30 @@ class rep_filter
         }
     }
 
-    bool lookup(uint64_t key) const
+    bool lookup(uint64_t key, int ply, const chess::Board &board)
     {
-        return filter[h1(key)] == key || filter[h2(key)] == key;
+        // check for one in search
+        bool all_check = filter[h1(key)] == key || filter[h2(key)] == key;
+        if (!all_check) [[likely]]
+            return false;
+
+        // full check
+        auto &states = board.get_prev_state();
+        int maxDist = std::min((int)states.size(), (int)board.halfMoveClock());
+        bool hit = false;
+        for (int i = 4; i <= maxDist; i += 2)
+        {
+            if (states[states.size() - i].hash == key)
+            {
+                if (ply >= i)
+                    return true;
+                if (hit)
+                    return true;
+                hit = true;
+                i += 2;
+            }
+        }
+        return false;
     }
 
   public:
@@ -81,9 +102,9 @@ class rep_filter
         set(x.hash());
     }
 
-    bool check(const chess::Board &position) const
+    bool check(const chess::Board &position, int ply)
     {
-        return lookup(position.hash());
+        return lookup(position.hash(), ply, position);
     }
 
     void remove(const chess::Board &x)
@@ -94,21 +115,14 @@ class rep_filter
     void load(const chess::Board &position)
     {
         // clear at new hfm, so we have more space for the search
-        if (position.halfMoveClock() <= 1)
-        {
-            for (int i = 0; i < REP_FILTER_SIZE; ++i)
-                filter[i] = 0;
-        }
+        for (int i = 0; i < REP_FILTER_SIZE; ++i)
+            filter[i] = 0;
 
         const int maxDist = position.halfMoveClock();
         const auto &states = position.get_prev_state();
-        for (int i = 1; i <= maxDist && i < states.size(); ++i)
+        for (int i = 1; i <= maxDist && i <= states.size(); ++i)
         {
-            bool exists = set(states[states.size() - 1 - i].hash);
-
-            // we don't need to add more since we persist positions within game
-            if (exists)
-                break;
+            set(states[states.size() - i].hash);
         }
     }
 };

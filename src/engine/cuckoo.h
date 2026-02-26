@@ -96,10 +96,11 @@ inline void init()
 inline bool is_upcoming_rep(const chess::Board &pos, int ply)
 {
     const chess::Bitboard occ = pos.occ();
-    const int maxDist = pos.halfMoveClock();
     const auto &states = pos.get_prev_state();
+    const int maxDist = std::min((int)pos.halfMoveClock(), (int)states.size());
 
-    for (int i = 3; i <= maxDist && (int(states.size()) - i) >= 0; i += 2)
+
+    for (int i = 3; i <= maxDist; i += 2)
     {
         uint64_t moveKey = pos.hash() ^ states[states.size() - i].hash;
 
@@ -131,7 +132,7 @@ inline bool is_upcoming_rep(const chess::Board &pos, int ply)
         }
 
         // otherwise need another
-        for (int j = i + 4; j <= maxDist; ++j)
+        for (int j = i + 4; j <= maxDist; j += 2)
         {
             if (states[states.size() - j].hash == states[states.size() - i].hash)
                 return true;
