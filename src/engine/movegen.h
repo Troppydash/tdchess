@@ -395,22 +395,9 @@ class movegen
     template <typename Pred>
     int pick_move(chess::Movelist &moves, const int start, const int end, Pred filter)
     {
-        // static_sort good quiet array if length < 16
-        // if (m_stage == int(movegen_stage::GOOD_QUIET) && start == m_bad_quiet_end && end - start < 8)
-        // {
-        //     assert(!static_sort_quiet);
-        //     static_sort_quiet = true;
-        //     static_sort<8>(end - start, &m_moves[start]);
-        // }
-
         for (int i = start; i < end; ++i)
         {
-            if (m_stage == int(movegen_stage::GOOD_QUIET) && static_sort_quiet)
-            {
-                // ignore
-            }
-            else
-                sort_moves(moves, i, end);
+            sort_moves(moves, i, end);
 
             // ignore specific moves
             if (moves[i].score() == IGNORE_SCORE || !filter(moves[i]))
@@ -422,7 +409,7 @@ class movegen
         return end;
     }
 
-    void sort_moves(chess::Movelist &moves, int i, int end = -1)
+    static void sort_moves(chess::Movelist &moves, int i, int end = -1)
     {
         if (end == -1)
             end = moves.size();
