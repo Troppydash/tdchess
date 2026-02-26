@@ -45,7 +45,6 @@ class movegen
     chess::Board &m_position;
     const heuristics &m_heuristics;
     chess::Move m_pv_move;
-    chess::Move m_prev_move;
     int32_t m_ply;
 
     std::array<const continuation_history *, NUM_CONTINUATION> m_continuations{nullptr};
@@ -54,27 +53,27 @@ class movegen
 
   public:
     explicit movegen(chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
-                     chess::Move prev_move, int32_t ply, movegen_stage stage = movegen_stage::PV)
+                     int32_t ply, movegen_stage stage = movegen_stage::PV)
         : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
-          m_pv_move(pv_move), m_prev_move(prev_move), m_ply(ply)
+          m_pv_move(pv_move),  m_ply(ply)
     {
     }
 
     explicit movegen(
         chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
-        chess::Move prev_move, int32_t ply,
+       int32_t ply,
         const std::array<const continuation_history *, NUM_CONTINUATION> &continuations,
         movegen_stage stage = movegen_stage::PV)
         : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
-          m_pv_move(pv_move), m_prev_move(prev_move), m_ply(ply), m_continuations{continuations}
+          m_pv_move(pv_move),  m_ply(ply), m_continuations{continuations}
     {
     }
 
     explicit movegen(chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
-                     chess::Move prev_move, int32_t ply, const continuation_history *continuation1,
+            int32_t ply, const continuation_history *continuation1,
                      movegen_stage stage = movegen_stage::PV)
         : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
-          m_pv_move(pv_move), m_prev_move(prev_move), m_ply(ply)
+          m_pv_move(pv_move),  m_ply(ply)
     {
         m_continuations[0] = continuation1;
     }
