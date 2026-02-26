@@ -25,7 +25,8 @@ inline int32_t parse_i32(std::string_view s)
         return out;
     }
 
-    throw std::runtime_error{"bad range"};
+    std::cout << "bad range\n";
+    exit(0);
 }
 
 inline int64_t parse_i64(std::string_view s)
@@ -37,7 +38,8 @@ inline int64_t parse_i64(std::string_view s)
         return out;
     }
 
-    throw std::runtime_error{"bad range"};
+    std::cout << "bad range\n";
+    exit(0);
 }
 
 class uci_handler
@@ -105,7 +107,7 @@ class uci_handler
             }
             std::cout << "loaded " << positions.size() << " positions\n";
 
-            for (int i = 0; i < positions.size(); i += 10)
+            for (size_t i = 0; i < positions.size(); i += 10)
             {
                 search_param param{};
                 param.movetime = 400;

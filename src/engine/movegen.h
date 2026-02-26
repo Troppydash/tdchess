@@ -239,7 +239,7 @@ class movegen
 
                     // killer move
                     bool found = false;
-                    for (int j = 0; j < param::NUMBER_KILLERS; ++j)
+                    for (int j = 0; j < (int)param::NUMBER_KILLERS; ++j)
                     {
                         const auto &entry = m_heuristics.killers[m_ply][j];
                         if (move == entry.first)
@@ -314,7 +314,7 @@ class movegen
                 }
 
                 m_move_index =
-                    pick_move(m_moves, m_move_index, m_moves.size(), [](auto &_m) { return true; });
+                    pick_move(m_moves, m_move_index, m_moves.size(), [](auto &) { return true; });
                 if (m_move_index < m_moves.size())
                     return m_moves[m_move_index++];
 
@@ -325,7 +325,7 @@ class movegen
                 // iterating through bad capture moves
             case movegen_stage::BAD_CAPTURE: {
                 m_move_index = pick_move(m_moves, m_move_index, m_bad_capture_end,
-                                         [](auto &_m) { return true; });
+                                         [](auto &) { return true; });
                 if (m_move_index < m_bad_capture_end)
                     return m_moves[m_move_index++];
 
@@ -342,7 +342,7 @@ class movegen
                 }
 
                 m_move_index = pick_move(m_moves, m_move_index, m_bad_quiet_end,
-                                         [](auto &_m) { return true; });
+                                         [](auto &) { return true; });
                 if (m_move_index < m_bad_quiet_end)
                     return m_moves[m_move_index++];
 
@@ -353,7 +353,7 @@ class movegen
                 // explore all good captures
             case movegen_stage::QCAPTURE: {
                 m_move_index =
-                    pick_move(m_moves, m_move_index, m_moves.size(), [](auto &_m) { return true; });
+                    pick_move(m_moves, m_move_index, m_moves.size(), [](auto &) { return true; });
                 if (m_move_index < m_moves.size())
                     return m_moves[m_move_index++];
 
@@ -363,7 +363,7 @@ class movegen
 
             case movegen_stage::EMOVES: {
                 m_move_index =
-                    pick_move(m_moves, m_move_index, m_moves.size(), [](auto &_m) { return true; });
+                    pick_move(m_moves, m_move_index, m_moves.size(), [](auto &) { return true; });
                 if (m_move_index < m_moves.size())
                     return m_moves[m_move_index++];
 

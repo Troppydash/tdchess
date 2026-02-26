@@ -91,7 +91,8 @@ struct endgame_table
             score = -param::INF + ply;
             break;
         default:
-            throw std::runtime_error{"impossible wdl"};
+            std::cout << "impossible wdl\n";
+            exit(0);
         }
 
         return {pv_line, score};
@@ -117,7 +118,7 @@ struct endgame_table
             std::cout << "info failed probe dtz\n";
             std::cout << position << std::endl;
             std::cout << position.getFen() << std::endl;
-            throw std::runtime_error("failed probe");
+            exit(0);
         }
 
         int wdl = TB_GET_WDL(result);
@@ -169,8 +170,8 @@ struct endgame_table
 
         std::cout << ep << "," << ep_ << std::endl;
         std::cout << position << std::endl;
-
-        throw std::runtime_error{"impossible"};
+        std::cout << "dtz\n";
+        exit(0);
     }
 
     int16_t probe_wdl(const chess::Board &position)
@@ -182,10 +183,10 @@ struct endgame_table
         {
             // assuming the wdl is computed against the dtz clock, fix later if needed
 
-            if (std::abs(cache.score) == 2 && position.halfMoveClock() <= cache.move50)
+            if (std::abs(cache.score) == 2 && (int)position.halfMoveClock() <= cache.move50)
                 return cache.score;
 
-            if (std::abs(cache.score) == 1 && position.halfMoveClock() >= cache.move50)
+            if (std::abs(cache.score) == 1 && (int)position.halfMoveClock() >= cache.move50)
                 return cache.score;
 
             if (cache.score == 0)
@@ -209,7 +210,7 @@ struct endgame_table
             std::cout << "info failed probe wdl\n";
             std::cout << position << std::endl;
             std::cout << position.getFen() << std::endl;
-            throw std::runtime_error("failed probe");
+            exit(0);
         }
 
         int16_t ret = 0;
@@ -231,7 +232,8 @@ struct endgame_table
             ret = 2;
             break;
         default:
-            throw std::runtime_error{"impossible wdl value"};
+            std::cout << "impossible wdl value\n";
+            exit(0);
         }
 
 

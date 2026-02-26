@@ -143,7 +143,7 @@ class rep_filter
         current.unset(x.hash());
     }
 
-    bool check(const chess::Board &board, int ply) const
+    bool check(const chess::Board &board, int) const
     {
         // if (board.halfMoveClock() < 6)
         // {

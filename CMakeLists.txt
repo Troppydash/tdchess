@@ -32,6 +32,7 @@ target_compile_options(tdchess_uci PRIVATE
         "-Wextra"
         -DNDEBUG
         -mcpu=native
+        -fno-exceptions
 )
 
 #if (PGOGEN)
@@ -72,6 +73,7 @@ target_compile_options(tdchess_test PRIVATE
         "-Wextra"
         -DNDEBUG
         -mcpu=native
+        -fno-exceptions
         #        -fsanitize=undefined
         #        -g
         #                "-ftrapv"

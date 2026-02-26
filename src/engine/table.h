@@ -79,7 +79,7 @@ class table_entry
     int8_t m_depth;
     uint8_t m_mask = 1;
 
-    [[nodiscard]] table_entry_result get(uint64_t hash, int32_t ply, int32_t depth, int16_t alpha,
+    [[nodiscard]] table_entry_result get(uint64_t, int32_t ply, int32_t depth, int16_t alpha,
                                          int16_t beta, bool bucket_hit) const
     {
         int16_t adj_score = param::VALUE_NONE;

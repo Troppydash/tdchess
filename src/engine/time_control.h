@@ -56,7 +56,7 @@ struct search_param
         original_time_adjust = -1;
     }
 
-    [[nodiscard]] result time_control(int moves, chess::Color side2move)
+    [[nodiscard]] result time_control(int, chess::Color side2move)
     {
         int64_t inc, time;
         if (side2move == chess::Color::WHITE)

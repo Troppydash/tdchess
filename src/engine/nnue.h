@@ -391,7 +391,8 @@ class nnue
             break;
         }
         default: {
-            throw std::runtime_error{"invalid move type"};
+            std::cout << "invalid move type\n";
+            exit(0);
         }
         }
     }

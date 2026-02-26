@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <iostream>
 
 namespace helper
 {
@@ -62,7 +63,10 @@ template <typename T> struct thread_safe_queue
         m_cv.wait(lock, [&] { return !m_queue.empty() || m_is_done; });
 
         if (m_queue.empty())
-            throw std::runtime_error{"empty queue"};
+        {
+            std::cout << "empty queue\n";
+            exit(0);
+        }
 
         T value = std::move(m_queue.front());
         m_queue.pop();
