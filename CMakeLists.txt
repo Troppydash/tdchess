@@ -64,16 +64,16 @@ target_link_options(tdchess_test PRIVATE
         "-flto"
 )
 target_compile_options(tdchess_test PRIVATE
-        "-Ofast"
-        "-march=native"
-        "-mtune=native"
-        "-flto"
-        "-fomit-frame-pointer"
-        "-Wall"
-        "-Wextra"
-        -DNDEBUG
-        -mcpu=native
-        -fno-exceptions
+#        "-Ofast"
+#        "-march=native"
+#        "-mtune=native"
+#        "-flto"
+#        "-fomit-frame-pointer"
+#        "-Wall"
+#        "-Wextra"
+#        -DNDEBUG
+#        -mcpu=native
+#        -fno-exceptions
         #        -fsanitize=undefined
         #        -g
         #                "-ftrapv"

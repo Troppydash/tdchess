@@ -1440,6 +1440,16 @@ class Board;
 class movegen {
    public:
     enum class MoveGenType : std::uint8_t { ALL, CAPTURE, QUIET };
+    enum class Type : int { LEGAL, PSEUDO_LEGAL };
+
+    /// @brief Generates all pseudo legal moves for a position.
+    /// @tparam mt
+    /// @param movelist
+    /// @param board
+    template <MoveGenType mt = MoveGenType::ALL>
+    void static pseudolegalmoves(Movelist &movelist, const Board &board,
+                                 int pieces = PieceGenType::PAWN | PieceGenType::KNIGHT | PieceGenType::BISHOP |
+                                              PieceGenType::ROOK | PieceGenType::QUEEN | PieceGenType::KING);
 
     /**
      * @brief Generates all legal moves for a position.
@@ -1457,6 +1467,12 @@ class movegen {
         void static legalmoves_no_clear(Movelist &movelist, const Board &board,
                                int pieces = PieceGenType::PAWN | PieceGenType::KNIGHT | PieceGenType::BISHOP |
                                             PieceGenType::ROOK | PieceGenType::QUEEN | PieceGenType::KING);
+
+    template <MoveGenType mt = MoveGenType::ALL>
+        void static pseudolegalmoves_no_clear(Movelist &movelist, const Board &board,
+                               int pieces = PieceGenType::PAWN | PieceGenType::KNIGHT | PieceGenType::BISHOP |
+                                            PieceGenType::ROOK | PieceGenType::QUEEN | PieceGenType::KING);
+
 
     template <MoveGenType mt = MoveGenType::ALL>
     void static legal_promote_moves(Movelist &movelist, const Board &board);
@@ -1507,7 +1523,7 @@ class movegen {
     template <typename T>
     static void whileBitboardAdd(Movelist &movelist, Bitboard mask, T func);
 
-    template <Color::underlying c, MoveGenType mt>
+    template <Color::underlying c, MoveGenType mt, Type type>
     static void legalmoves(Movelist &movelist, const Board &board, int pieces);
 
     template <Color::underlying c, MoveGenType mt>
@@ -1996,6 +2012,135 @@ class Board {
     const std::vector<State> &get_prev_state() const
     {
         return prev_states_;
+    }
+
+    bool was_move_legal() const
+    {
+        // check if king is in check
+        return !isAttacked(kingSq(~stm_), stm_);
+    }
+
+    bool is_move_legal(const chess::Move &move)
+    {
+        // we always check castling
+        if (move.typeOf() == chess::Move::CASTLING)
+            return true;
+
+        const auto from = move.from();
+        const auto to = move.to();
+        const auto piece = at(move.from());
+
+        // king moves
+        // if (piece.type() == chess::PieceType::KING)
+        // {
+        //     return !isAttackedMask(to, ~stm_, occ() ^ Bitboard::fromSquare(from));
+        // }
+
+        // std::pair<chess::Bitboard, int> p;
+        // if (stm_ == chess::Color::WHITE)
+        //     p = chess::movegen::checkMask<chess::Color::WHITE>(*this, kingSq(stm_));
+        // else
+        //     p = chess::movegen::checkMask<chess::Color::BLACK>(*this, kingSq(stm_));
+        //
+        // if (p.second == 0)
+        // {
+        //     // discovery
+        // }
+        // else if (p.second == 1)
+        // {
+        //     // evasion
+        // }
+        // else if (p.second == 2)
+        //     return false;
+
+
+        const auto capture = at(move.to()) != Piece::NONE && move.typeOf() != Move::CASTLING;
+        const auto captured = at(move.to());
+        const auto pt = at<PieceType>(move.from());
+
+        if (capture)
+        {
+            removePiece(captured, move.to());
+        }
+
+        if (move.typeOf() == Move::PROMOTION)
+        {
+            const auto piece_pawn = Piece(PieceType::PAWN, stm_);
+            const auto piece_prom = Piece(move.promotionType(), stm_);
+
+            removePiece(piece_pawn, move.from());
+            placePiece(piece_prom, move.to());
+        }
+        else
+        {
+            assert(at(move.from()) != Piece::NONE);
+            assert(at(move.to()) == Piece::NONE);
+
+            const auto piece = at(move.from());
+
+            removePiece(piece, move.from());
+            placePiece(piece, move.to());
+        }
+
+        if (move.typeOf() == Move::ENPASSANT)
+        {
+            assert(at<PieceType>(move.to().ep_square()) == PieceType::PAWN);
+
+            const auto piece = Piece(PieceType::PAWN, ~stm_);
+
+            removePiece(piece, move.to().ep_square());
+        }
+
+        bool legal = !isAttacked(kingSq(stm_), ~stm_);
+
+        // undo move
+        if (move.typeOf() == Move::PROMOTION)
+        {
+            const auto pawn = Piece(PieceType::PAWN, stm_);
+            const auto piece = at(move.to());
+
+            assert(piece.type() == move.promotionType());
+            assert(piece.type() != PieceType::PAWN);
+            assert(piece.type() != PieceType::KING);
+            assert(piece.type() != PieceType::NONE);
+
+            removePiece(piece, move.to());
+            placePiece(pawn, move.from());
+
+            if (captured != Piece::NONE)
+            {
+                assert(at(move.to()) == Piece::NONE);
+                placePiece(captured, move.to());
+            }
+        }
+        else
+        {
+            assert(at(move.to()) != Piece::NONE);
+            assert(at(move.from()) == Piece::NONE);
+
+            const auto piece = at(move.to());
+
+            removePiece(piece, move.to());
+            placePiece(piece, move.from());
+
+            if (move.typeOf() == Move::ENPASSANT)
+            {
+                const auto pawn = Piece(PieceType::PAWN, ~stm_);
+                const auto pawnTo = static_cast<Square>(ep_sq_ ^ 8);
+
+                assert(at(pawnTo) == Piece::NONE);
+
+                placePiece(pawn, pawnTo);
+            }
+            else if (captured != Piece::NONE)
+            {
+                assert(at(move.to()) == Piece::NONE);
+
+                placePiece(captured, move.to());
+            }
+        }
+
+        return legal;
     }
 
     /**
@@ -2516,6 +2661,17 @@ class Board {
         if (attacks::king(square) & pieces(PieceType::KING, color)) return true;
         if (attacks::bishop(square, occ()) & pieces(PieceType::BISHOP, PieceType::QUEEN) & us(color)) return true;
         if (attacks::rook(square, occ()) & pieces(PieceType::ROOK, PieceType::QUEEN) & us(color)) return true;
+
+        return false;
+    }
+
+    [[nodiscard]] bool isAttackedMask(Square square, Color color, Bitboard mask) const noexcept {
+        // cheap checks first
+        if (attacks::pawn(~color, square) & pieces(PieceType::PAWN, color) & mask) return true;
+        if (attacks::knight(square) & pieces(PieceType::KNIGHT, color) & mask) return true;
+        if (attacks::king(square) & pieces(PieceType::KING, color) & mask) return true;
+        if (attacks::bishop(square, occ() & mask) & pieces(PieceType::BISHOP, PieceType::QUEEN) & us(color) & mask) return true;
+        if (attacks::rook(square, occ() & mask) & pieces(PieceType::ROOK, PieceType::QUEEN) & us(color) & mask) return true;
 
         return false;
     }
@@ -4139,7 +4295,7 @@ inline void movegen::whileBitboardAdd(Movelist &movelist, Bitboard mask, T func)
     }
 }
 
-template <Color::underlying c, movegen::MoveGenType mt>
+template <Color::underlying c, movegen::MoveGenType mt, movegen::Type type>
 inline void movegen::legalmoves(Movelist &movelist, const Board &board, int pieces) {
     /*
      The size of the movelist might not
@@ -4154,11 +4310,23 @@ inline void movegen::legalmoves(Movelist &movelist, const Board &board, int piec
 
     Bitboard opp_empty = ~occ_us;
 
-    const auto [checkmask, checks] = checkMask<c>(board, king_sq);
-    const auto pin_hv              = pinMask<c, PieceType::ROOK>(board, king_sq, occ_opp, occ_us);
-    const auto pin_d               = pinMask<c, PieceType::BISHOP>(board, king_sq, occ_opp, occ_us);
+    Bitboard checkmask, pin_hv, pin_d;
+    int checks;
 
-    assert(checks <= 2);
+    if constexpr (type == movegen::Type::LEGAL)
+    {
+        const auto p = checkMask<c>(board, king_sq);
+        checkmask = p.first;
+        checks = p.second;
+        pin_hv = pinMask<c, PieceType::ROOK>(board, king_sq, occ_opp, occ_us);
+        pin_d = pinMask<c, PieceType::BISHOP>(board, king_sq, occ_opp, occ_us);
+        assert(checks <= 2);
+    } else
+    {
+        checkmask = constants::DEFAULT_CHECKMASK;
+        pin_d = pin_hv = 0;
+        checks = 0;
+    }
 
     Bitboard movable_square;
 
@@ -4172,22 +4340,47 @@ inline void movegen::legalmoves(Movelist &movelist, const Board &board, int piec
 
     if (pieces & PieceGenType::KING) {
         Bitboard seen = seenSquares<~c>(board, opp_empty);
+        Bitboard mask_normal_moves = seen;
+        if constexpr (type == Type::PSEUDO_LEGAL)
+            mask_normal_moves = 0ull;
 
         whileBitboardAdd(movelist, Bitboard::fromSquare(king_sq),
-                         [&](Square sq) { return generateKingMoves(sq, seen, movable_square); });
+                         [&](Square sq) { return generateKingMoves(sq, mask_normal_moves, movable_square); });
 
         if (mt != MoveGenType::CAPTURE && checks == 0) {
             Bitboard moves_bb = generateCastleMoves<c>(board, king_sq, seen, pin_hv);
 
-            while (moves_bb) {
-                Square to = moves_bb.pop();
-                movelist.add(Move::make<Move::CASTLING>(king_sq, to));
+            if constexpr (type == Type::PSEUDO_LEGAL)
+            {
+                // need to perform checkmask to see if king in check, but only do it if any castles exists
+                bool checked = false;
+                if (moves_bb)
+                    checked = checkMask<c>(board, king_sq).second;
+
+                if (!checked)
+                {
+                    while (moves_bb) {
+                        Square to = moves_bb.pop();
+                        movelist.add(Move::make<Move::CASTLING>(king_sq, to));
+                    }
+                }
             }
+            else
+            {
+                while (moves_bb) {
+                    Square to = moves_bb.pop();
+                    movelist.add(Move::make<Move::CASTLING>(king_sq, to));
+                }
+            }
+
         }
     }
 
     // Early return for double check as described earlier
-    if (checks == 2) return;
+    if constexpr (type == Type::LEGAL)
+    {
+        if (checks == 2) return;
+    }
 
     // Moves have to be on the checkmask
     movable_square &= checkmask;
@@ -4229,22 +4422,42 @@ inline void movegen::legalmoves(Movelist &movelist, const Board &board, int piec
     }
 }
 
+
+template <movegen::MoveGenType mt>
+inline void movegen::pseudolegalmoves(Movelist &movelist, const Board &board, int pieces) {
+    movelist.clear();
+
+    if (board.sideToMove() == Color::WHITE)
+        legalmoves<Color::WHITE, mt, Type::PSEUDO_LEGAL>(movelist, board, pieces);
+    else
+        legalmoves<Color::BLACK, mt, Type::PSEUDO_LEGAL>(movelist, board, pieces);
+}
+
+
 template <movegen::MoveGenType mt>
 inline void movegen::legalmoves(Movelist &movelist, const Board &board, int pieces) {
     movelist.clear();
 
     if (board.sideToMove() == Color::WHITE)
-        legalmoves<Color::WHITE, mt>(movelist, board, pieces);
+        legalmoves<Color::WHITE, mt, Type::LEGAL>(movelist, board, pieces);
     else
-        legalmoves<Color::BLACK, mt>(movelist, board, pieces);
+        legalmoves<Color::BLACK, mt, Type::LEGAL>(movelist, board, pieces);
 }
 
 template <movegen::MoveGenType mt>
 inline void movegen::legalmoves_no_clear(Movelist &movelist, const Board &board, int pieces) {
     if (board.sideToMove() == Color::WHITE)
-        legalmoves<Color::WHITE, mt>(movelist, board, pieces);
+        legalmoves<Color::WHITE, mt, Type::LEGAL>(movelist, board, pieces);
     else
-        legalmoves<Color::BLACK, mt>(movelist, board, pieces);
+        legalmoves<Color::BLACK, mt, Type::LEGAL>(movelist, board, pieces);
+}
+
+template <movegen::MoveGenType mt>
+inline void movegen::pseudolegalmoves_no_clear(Movelist &movelist, const Board &board, int pieces) {
+    if (board.sideToMove() == Color::WHITE)
+        legalmoves<Color::WHITE, mt, Type::PSEUDO_LEGAL>(movelist, board, pieces);
+    else
+        legalmoves<Color::BLACK, mt, Type::PSEUDO_LEGAL>(movelist, board, pieces);
 }
 
 template <movegen::MoveGenType mt>
