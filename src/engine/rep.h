@@ -2,127 +2,190 @@
 #include <algorithm>
 #include <cstdint>
 
-constexpr uint64_t REP_FILTER_SIZE = 1 << 15;
+constexpr uint64_t REP_FILTER_SIZE = 1 << 14;
 constexpr uint64_t REP_FILTER_SIZE_M1 = REP_FILTER_SIZE - 1;
-inline int h1(uint64_t key)
+constexpr size_t h1(uint64_t key)
 {
     return key & REP_FILTER_SIZE_M1;
 }
 
-inline int h2(uint64_t key)
+constexpr size_t h2(uint64_t key)
 {
-    return (key >> 16) & REP_FILTER_SIZE_M1;
+    size_t value = (key >> 32) & REP_FILTER_SIZE_M1;
+    if (value == h1(key))
+        return (value + 1) & REP_FILTER_SIZE_M1;
+    return value;
 }
-class rep_filter
-{
-  private:
-    uint64_t *filter;
 
-  public:
-    rep_filter()
+template <int L> struct cuckoo_table
+{
+    std::pair<uint64_t, uint8_t> *filter;
+    cuckoo_table()
     {
-        filter = new uint64_t[REP_FILTER_SIZE];
-        for (int i = 0; i < REP_FILTER_SIZE; ++i)
-            filter[i] = 0;
+        filter = new std::pair<uint64_t, uint8_t>[L];
+        for (int i = 0; i < L; ++i)
+        {
+            filter[i].first = 0;
+            filter[i].second = 0;
+        }
     }
 
-    ~rep_filter()
+    ~cuckoo_table()
     {
         delete[] filter;
     }
 
-  private:
     // returns if exists
-    bool set(uint64_t key)
+    void set(uint64_t key)
     {
         assert(key != 0);
+        assert(h1(key) != h2(key));
 
-        int slot = h1(key);
-        while (filter[slot] != key)
+        // first check that it is in the table
+        if (filter[h1(key)].first == key)
         {
-            std::swap(filter[slot], key);
-
-            if (key == 0)
-            {
-                return false;
-            }
-
-            // Use the other slot
-            slot = (slot == h1(key)) ? h2(key) : h1(key);
+            filter[h1(key)].second++;
+            return;
         }
 
-        return true;
+        if (filter[h2(key)].first == key)
+        {
+            filter[h2(key)].second++;
+            return;
+        }
+
+        // insert
+        std::pair<uint64_t, uint8_t> insert = {key, 1};
+        size_t slot = h1(insert.first);
+        int kicks = 0;
+        while (filter[slot].first != insert.first)
+        {
+            // ignore if too many kicks
+            // TODO: technically this is not correct since we miss a rep
+            if (kicks >= 16)
+                break;
+
+            std::swap(filter[slot], insert);
+
+            // inserted
+            if (insert.first == 0)
+                break;
+
+            // Use the other slot
+            slot = (slot == h1(insert.first)) ? h2(insert.first) : h1(insert.first);
+            kicks += 1;
+        }
     }
 
     void unset(uint64_t key)
     {
-        if (filter[h1(key)] == key)
-            filter[h1(key)] = 0;
+        assert(key != 0);
+
+        auto *ref = &filter[h1(key)];
+        if (ref->first != key)
+        {
+            ref = &filter[h2(key)];
+            // skip if not exist
+            if (ref->first != key)
+                return;
+        }
+
+        assert(ref->second > 0);
+        if (ref->second == 1)
+        {
+            ref->first = 0;
+            ref->second = 0;
+        }
         else
-        {
-            assert(filter[h2(key)] == key);
-            filter[h2(key)] = 0;
-        }
+            ref->second -= 1;
     }
 
-    bool lookup(uint64_t key, int ply, const chess::Board &board)
+    int lookup(uint64_t key) const
     {
-        // check for one in search
-        bool all_check = filter[h1(key)] == key || filter[h2(key)] == key;
-        if (!all_check) [[likely]]
-            return false;
+        assert(key != 0);
+        if (filter[h1(key)].first == key)
+            return filter[h1(key)].second;
 
-        // full check
-        auto &states = board.get_prev_state();
-        int maxDist = std::min((int)states.size(), (int)board.halfMoveClock());
-        bool hit = false;
-        for (int i = 4; i <= maxDist; i += 2)
-        {
-            if (states[states.size() - i].hash == key)
-            {
-                if (ply >= i)
-                    return true;
-                if (hit)
-                    return true;
-                hit = true;
-                i += 2;
-            }
-        }
-        return false;
+        if (filter[h2(key)].first == key)
+            return filter[h2(key)].second;
+
+        return 0;
     }
+
+    void clear()
+    {
+        for (size_t i = 0; i < L; ++i)
+        {
+            filter[i].first = 0;
+        }
+    }
+};
+
+class rep_filter
+{
+    cuckoo_table<REP_FILTER_SIZE> history{};
+    cuckoo_table<REP_FILTER_SIZE> current{};
 
   public:
     void prefetch(uint64_t key) const
     {
-        __builtin_prefetch(filter + h1(key));
+        __builtin_prefetch(current.filter + h1(key));
+        __builtin_prefetch(history.filter + h1(key));
     }
 
     void add(const chess::Board &x)
     {
-        set(x.hash());
-    }
-
-    bool check(const chess::Board &position, int ply)
-    {
-        return lookup(position.hash(), ply, position);
+        current.set(x.hash());
     }
 
     void remove(const chess::Board &x)
     {
-        unset(x.hash());
+        current.unset(x.hash());
+    }
+
+    bool check(const chess::Board &board, int ply) const
+    {
+        // if (board.halfMoveClock() < 6)
+        // {
+        //     const auto &states = board.get_prev_state();
+        //     int maxDist = std::min((int)states.size(), (int)board.halfMoveClock());
+        //     bool hit = false;
+        //     for (int i = 4; i <= maxDist; i += 2)
+        //     {
+        //         if (states[states.size() - i].hash == board.hash())
+        //         {
+        //             if (ply >= i)
+        //                 return true;
+        //             if (hit)
+        //                 return true;
+        //             hit = true;
+        //             i += 2;
+        //         }
+        //     }
+        //     return false;
+        // }
+
+        int c = current.lookup(board.hash());
+        if (c >= 1)
+            return true;
+
+        c = history.lookup(board.hash());
+        if (c >= 2)
+            return true;
+
+        return false;
     }
 
     void load(const chess::Board &position)
     {
-        // clear at new hfm, so we have more space for the search
-        for (int i = 0; i < REP_FILTER_SIZE; ++i)
-            filter[i] = 0;
+        current.clear();
+        history.clear();
 
-        const int maxDist = position.halfMoveClock();
         const auto &states = position.get_prev_state();
-        for (int i = 1; i <= maxDist && i <= states.size(); ++i)
+        const int maxDist = std::min((int)position.halfMoveClock(), (int)states.size());
+        for (int i = 1; i <= maxDist; ++i)
         {
-            set(states[states.size() - i].hash);
+            history.set(states[states.size() - i].hash);
         }
     }
 };

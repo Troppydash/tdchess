@@ -299,12 +299,6 @@ class movegen
                     }
                 }
 
-                // fast sort
-                std::sort(&m_moves[m_bad_quiet_end], m_moves.end(),
-                          [](const chess::Move &a, const chess::Move &b) {
-                              return a.score() > b.score();
-                          });
-
                 m_move_index = m_bad_quiet_end;
                 m_stage++;
                 break;
@@ -400,10 +394,18 @@ class movegen
     {
         for (int i = start; i < end; ++i)
         {
-            if (i >= m_bad_quiet_end && m_stage == int(movegen_stage::GOOD_QUIET))
-            {
-            }
-            else
+            // if (m_stage == int(movegen_stage::GOOD_QUIET))
+            // {
+            //     if (i == m_bad_quiet_end)
+            //     {
+            //         // fast sort
+            //         std::sort(&m_moves[i], m_moves.end(),
+            //                   [](const chess::Move &a, const chess::Move &b) {
+            //                       return a.score() > b.score();
+            //                   });
+            //     }
+            // }
+            // else
                 sort_moves(moves, i, end);
 
             // ignore specific moves

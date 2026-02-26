@@ -148,6 +148,15 @@ void position_test()
     //     std::cout << chess::uci::moveToUci(result.pv_line[0]) << std::endl;
     // }
 
+    // cuckoo_table<10000> t;
+    // t.set(1);
+    // t.set(1);
+    // t.unset(1);
+    // t.set(1);
+    // int c = t.lookup(1);
+    // std::cout << c << std::endl;
+    // exit(0);
+
     std::vector<std::pair<std::string, std::string>> positions{
         // {"rnbqkbnr/pppp1ppp/8/4p3/2P5/2N5/PP1PPPPP/R1BQKBNR b KQkq - 1 2", ""},
         // {"rnbqkbnr/pppp1ppp/8/4p3/2P5/8/PP1PPPPP/RNBQKBNR w KQkq - 0 2", "s"},
