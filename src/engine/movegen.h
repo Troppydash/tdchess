@@ -382,7 +382,7 @@ class movegen
                 break;
             }
 
-                // explore all good captures
+                // explore all captures
             case movegen_stage::QCAPTURE: {
                 m_move_index =
                     pick_move(m_moves, m_move_index, m_moves.size(), [](auto &) { return true; });
