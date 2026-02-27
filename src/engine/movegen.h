@@ -41,6 +41,7 @@ class movegen
     int m_bad_capture_end{0};
     int m_bad_quiet_end{0};
     int m_move_index{0};
+    int m_capture_end{0};
 
     chess::Board &m_position;
     const heuristics &m_heuristics;
@@ -114,34 +115,88 @@ class movegen
             case movegen_stage::CAPTURE_INIT:
             case movegen_stage::QCAPTURE_INIT:
             case movegen_stage::PROB_CAPTURE_INIT: {
-                m_precompute = chess::movegen::legalmoves_precompute(m_position);
-                chess::movegen::legalmoves_capture(m_moves, m_position, m_precompute);
-
-                // score
-                for (auto &move : m_moves)
+                if (m_stage == static_cast<int>(movegen_stage::CAPTURE_INIT))
                 {
-                    if (move == m_pv_move)
+                    chess::movegen::legalmoves(m_moves, m_position);
+
+                    // sort capture moves first
+                    // [captures, quiet]
+                    m_capture_end = m_moves.size();
+                    int end = m_moves.size();
+                    for (int i = 0; i < m_capture_end; ++i)
                     {
-                        move.setScore(IGNORE_SCORE);
-                        continue;
+                        auto &move = m_moves[i];
+                        if (!m_heuristics.is_capture(m_position, move))
+                        {
+                            m_capture_end--;
+                            std::swap(move, m_moves[m_capture_end]);
+                            i--;
+                        }
+                        else
+                        {
+                            // score captures
+                            if (move == m_pv_move)
+                            {
+                                move.setScore(IGNORE_SCORE);
+                                continue;
+                            }
+
+                            auto captured = m_heuristics.get_capture(m_position, move);
+                            int16_t mvv = see::PIECE_VALUES[captured] * features::CAPTURE_MVV_SCALE;
+
+                            // capture history
+                            int16_t capture_score =
+                                m_heuristics
+                                    .capture_history[m_position.at(move.from())][move.to().index()]
+                                                    [captured]
+                                    .get_value();
+
+                            int32_t score = mvv + capture_score;
+
+                            if (move.typeOf() == chess::Move::PROMOTION)
+                                score += 10000;
+
+                            score = std::clamp(score, -32000, 32000);
+                            move.setScore(score);
+                        }
                     }
+                }
+                else
+                {
+                    // direct capture generation
+                    chess::movegen::legalmoves_capture(
+                        m_moves, m_position, chess::movegen::legalmoves_precompute(m_position));
+                    m_capture_end = m_moves.size();
 
-                    auto captured = m_heuristics.get_capture(m_position, move);
-                    int16_t mvv = see::PIECE_VALUES[captured] * features::CAPTURE_MVV_SCALE;
+                    // score
+                    for (int i = 0; i < m_capture_end; ++i)
+                    {
+                        auto &move = m_moves[i];
+                        if (move == m_pv_move)
+                        {
+                            move.setScore(IGNORE_SCORE);
+                            continue;
+                        }
 
-                    // capture history
-                    int16_t capture_score = m_heuristics
-                                                .capture_history[m_position.at(move.from())]
-                                                                [move.to().index()][captured]
-                                                .get_value();
+                        assert(m_heuristics.is_capture(m_position, move));
 
-                    int32_t score = mvv + capture_score;
+                        auto captured = m_heuristics.get_capture(m_position, move);
+                        int16_t mvv = see::PIECE_VALUES[captured] * features::CAPTURE_MVV_SCALE;
 
-                    if (move.typeOf() == chess::Move::PROMOTION)
-                        score += 10000;
+                        // capture history
+                        int16_t capture_score = m_heuristics
+                                                    .capture_history[m_position.at(move.from())]
+                                                                    [move.to().index()][captured]
+                                                    .get_value();
 
-                    score = std::clamp(score, -32000, 32000);
-                    move.setScore(score);
+                        int32_t score = mvv + capture_score;
+
+                        if (move.typeOf() == chess::Move::PROMOTION)
+                            score += 10000;
+
+                        score = std::clamp(score, -32000, 32000);
+                        move.setScore(score);
+                    }
                 }
 
                 m_bad_capture_end = 0;
@@ -230,7 +285,8 @@ class movegen
                 // iterate good captures, sorting into bad captures
             case movegen_stage::GOOD_CAPTURE: {
                 // see check, incr bad_capture_end
-                m_move_index = pick_move(m_moves, m_move_index, m_moves.size(), [&](auto &move) {
+                m_move_index = pick_move(m_moves, m_move_index, m_capture_end, [&](auto &move) {
+                    assert(m_heuristics.is_capture(m_position, move));
                     if (!see::test_ge(m_position, move,
                                       -move.score() / features::GOOD_CAPTURE_SEE_DIV))
                     {
@@ -240,7 +296,7 @@ class movegen
                     }
                     return true;
                 });
-                if (m_move_index < m_moves.size())
+                if (m_move_index < m_capture_end)
                     return m_moves[m_move_index++];
 
                 // note here that bad_capture_end should point to end of bad captures
@@ -250,14 +306,9 @@ class movegen
 
                 // generating all quiet moves and scoring them
             case movegen_stage::QUIET_INIT: {
-                // m_moves = [bad captures, quiets]
-                m_moves.set_size(m_bad_capture_end);
-                chess::movegen::legalmoves_quiet(m_moves, m_position, m_precompute);
-
-                // m_moves = [bad captures, quiets]
-                m_bad_quiet_end = m_bad_capture_end;
+                m_bad_quiet_end = m_capture_end;
                 uint64_t pawn_key = m_heuristics.get_pawn_key(m_position);
-                for (int i = m_bad_capture_end; i < m_moves.size(); ++i)
+                for (int i = m_bad_quiet_end; i < m_moves.size(); ++i)
                 {
                     chess::Move &move = m_moves[i];
                     if (move == m_pv_move)
@@ -266,31 +317,22 @@ class movegen
                         continue;
                     }
 
-                    if (move.typeOf() == chess::Move::PROMOTION &&
-                        (move.promotionType() == chess::PieceType::QUEEN ||
-                         move.promotionType() == chess::PieceType::KNIGHT))
-                    {
-                        move.setScore(IGNORE_SCORE);
-                        continue;
-                    }
+                    assert(!m_heuristics.is_capture(m_position, move));
+
+                    int32_t score = 0;
 
                     // killer move
-                    bool found = false;
                     for (int j = 0; j < (int)param::NUMBER_KILLERS; ++j)
                     {
                         const auto &entry = m_heuristics.killers[m_ply][j];
                         if (move == entry.first)
                         {
                             move.setScore(32100 - j);
-                            found = true;
-                            break;
+                            goto end;
                         }
                     }
-                    if (found)
-                        continue;
 
                     // normal
-                    int32_t score = 0;
                     score += m_heuristics
                                  .main_history[m_position.sideToMove()][move.from().index()]
                                               [move.to().index()]
@@ -335,6 +377,8 @@ class movegen
                         std::swap(m_moves[m_bad_quiet_end], m_moves[i]);
                         m_bad_quiet_end++;
                     }
+
+                    end:
                 }
 
                 m_move_index = m_bad_quiet_end;
@@ -366,7 +410,8 @@ class movegen
                 if (m_move_index < m_bad_capture_end)
                     return m_moves[m_move_index++];
 
-                m_move_index = m_bad_capture_end;
+                assert(m_capture_end >= m_bad_capture_end);
+                m_move_index = m_capture_end;
                 m_stage++;
                 break;
             }
@@ -425,8 +470,6 @@ class movegen
             }
         }
     }
-
-    bool static_sort_quiet = false;
 
     template <typename Pred>
     int pick_move(chess::Movelist &moves, const int start, const int end, Pred filter)
