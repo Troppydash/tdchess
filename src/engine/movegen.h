@@ -49,6 +49,7 @@ class movegen
 
     std::array<const continuation_history *, NUM_CONTINUATION> m_continuations{nullptr};
 
+    int16_t margin;
     bool m_skip_quiet = false;
 
   public:
@@ -56,6 +57,13 @@ class movegen
                      int32_t ply, movegen_stage stage = movegen_stage::PV)
         : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
           m_pv_move(pv_move), m_ply(ply)
+    {
+    }
+
+    explicit movegen(chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
+                     int32_t ply, int16_t margin, movegen_stage stage = movegen_stage::PV)
+        : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
+          m_pv_move(pv_move), m_ply(ply), margin{margin}
     {
     }
 
@@ -406,8 +414,7 @@ class movegen
                 // explore only see captures
             case movegen_stage::PROB_GOOD_CAPTURE: {
                 m_move_index = pick_move(m_moves, m_move_index, m_moves.size(), [&](auto &move) {
-                    return see::test_ge(m_position, move,
-                                        -move.score() / features::PROB_GOOD_CAPTURE_SEE_DIV);
+                    return see::test_ge(m_position, move, margin);
                 });
                 if (m_move_index < m_moves.size())
                     return m_moves[m_move_index++];
