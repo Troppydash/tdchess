@@ -56,7 +56,7 @@ struct search_param
         original_time_adjust = -1;
     }
 
-    [[nodiscard]] result time_control(int, chess::Color side2move)
+    [[nodiscard]] result time_control(int moves, chess::Color side2move)
     {
         int64_t inc, time;
         if (side2move == chess::Color::WHITE)
@@ -78,7 +78,7 @@ struct search_param
             return {depth, movetime, movetime};
 
         // https://github.com/gab8192/Obsidian/blob/main/src/timeman.cpp
-        int mtg = 50;
+        int mtg = 40;
         int64_t time_left = std::max(int64_t(1), time + inc * (mtg - 1) - move_overhead * (2 + mtg));
 
         double opt_scale = std::min(0.025, 0.214 * time / double(time_left));

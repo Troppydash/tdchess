@@ -132,11 +132,13 @@ inline bool is_upcoming_rep(const chess::Board &pos, int ply)
         }
 
         // otherwise need another
+        // TODO: this might be slow
         for (int j = i + 4; j <= maxDist; j += 2)
         {
             if (states[states.size() - j].hash == states[states.size() - i].hash)
                 return true;
         }
+        // std::cout << "missed\n";
     }
 
     return false;
