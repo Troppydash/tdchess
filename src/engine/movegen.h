@@ -161,9 +161,13 @@ class movegen
 
                     if (m_heuristics.is_capture(m_position, move))
                     {
-                        move.setScore(
-                            see::PIECE_VALUES[m_heuristics.get_capture(m_position, move)] +
-                            (32000 - see::QUEEN_VALUE));
+                        int32_t score =
+                            features::CAPTURE_MVV_SCALE * see::PIECE_VALUES[m_heuristics.get_capture(m_position, move)] +
+                            m_heuristics.capture_history[m_position.at(move.from())][move.to().index()][m_heuristics.get_capture(m_position, move)].get_value();
+
+                        score += 10000;
+                        score = std::clamp(score, -32000, 32000);
+                        move.setScore(score);
                     }
                     else
                     {
@@ -172,13 +176,33 @@ class movegen
                                                          [move.from().index()][move.to().index()]
                                             .get_value();
 
-                        if (m_continuations[0] != nullptr)
-                            score +=
-                                (*m_continuations[0])[m_position.at(move.from())][move.to().index()]
-                                    .get_value() /
-                                2;
+                        if (m_ply < LOW_PLY)
+                        {
+                            score += features::QUIET_LOW_PLY_SCALE *
+                                     m_heuristics
+                                         .low_ply[m_position.sideToMove()][m_ply][move.from().index()]
+                                                 [move.to().index()]
+                                         .get_value() /
+                                     (1 + m_ply);
+                        }
 
-                        score = std::clamp(score, -30000, 30000);
+                        // pawn history
+                        score += m_heuristics
+                                     .pawn[m_heuristics.get_pawn_key(m_position) & PAWN_STRUCTURE_SIZE_M1]
+                                          [m_position.at(move.from())][move.to().index()]
+                                     .get_value();
+
+                        // continuation
+                        for (int i = 0; i < NUM_CONTINUATION; ++i)
+                        {
+                            if (m_continuations[i] != nullptr)
+                                score +=
+                                    (*m_continuations[i])[m_position.at(move.from())][move.to().index()]
+                                        .get_value() /
+                                    2;
+                        }
+
+                        score = std::clamp(score, -32000, 32000);
                         move.setScore(score);
                     }
                 }

@@ -74,8 +74,8 @@ target_compile_options(tdchess_test PRIVATE
 #        -DNDEBUG
 #        -mcpu=native
 #        -fno-exceptions
-        #        -fsanitize=undefined
-        #        -g
+                -fsanitize=undefined
+                -g
         #                "-ftrapv"
 )
 
