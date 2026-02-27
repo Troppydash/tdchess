@@ -5,11 +5,11 @@
 
 struct see
 {
-    static constexpr int16_t PAWN_VALUE = 200;
-    static constexpr int16_t KNIGHT_VALUE = 700;
-    static constexpr int16_t BISHOP_VALUE = 800;
-    static constexpr int16_t ROOK_VALUE = 1300;
-    static constexpr int16_t QUEEN_VALUE = 2500;
+    static constexpr int16_t PAWN_VALUE = 100;
+    static constexpr int16_t KNIGHT_VALUE = 290;
+    static constexpr int16_t BISHOP_VALUE = 330;
+    static constexpr int16_t ROOK_VALUE = 600;
+    static constexpr int16_t QUEEN_VALUE = 900;
 
     constexpr static std::array<int16_t, 7> PIECE_VALUES = {
         // pawn, knight, bishop, rook, queen, king, none
@@ -51,7 +51,7 @@ struct see
      * @param threshold
      * @return
      */
-    static bool test_ge(chess::Board &position, const chess::Move &move, int16_t threshold)
+    static bool test_ge(chess::Board &position, const chess::Move &move, int32_t threshold)
     {
         if (move.typeOf() != chess::Move::NORMAL)
         {
@@ -178,7 +178,7 @@ struct see
         return static_cast<bool>(res);
     }
 
-    static bool test_ge_promote(chess::Board &position, const chess::Move &move, int16_t threshold)
+    static bool test_ge_promote(chess::Board &position, const chess::Move &move, int32_t threshold)
     {
         chess::Square from = move.from();
         chess::Square to = move.to();
