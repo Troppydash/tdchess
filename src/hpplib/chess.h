@@ -1473,6 +1473,19 @@ class movegen {
                                int pieces = PieceGenType::PAWN | PieceGenType::KNIGHT | PieceGenType::BISHOP |
                                             PieceGenType::ROOK | PieceGenType::QUEEN | PieceGenType::KING);
 
+        // better move gen
+
+    struct precompute
+    {
+        std::pair<Bitboard, int> checks;
+        Bitboard pin_hv;
+        Bitboard pin_d;
+        Bitboard seen;
+    };
+
+    static precompute legalmoves_precompute(const Board &board);
+    void static legalmoves_capture(Movelist &movelist, const Board &board, const precompute &precompute);
+    void static legalmoves_quiet(Movelist &movelist, const Board &board, const precompute &precompute);
 
     template <MoveGenType mt = MoveGenType::ALL>
     void static legal_promote_moves(Movelist &movelist, const Board &board);
@@ -1528,6 +1541,15 @@ class movegen {
 
     template <Color::underlying c, MoveGenType mt>
     static void legal_promote_moves(Movelist &movelist, const Board &board);
+
+    // faster movegen
+    template <Color::underlying c>
+    void static legalmoves_capture(Movelist &movelist, const Board &board, const precompute &precompute);
+    template <Color::underlying c>
+    void static legalmoves_quiet(Movelist &movelist, const Board &board, const precompute &precompute);
+
+    template <Color::underlying c> static precompute legalmoves_precompute(const Board &board);
+
 
     template <Color::underlying c>
     static bool isEpSquareValid(const Board &board, Square ep);
@@ -4506,6 +4528,199 @@ inline void movegen::legal_promote_moves(Movelist &movelist, const Board &board)
     movable_square &= checkmask;
 
     generatePawnPromoteMoves<c, mt>(board, movelist, pin_d, pin_hv, checkmask, occ_opp);
+}
+
+inline void movegen::legalmoves_capture(Movelist &movelist, const Board &board, const precompute &precompute)
+{
+    if (board.sideToMove() == chess::Color::WHITE)
+        legalmoves_capture<Color::WHITE>(movelist, board, precompute);
+    else
+        legalmoves_capture<Color::BLACK>(movelist, board, precompute);
+}
+
+template <Color::underlying c>
+inline void movegen::legalmoves_capture(Movelist &movelist, const Board &board, const precompute &precompute)
+{
+    /*
+     The size of the movelist might not
+     be 0! This is done on purpose since it enables
+     you to append new move types to any movelist.
+    */
+    auto king_sq = board.kingSq(c);
+
+    Bitboard occ_us  = board.us(c);
+    Bitboard occ_opp = board.us(~c);
+    Bitboard occ_all = occ_us | occ_opp;
+
+    Bitboard opp_empty = ~occ_us;
+
+    Bitboard checkmask, pin_hv, pin_d;
+    int checks;
+
+    checkmask = precompute.checks.first;
+    checks = precompute.checks.second;
+    pin_hv = precompute.pin_hv;
+    pin_d = precompute.pin_d;
+
+    // generate captures first
+    Bitboard movable_square;
+    movable_square = occ_opp;
+
+    Bitboard seen = precompute.seen;
+    whileBitboardAdd(movelist, Bitboard::fromSquare(king_sq),
+                     [&](Square sq) { return generateKingMoves(sq, seen, movable_square); });
+
+    // Early return for double check as described earlier
+    if (checks == 2)
+        return;
+
+    // Moves have to be on the checkmask
+    movable_square &= checkmask;
+
+    // Add the moves to the movelist.
+    generatePawnMoves<c, MoveGenType::CAPTURE>(board, movelist, pin_d, pin_hv, checkmask, occ_opp);
+
+    // Prune knights that are pinned since these cannot move.
+    Bitboard knights_mask = board.pieces(PieceType::KNIGHT, c) & ~(pin_d | pin_hv);
+
+    whileBitboardAdd(movelist, knights_mask,
+                     [&](Square sq) { return generateKnightMoves(sq) & movable_square; });
+
+    // Prune horizontally pinned bishops
+    Bitboard bishops_mask = board.pieces(PieceType::BISHOP, c) & ~pin_hv;
+    whileBitboardAdd(movelist, bishops_mask, [&](Square sq) {
+        return generateBishopMoves(sq, pin_d, occ_all) & movable_square;
+    });
+
+    //  Prune diagonally pinned rooks
+    Bitboard rooks_mask = board.pieces(PieceType::ROOK, c) & ~pin_d;
+
+    whileBitboardAdd(movelist, rooks_mask, [&](Square sq) {
+        return generateRookMoves(sq, pin_hv, occ_all) & movable_square;
+    });
+
+    // Prune double pinned queens
+    Bitboard queens_mask = board.pieces(PieceType::QUEEN, c) & ~(pin_d & pin_hv);
+
+    whileBitboardAdd(movelist, queens_mask, [&](Square sq) {
+        return generateQueenMoves(sq, pin_d, pin_hv, occ_all) & movable_square;
+    });
+
+    // promotion pawn moves
+    generatePawnPromoteMoves<c, MoveGenType::QUIET>(board, movelist, pin_d, pin_hv, checkmask,
+                                                    occ_opp);
+}
+
+inline void movegen::legalmoves_quiet(Movelist &movelist, const Board &board, const precompute &precompute)
+{
+    if (board.sideToMove() == chess::Color::WHITE)
+        legalmoves_quiet<Color::WHITE>(movelist, board, precompute);
+    else
+        legalmoves_quiet<Color::BLACK>(movelist, board, precompute);
+}
+
+template <Color::underlying c>
+inline void movegen::legalmoves_quiet(Movelist &movelist, const Board &board, const precompute &precompute)
+{
+    /*
+     The size of the movelist might not
+     be 0! This is done on purpose since it enables
+     you to append new move types to any movelist.
+    */
+    auto king_sq = board.kingSq(c);
+
+    Bitboard occ_us  = board.us(c);
+    Bitboard occ_opp = board.us(~c);
+    Bitboard occ_all = occ_us | occ_opp;
+
+    Bitboard opp_empty = ~occ_us;
+
+    Bitboard checkmask, pin_hv, pin_d;
+    int checks;
+
+    checkmask = precompute.checks.first;
+    checks = precompute.checks.second;
+    pin_hv = precompute.pin_hv;
+    pin_d = precompute.pin_d;
+
+    Bitboard movable_square;
+    movable_square = ~occ_all;
+
+    // king moves
+    Bitboard seen = precompute.seen;
+    whileBitboardAdd(movelist, Bitboard::fromSquare(king_sq),
+                     [&](Square sq) { return generateKingMoves(sq, seen, movable_square); });
+
+    if (checks == 0)
+    {
+        Bitboard moves_bb = generateCastleMoves<c>(board, king_sq, seen, pin_hv);
+
+        while (moves_bb)
+        {
+            Square to = moves_bb.pop();
+            movelist.add(Move::make<Move::CASTLING>(king_sq, to));
+        }
+    }
+
+    // Early return for double check as described earlier
+    if (checks == 2) return;
+
+    // Moves have to be on the checkmask
+    movable_square &= checkmask;
+
+    // Add the moves to the movelist.
+    generatePawnMoves<c, MoveGenType::QUIET>(board, movelist, pin_d, pin_hv, checkmask, occ_opp);
+
+    // Prune knights that are pinned since these cannot move.
+    Bitboard knights_mask = board.pieces(PieceType::KNIGHT, c) & ~(pin_d | pin_hv);
+
+    whileBitboardAdd(movelist, knights_mask,
+                     [&](Square sq) { return generateKnightMoves(sq) & movable_square; });
+
+    // Prune horizontally pinned bishops
+    Bitboard bishops_mask = board.pieces(PieceType::BISHOP, c) & ~pin_hv;
+
+    whileBitboardAdd(movelist, bishops_mask, [&](Square sq) {
+        return generateBishopMoves(sq, pin_d, occ_all) & movable_square;
+    });
+
+    //  Prune diagonally pinned rooks
+    Bitboard rooks_mask = board.pieces(PieceType::ROOK, c) & ~pin_d;
+
+    whileBitboardAdd(movelist, rooks_mask, [&](Square sq) {
+        return generateRookMoves(sq, pin_hv, occ_all) & movable_square;
+    });
+
+    // Prune double pinned queens
+    Bitboard queens_mask = board.pieces(PieceType::QUEEN, c) & ~(pin_d & pin_hv);
+
+    whileBitboardAdd(movelist, queens_mask, [&](Square sq) {
+        return generateQueenMoves(sq, pin_d, pin_hv, occ_all) & movable_square;
+    });
+}
+
+inline movegen::precompute movegen::legalmoves_precompute(const Board &board)
+{
+    if (board.sideToMove() == chess::Color::WHITE)
+        return legalmoves_precompute<Color::WHITE>(board);
+    else
+        return legalmoves_precompute<Color::BLACK>(board);
+}
+
+template <Color::underlying c>
+inline movegen::precompute movegen::legalmoves_precompute(const Board &board)
+{
+    auto king_sq = board.kingSq(c);
+    Bitboard occ_us = board.us(c);
+    Bitboard occ_opp = board.us(~c);
+    Bitboard opp_empty = ~occ_us;
+
+    return {
+        .checks = checkMask<c>(board, king_sq),
+        .pin_hv = pinMask<c, PieceType::ROOK>(board, king_sq, occ_opp, occ_us),
+        .pin_d = pinMask<c, PieceType::BISHOP>(board, king_sq, occ_opp, occ_us),
+        .seen = seenSquares<~c>(board, opp_empty)
+    };
 }
 
 template <Color::underlying c>

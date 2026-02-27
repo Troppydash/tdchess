@@ -52,6 +52,8 @@ class movegen
     int16_t margin;
     bool m_skip_quiet = false;
 
+    chess::movegen::precompute m_precompute;
+
   public:
     explicit movegen(chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
                      int32_t ply, movegen_stage stage = movegen_stage::PV)
@@ -112,13 +114,8 @@ class movegen
             case movegen_stage::CAPTURE_INIT:
             case movegen_stage::QCAPTURE_INIT:
             case movegen_stage::PROB_CAPTURE_INIT: {
-                // generate
-                chess::movegen::legalmoves<chess::movegen::MoveGenType::CAPTURE>(m_moves,
-                                                                                 m_position);
-
-                // generate quiet queen promotions
-                chess::movegen::legal_promote_moves<chess::movegen::MoveGenType::QUIET>(m_moves,
-                                                                                        m_position);
+                m_precompute = chess::movegen::legalmoves_precompute(m_position);
+                chess::movegen::legalmoves_capture(m_moves, m_position, m_precompute);
 
                 // score
                 for (auto &move : m_moves)
@@ -155,6 +152,7 @@ class movegen
 
                 // generate all evasion moves
             case movegen_stage::EINIT: {
+                // don't use the sep movegen since all moves are generated
                 chess::movegen::legalmoves(m_moves, m_position);
 
                 // score
@@ -254,8 +252,7 @@ class movegen
             case movegen_stage::QUIET_INIT: {
                 // m_moves = [bad captures, quiets]
                 m_moves.set_size(m_bad_capture_end);
-                chess::movegen::legalmoves_no_clear<chess::movegen::MoveGenType::QUIET>(m_moves,
-                                                                                        m_position);
+                chess::movegen::legalmoves_quiet(m_moves, m_position, m_precompute);
 
                 // m_moves = [bad captures, quiets]
                 m_bad_quiet_end = m_bad_capture_end;
