@@ -235,10 +235,10 @@ class movegen
                                 .get_value();
 
                         // baseline
-                        score += 10000;
+                        score += 20000;
                         // additional
                         if (move.typeOf() == chess::Move::PROMOTION)
-                            score += 10000;
+                            score += see::PIECE_VALUES[move.promotionType()] * 2;
 
                         score = std::clamp(score, -32000, 32000);
                         move.setScore(score);
