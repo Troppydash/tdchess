@@ -50,10 +50,8 @@ class movegen
 
     std::array<const continuation_history *, NUM_CONTINUATION> m_continuations{nullptr};
 
-    int16_t margin;
+    int16_t m_prob_margin;
     bool m_skip_quiet = false;
-
-    chess::movegen::precompute m_precompute;
 
   public:
     explicit movegen(chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
@@ -66,7 +64,7 @@ class movegen
     explicit movegen(chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
                      int32_t ply, int16_t margin, movegen_stage stage = movegen_stage::PV)
         : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
-          m_pv_move(pv_move), m_ply(ply), margin{margin}
+          m_pv_move(pv_move), m_ply(ply), m_prob_margin{margin}
     {
     }
 
@@ -122,7 +120,6 @@ class movegen
                     // sort capture moves first
                     // [captures, quiet]
                     m_capture_end = m_moves.size();
-                    int end = m_moves.size();
                     for (int i = 0; i < m_capture_end; ++i)
                     {
                         auto &move = m_moves[i];
@@ -456,7 +453,7 @@ class movegen
                 // explore only see captures
             case movegen_stage::PROB_GOOD_CAPTURE: {
                 m_move_index = pick_move(m_moves, m_move_index, m_moves.size(), [&](auto &move) {
-                    return see::test_ge(m_position, move, margin);
+                    return see::test_ge(m_position, move, m_prob_margin);
                 });
                 if (m_move_index < m_moves.size())
                     return m_moves[m_move_index++];
