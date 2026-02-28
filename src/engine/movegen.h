@@ -153,7 +153,9 @@ class movegen
                             int32_t score = mvv + capture_score;
 
                             if (move.typeOf() == chess::Move::PROMOTION)
-                                score += 10000;
+                            {
+                                score += see::PIECE_VALUES[move.promotionType()] * 2;
+                            }
 
                             score = std::clamp(score, -32000, 32000);
                             move.setScore(score);
@@ -192,7 +194,9 @@ class movegen
                         int32_t score = mvv + capture_score;
 
                         if (move.typeOf() == chess::Move::PROMOTION)
-                            score += 10000;
+                        {
+                            score += see::PIECE_VALUES[move.promotionType()] * 2;
+                        }
 
                         score = std::clamp(score, -32000, 32000);
                         move.setScore(score);

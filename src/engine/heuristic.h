@@ -44,6 +44,8 @@ constexpr int NON_PAWN_SIZE = 1 << 13;
 constexpr int NON_PAWN_SIZE_M1 = NON_PAWN_SIZE - 1;
 using non_pawn_correction_history = history_entry<int16_t, 8000>[2][NON_PAWN_SIZE];
 
+// continuation correction history, TODO
+
 struct heuristics
 {
     history_heuristic main_history;
