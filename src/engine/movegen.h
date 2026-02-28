@@ -37,7 +37,7 @@ class movegen
   private:
     int m_stage;
     // stack for regular: [bad capture, (bad quiet, good quiet)/good capture]
-    chess::Movelist m_moves{};
+    chess::Movelist &m_moves;
     int m_bad_capture_end{0};
     int m_bad_quiet_end{0};
     int m_move_index{0};
@@ -54,34 +54,36 @@ class movegen
     bool m_skip_quiet = false;
 
   public:
-    explicit movegen(chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
-                     int32_t ply, movegen_stage stage = movegen_stage::PV)
-        : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
-          m_pv_move(pv_move), m_ply(ply)
+    explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
+                     chess::Move pv_move, int32_t ply, movegen_stage stage = movegen_stage::PV)
+        : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
+          m_heuristics(heuristics), m_pv_move(pv_move), m_ply(ply)
     {
     }
 
-    explicit movegen(chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
-                     int32_t ply, int16_t margin, movegen_stage stage = movegen_stage::PV)
-        : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
-          m_pv_move(pv_move), m_ply(ply), m_prob_margin{margin}
+    explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
+                     chess::Move pv_move, int32_t ply, int16_t margin,
+                     movegen_stage stage = movegen_stage::PV)
+        : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
+          m_heuristics(heuristics), m_pv_move(pv_move), m_ply(ply), m_prob_margin{margin}
     {
     }
 
     explicit movegen(
-        chess::Board &position, const heuristics &heuristics, chess::Move pv_move, int32_t ply,
+        chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
+        chess::Move pv_move, int32_t ply,
         const std::array<const continuation_history *, NUM_CONTINUATION> &continuations,
         movegen_stage stage = movegen_stage::PV)
-        : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
-          m_pv_move(pv_move), m_ply(ply), m_continuations{continuations}
+        : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
+          m_heuristics(heuristics), m_pv_move(pv_move), m_ply(ply), m_continuations{continuations}
     {
     }
 
-    explicit movegen(chess::Board &position, const heuristics &heuristics, chess::Move pv_move,
-                     int32_t ply, const continuation_history *continuation1,
+    explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
+                     chess::Move pv_move, int32_t ply, const continuation_history *continuation1,
                      movegen_stage stage = movegen_stage::PV)
-        : m_stage{static_cast<int>(stage)}, m_position(position), m_heuristics(heuristics),
-          m_pv_move(pv_move), m_ply(ply)
+        : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
+          m_heuristics(heuristics), m_pv_move(pv_move), m_ply(ply)
     {
         m_continuations[0] = continuation1;
     }
@@ -161,6 +163,7 @@ class movegen
                 else
                 {
                     // direct capture generation
+                    m_moves.clear();
                     chess::movegen::legalmoves_capture(
                         m_moves, m_position, chess::movegen::legalmoves_precompute(m_position));
                     m_capture_end = m_moves.size();
@@ -375,7 +378,7 @@ class movegen
                         m_bad_quiet_end++;
                     }
 
-                    end:
+                end:
                 }
 
                 m_move_index = m_bad_quiet_end;
