@@ -9,7 +9,7 @@ template <typename I, I LIMIT> struct history_entry
         return value;
     }
 
-    void add_bonus(I bonus)
+    void add_bonus(int bonus)
     {
         I clamped_bonus = helper::clamp(bonus, -LIMIT, LIMIT);
         value += clamped_bonus - static_cast<int32_t>(value) * std::abs(clamped_bonus) / LIMIT;
@@ -44,7 +44,8 @@ constexpr int NON_PAWN_SIZE = 1 << 13;
 constexpr int NON_PAWN_SIZE_M1 = NON_PAWN_SIZE - 1;
 using non_pawn_correction_history = history_entry<int16_t, 8000>[2][NON_PAWN_SIZE];
 
-// continuation correction history, TODO
+using continuation_correction_history = history_entry<int16_t, 8000>[13][64];
+using continuation_correction_history_full = history_entry<int16_t, 8000>[13][64][13][64];
 
 struct heuristics
 {
@@ -57,10 +58,11 @@ struct heuristics
     pawn_correction_history correction_history;
     non_pawn_correction_history white_corrhist;
     non_pawn_correction_history black_corrhist;
+    continuation_correction_history_full cont_corr;
 
     heuristics()
         : main_history{}, capture_history{}, killers{}, low_ply{}, continuation{}, pawn{},
-          correction_history{}, white_corrhist{}, black_corrhist{}
+          correction_history{}, white_corrhist{}, black_corrhist{}, cont_corr{}
     {
     }
 
@@ -146,6 +148,8 @@ struct heuristics
         black_corrhist[position.sideToMove()]
                       [get_corrhist_key(position, chess::Color::BLACK) & NON_PAWN_SIZE_M1]
                           .add_bonus(bonus);
+
+
     }
 
     uint64_t get_corrhist_key(const chess::Board &position, chess::Color color) const
