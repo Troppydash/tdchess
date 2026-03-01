@@ -369,6 +369,12 @@ class movegen
                                 2;
                     }
 
+                    score +=
+                        m_heuristics
+                            .king[m_position.sideToMove()][m_heuristics.get_king_bucket(m_position)]
+                                 [move.from().index()][move.to().index()]
+                            .get_value();
+
                     // penalty for weak promotion
                     if (move.typeOf() == chess::Move::PROMOTION)
                         score -= 1000;

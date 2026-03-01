@@ -40,7 +40,7 @@ constexpr int PAWN_STRUCTURE_SIZE_M1 = PAWN_STRUCTURE_SIZE - 1;
 using pawn_history = history_entry<int16_t, 20000>[PAWN_STRUCTURE_SIZE][12][64];
 using pawn_correction_history = history_entry<int16_t, 8000>[2][PAWN_STRUCTURE_SIZE];
 
-using king_history = history_entry<int16_t, 20000>[64][2][64][64];
+using king_history = history_entry<int16_t, 20000>[2][16][64][64];
 
 constexpr int NON_PAWN_SIZE = 1 << 13;
 constexpr int NON_PAWN_SIZE_M1 = NON_PAWN_SIZE - 1;
@@ -62,9 +62,11 @@ struct heuristics
     non_pawn_correction_history black_corrhist;
     continuation_correction_history_full cont_corr;
 
+    king_history king;
+
     heuristics()
         : main_history{}, capture_history{}, killers{}, low_ply{}, continuation{}, pawn{},
-          correction_history{}, white_corrhist{}, black_corrhist{}, cont_corr{}
+          correction_history{}, white_corrhist{}, black_corrhist{}, cont_corr{}, king{}
     {
     }
 
@@ -109,6 +111,28 @@ struct heuristics
         pawn[get_pawn_key(position) & PAWN_STRUCTURE_SIZE_M1][position.at(move.from())]
             [move.to().index()]
                 .add_bonus(bonus);
+
+        king[position.sideToMove()][get_king_bucket(position)][move.from().index()]
+            [move.to().index()]
+                .add_bonus(bonus);
+    }
+
+    // clang-format off
+    constexpr static int KING_BUCKET[64] = {
+        0,0,1,1,2,2,3,3,
+        0,0,1,1,2,2,3,3,
+        4,4,5,5,6,6,7,7,
+        4,4,5,5,6,6,7,7,
+        8,8,9,9,10,10,11,11,
+        8,8,9,9,10,10,11,11,
+        12,12,13,13,14,14,15,15,
+        12,12,13,13,14,14,15,15
+    };
+    // clang-format on
+
+    int get_king_bucket(const chess::Board &pos) const
+    {
+        return KING_BUCKET[pos.kingSq(pos.sideToMove()).index()];
     }
 
     [[nodiscard]] uint64_t get_pawn_key(const chess::Board &position) const
@@ -150,8 +174,6 @@ struct heuristics
         black_corrhist[position.sideToMove()]
                       [get_corrhist_key(position, chess::Color::BLACK) & NON_PAWN_SIZE_M1]
                           .add_bonus(bonus);
-
-
     }
 
     uint64_t get_corrhist_key(const chess::Board &position, chess::Color color) const
