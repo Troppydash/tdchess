@@ -94,7 +94,7 @@ struct heuristics
     }
 
     void update_main_history(const chess::Board &position, const chess::Move &move, int32_t ply,
-                             int16_t bonus)
+                             int bonus)
     {
         // update lowply
         if (ply < LOW_PLY)
@@ -148,8 +148,7 @@ struct heuristics
         return pawn_key;
     }
 
-    void update_capture_history(const chess::Board &position, const chess::Move &move,
-                                int16_t bonus)
+    void update_capture_history(const chess::Board &position, const chess::Move &move, int bonus)
     {
         capture_history[position.at(move.from())][move.to().index()][get_capture(position, move)]
             .add_bonus(bonus);

@@ -275,6 +275,11 @@ class movegen
                                                                   .get_value() /
                                          2;
                         }
+                        //
+                        // score += m_heuristics
+                        //     .king[m_position.sideToMove()][m_heuristics.get_king_bucket(m_position)][move.from().index()]
+                        //          [move.to().index()]
+                        //     .get_value();
 
                         score = std::clamp(score, -32000, 32000);
                         move.setScore(score);
@@ -371,8 +376,8 @@ class movegen
 
                     score +=
                         m_heuristics
-                            .king[m_position.sideToMove()][m_heuristics.get_king_bucket(m_position)]
-                                 [move.from().index()][move.to().index()]
+                            .king[m_position.sideToMove()][m_heuristics.get_king_bucket(m_position)][move.from().index()]
+                                 [move.to().index()]
                             .get_value();
 
                     // penalty for weak promotion
