@@ -6,7 +6,7 @@
 struct see
 {
     static constexpr int16_t PAWN_VALUE = 100;
-    static constexpr int16_t KNIGHT_VALUE = 290;
+    static constexpr int16_t KNIGHT_VALUE = 320;
     static constexpr int16_t BISHOP_VALUE = 330;
     static constexpr int16_t ROOK_VALUE = 600;
     static constexpr int16_t QUEEN_VALUE = 900;
