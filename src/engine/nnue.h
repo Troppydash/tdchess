@@ -14,11 +14,11 @@
 
 #define TDCHESS_NNUE_INLINE
 
-constexpr size_t HIDDEN_SIZE = 1568;
+constexpr size_t HIDDEN_SIZE = 1024;
 constexpr int16_t QA = 255;
 constexpr int16_t QB = 64;
 constexpr int32_t SCALE = 400;
-constexpr size_t BUCKET_SIZE = 8;
+constexpr size_t BUCKET_SIZE = 1;
 
 struct alignas(64) accumulator
 {
@@ -39,7 +39,7 @@ struct network
 };
 
 #include "../hpplib/incbin.h"
-INCBIN(Embed, "../nets/2026-02-08-1800-370.bin");
+INCBIN(Embed, "../nets/leorik/1024HL-S-5732M-Tmix-Q5-v19.nnue");
 
 constexpr int32_t screlu(int16_t x)
 {
@@ -142,6 +142,7 @@ class nnue
 
     [[nodiscard]] int32_t evaluate(int side2move, int bucket)
     {
+        bucket = 0;
         catchup();
 
         int32_t output = 0;

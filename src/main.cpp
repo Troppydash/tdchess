@@ -172,7 +172,7 @@ void position_test()
         // param.movetime = 5000;
         // auto result = engine.search(chess::Board{pos}, param, true);
         nnue nnue{};
-        nnue.load_network("../nets/2026-02-08-1800-370.bin");
+        nnue.incbin_load();
         chess::Board start{pos};
         table tt{512};
         engine engine{nullptr, &nnue, &tt};
