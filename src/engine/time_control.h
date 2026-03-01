@@ -22,6 +22,7 @@ struct search_param
         int32_t depth;
         int64_t time;
         int64_t opt_time;
+        bool comp;
     };
 
     explicit search_param()
@@ -72,10 +73,10 @@ struct search_param
 
         // ignore if time and inc are invalid
         if (time == param::TIME_MAX || inc == param::TIME_MAX)
-            return {depth, movetime, movetime};
+            return {depth, movetime, movetime, false};
 
         if (movetime != param::TIME_MAX)
-            return {depth, movetime, movetime};
+            return {depth, movetime, movetime, false};
 
         // https://github.com/gab8192/Obsidian/blob/main/src/timeman.cpp
         int mtg = 40;
@@ -85,6 +86,6 @@ struct search_param
         int64_t max_time = time * 0.8 - move_overhead;
         int64_t optimum_time = opt_scale * time_left;
 
-        return {depth, max_time, optimum_time};
+        return {depth, max_time, optimum_time, true};
     }
 };
