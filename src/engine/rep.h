@@ -143,27 +143,28 @@ class rep_filter
         current.unset(x.hash());
     }
 
-    bool check(const chess::Board &board, int) const
+    bool check(const chess::Board &board, int ply) const
     {
-        // if (board.halfMoveClock() < 6)
-        // {
-        //     const auto &states = board.get_prev_state();
-        //     int maxDist = std::min((int)states.size(), (int)board.halfMoveClock());
-        //     bool hit = false;
-        //     for (int i = 4; i <= maxDist; i += 2)
-        //     {
-        //         if (states[states.size() - i].hash == board.hash())
-        //         {
-        //             if (ply >= i)
-        //                 return true;
-        //             if (hit)
-        //                 return true;
-        //             hit = true;
-        //             i += 2;
-        //         }
-        //     }
-        //     return false;
-        // }
+        // backup for misses
+        if (ply >= 40)
+        {
+            const auto &states = board.get_prev_state();
+            int maxDist = std::min((int)states.size(), (int)board.halfMoveClock());
+            bool hit = false;
+            for (int i = 4; i <= maxDist; i += 2)
+            {
+                if (states[states.size() - i].hash == board.hash())
+                {
+                    if (ply >= i)
+                        return true;
+                    if (hit)
+                        return true;
+                    hit = true;
+                    i += 2;
+                }
+            }
+            return false;
+        }
 
         int c = current.lookup(board.hash());
         if (c >= 1)
