@@ -64,19 +64,19 @@ target_link_options(tdchess_test PRIVATE
         "-flto"
 )
 target_compile_options(tdchess_test PRIVATE
-        "-O1"
-        "-march=native"
-        "-mtune=native"
-        "-flto"
-        "-fomit-frame-pointer"
-        "-Wall"
-        "-Wextra"
-        -DNDEBUG
-        -mcpu=native
-        -fno-exceptions
-#                -fsanitize=undefined
-#                -g
-        #                "-ftrapv"
+#        "-O1"
+#        "-march=native"
+#        "-mtune=native"
+#        "-flto"
+#        "-fomit-frame-pointer"
+#        "-Wall"
+#        "-Wextra"
+#        -DNDEBUG
+#        -mcpu=native
+#        -fno-exceptions
+                -fsanitize=undefined
+                -g
+                        "-ftrapv"
 )
 
 add_executable(tdchess_elo src/main.cpp
