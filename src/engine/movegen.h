@@ -331,14 +331,10 @@ class movegen
                     int32_t score = 0;
 
                     // killer move
-                    for (int j = 0; j < (int)param::NUMBER_KILLERS; ++j)
+                    if (m_heuristics.killers[m_ply][0].first == move)
                     {
-                        const auto &entry = m_heuristics.killers[m_ply][j];
-                        if (move == entry.first)
-                        {
-                            move.setScore(32100 - j);
-                            goto end;
-                        }
+                        move.setScore(32500);
+                        continue;
                     }
 
                     // normal
@@ -392,8 +388,6 @@ class movegen
                         std::swap(m_moves[m_bad_quiet_end], m_moves[i]);
                         m_bad_quiet_end++;
                     }
-
-                end:
                 }
 
                 m_move_index = m_bad_quiet_end;
