@@ -112,9 +112,9 @@ struct heuristics
             [move.to().index()]
                 .add_bonus(bonus);
 
-        king[position.sideToMove()][get_king_bucket(position)][move.from().index()]
-            [move.to().index()]
-                .add_bonus(bonus);
+        // king[position.sideToMove()][get_king_bucket(position)][move.from().index()]
+        //     [move.to().index()]
+        //         .add_bonus(bonus);
     }
 
     // clang-format off
@@ -156,11 +156,7 @@ struct heuristics
 
     void store_killer(const chess::Move &killer, int32_t ply, bool is_mate)
     {
-        if (killers[ply][0].first != killer)
-        {
-            killers[ply][1] = killers[ply][0];
-            killers[ply][0] = {killer, is_mate};
-        }
+        killers[ply][0] = {killer, is_mate};
     }
 
     void update_corr_hist_score(const chess::Board &position, int bonus)
