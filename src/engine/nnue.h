@@ -124,10 +124,6 @@ class nnue
     void initialize(const chess::Board &position)
     {
         m_ply = 0;
-
-        // for (size_t i = 0; i < m_entries.size(); ++i)
-        //     m_entries[i].is_clean = false;
-
         m_entries[0].is_clean = true;
 
         // clear all entries
@@ -301,10 +297,6 @@ class nnue
     {
         m_ply += 1;
 
-        // only mark the entry dirty if incorrect position
-        // if (board.hash() != m_entries[m_ply].hash || move != m_entries[m_ply].move)
-        // {
-        // m_entries[m_ply].hash = board.hash();
         m_entries[m_ply].move = move;
         m_entries[m_ply].piece = board.at(move.from());
         m_entries[m_ply].captured = move.typeOf() == chess::Move::ENPASSANT
@@ -312,7 +304,6 @@ class nnue
                                         : board.at(move.to());
         m_entries[m_ply].stm = board.sideToMove();
         m_entries[m_ply].is_clean = false;
-        // }
     }
 
     void unmake_move()
