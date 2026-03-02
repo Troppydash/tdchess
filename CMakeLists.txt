@@ -35,6 +35,27 @@ target_compile_options(tdchess_uci PRIVATE
         -fno-exceptions
 )
 
+
+add_executable(tdchess_uci_tune src/main.cpp)
+target_link_libraries(tdchess_uci_tune PRIVATE fathom)
+target_compile_definitions(tdchess_uci_tune PRIVATE TDCHESS_UCI)
+target_compile_definitions(tdchess_uci_tune PRIVATE TDCHESS_TUNE)
+target_link_options(tdchess_uci_tune PRIVATE
+        "-flto"
+)
+target_compile_options(tdchess_uci_tune PRIVATE
+        "-Ofast"
+        "-march=native"
+        "-mtune=native"
+        "-flto"
+        "-fomit-frame-pointer"
+        "-Wall"
+        "-Wextra"
+        -DNDEBUG
+        -mcpu=native
+        -fno-exceptions
+)
+
 #if (PGOGEN)
 #    message("generating profile")
 #    target_link_options(tdchess_uci PRIVATE
@@ -64,19 +85,19 @@ target_link_options(tdchess_test PRIVATE
         "-flto"
 )
 target_compile_options(tdchess_test PRIVATE
-#        "-O1"
-#        "-march=native"
-#        "-mtune=native"
-#        "-flto"
-#        "-fomit-frame-pointer"
-#        "-Wall"
-#        "-Wextra"
-#        -DNDEBUG
-#        -mcpu=native
-#        -fno-exceptions
-                -fsanitize=undefined
-                -g
-                        "-ftrapv"
+        "-Ofast"
+        "-march=native"
+        "-mtune=native"
+        "-flto"
+        "-fomit-frame-pointer"
+        "-Wall"
+        "-Wextra"
+        -DNDEBUG
+        -mcpu=native
+        -fno-exceptions
+#                -fsanitize=undefined
+#                -g
+#                        "-ftrapv"
 )
 
 add_executable(tdchess_elo src/main.cpp

@@ -74,6 +74,8 @@ class nnue
         const unsigned char *data = gEmbedData;
         if (gEmbedSize != sizeof(network))
         {
+            std::cout << gEmbedSize << ", " << sizeof(network) << std::endl;
+
             std::cout << "failed to load network\n";
             exit(0);
             return false;

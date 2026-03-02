@@ -155,6 +155,20 @@ class uci_handler
                 std::cout << "option name CoreAff type spin default -1 min -1 max "
                           << total_threads - 1 << "\n";
                 std::cout << "option name MoveOverhead type spin default 10 min 0 max 2000\n";
+
+#ifdef TDCHESS_TUNE
+                auto &features = tunable_features_list();
+                for (auto &f : features)
+                {
+                    if (!f.is_active())
+                        continue;
+
+                    std::cout << "option name " << "tune_" + f.name << " type spin default "
+                              << f.value << " min " << f.min << " max " << f.max << "\n";
+                }
+
+#endif
+
                 std::cout << "uciok\n";
             }
             else if (lead == "setoption")
@@ -208,7 +222,26 @@ class uci_handler
                 }
                 else
                 {
+
+#ifdef TDCHESS_TUNE
+                    if (parts[2].starts_with("tune_"))
+                    {
+                        auto &features = tunable_features_list();
+                        // set value
+                        for (auto &f : features)
+                        {
+                            if (f.name == parts[2])
+                            {
+                                f.value = parse_i64(parts[4]);
+                                f.apply();
+                                break;
+                            }
+                        }
+                        goto end;
+                    }
+#endif
                     std::cout << "warning unknown option\n";
+                end:
                 }
             }
             else if (lead == "position")
