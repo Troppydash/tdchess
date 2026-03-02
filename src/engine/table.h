@@ -127,14 +127,18 @@ class table_entry
              const chess::Move &best_move, int16_t static_eval, bool is_pv, uint8_t age)
     {
         if (best_move != chess::Move::NO_MOVE || !MATCHES(hash, m_hash))
+        {
+            // will fuck up if hash collision
+            // hence we need to check best move
             m_best_move = best_move.move();
+        }
 
         uint8_t age_diff = (age - GET_AGE(m_mask)) & AGE_MASK;
         if (flag == param::EXACT_FLAG || !MATCHES(hash, m_hash) ||
             depth + 4 + 2 * is_pv > m_depth || age_diff >= 1)
         {
             m_hash = BUCKET_HASH(hash);
-            assert(depth > -30 && depth <= 255);
+            assert(depth > -100 && depth <= 255);
             m_depth = int8_t(depth);
             m_static_eval = static_eval;
 

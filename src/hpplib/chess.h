@@ -1487,6 +1487,8 @@ class movegen {
     void static legalmoves_capture(Movelist &movelist, const Board &board, const precompute &precompute);
     void static legalmoves_quiet(Movelist &movelist, const Board &board, const precompute &precompute);
 
+    void static legalmoves_special(Movelist &movelist, const Board &board, int pieces);
+
     template <MoveGenType mt = MoveGenType::ALL>
     void static legal_promote_moves(Movelist &movelist, const Board &board);
 
@@ -1549,6 +1551,9 @@ class movegen {
     void static legalmoves_quiet(Movelist &movelist, const Board &board, const precompute &precompute);
 
     template <Color::underlying c> static precompute legalmoves_precompute(const Board &board);
+
+    template <Color::underlying c>
+    void static legalmoves_special(Movelist &movelist, const Board &board, int pieces);
 
 
     template <Color::underlying c>
@@ -4445,6 +4450,64 @@ inline void movegen::legalmoves(Movelist &movelist, const Board &board, int piec
 }
 
 
+template <Color::underlying c>
+inline void movegen::legalmoves_special(Movelist &movelist, const Board &board, int pieces) {
+    /*
+     The size of the movelist might not
+     be 0! This is done on purpose since it enables
+     you to append new move types to any movelist.
+    */
+    auto king_sq = board.kingSq(c);
+
+    Bitboard occ_us  = board.us(c);
+    Bitboard occ_opp = board.us(~c);
+    Bitboard occ_all = occ_us | occ_opp;
+
+    Bitboard opp_empty = ~occ_us;
+
+    Bitboard checkmask, pin_hv, pin_d;
+    int checks;
+
+    const auto p = checkMask<c>(board, king_sq);
+    checkmask = p.first;
+    checks = p.second;
+    pin_hv = pinMask<c, PieceType::ROOK>(board, king_sq, occ_opp, occ_us);
+    pin_d = pinMask<c, PieceType::BISHOP>(board, king_sq, occ_opp, occ_us);
+
+    Bitboard movable_square;
+
+    // Slider, Knights and King moves can only go to enemy or empty squares.
+    movable_square = opp_empty;
+
+
+    if (pieces & PieceGenType::KING) {
+        Bitboard seen = seenSquares<~c>(board, opp_empty);
+
+        if (checks == 0) {
+            Bitboard moves_bb = generateCastleMoves<c>(board, king_sq, seen, pin_hv);
+
+            while (moves_bb)
+            {
+                Square to = moves_bb.pop();
+                movelist.add(Move::make<Move::CASTLING>(king_sq, to));
+            }
+        }
+    }
+
+    // Early return for double check as described earlier
+    if (checks == 2)
+        return;
+
+    // Moves have to be on the checkmask
+    movable_square &= checkmask;
+
+    // Add the moves to the movelist.
+    if (pieces & PieceGenType::PAWN) {
+        generatePawnMoves<c, chess::movegen::MoveGenType::ALL>(board, movelist, pin_d, pin_hv, checkmask, occ_opp);
+    }
+}
+
+
 template <movegen::MoveGenType mt>
 inline void movegen::pseudolegalmoves(Movelist &movelist, const Board &board, int pieces) {
     movelist.clear();
@@ -4455,6 +4518,14 @@ inline void movegen::pseudolegalmoves(Movelist &movelist, const Board &board, in
         legalmoves<Color::BLACK, mt, Type::PSEUDO_LEGAL>(movelist, board, pieces);
 }
 
+inline void movegen::legalmoves_special(Movelist &movelist, const Board &board, int pieces) {
+    movelist.clear();
+
+    if (board.sideToMove() == Color::WHITE)
+        legalmoves_special<Color::WHITE>(movelist, board, pieces);
+    else
+        legalmoves_special<Color::BLACK>(movelist, board, pieces);
+}
 
 template <movegen::MoveGenType mt>
 inline void movegen::legalmoves(Movelist &movelist, const Board &board, int pieces) {
