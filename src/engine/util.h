@@ -16,9 +16,9 @@ inline void init() {
     std::uniform_int_distribution<uint64_t> dis;
 
     memset(ZOBRIST_50MR, 0, sizeof(ZOBRIST_50MR));
-    for (int i = 14; i <= 100; i += 8) {
+    for (int i = 14; i <= 100; i += 10) {
         uint64_t key = dis(gen);
-        for (int j = 0; j < 8; j++)
+        for (int j = 0; j < 10; j++)
             ZOBRIST_50MR[i+j] = key;
     }
 }
