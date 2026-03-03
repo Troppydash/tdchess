@@ -163,6 +163,7 @@ void position_test()
         // {"6k1/7p/8/8/6P1/5p1q/PPP2P1B/3R3K b - - 0 55", "what"},
         // {"rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq - 0 1", "what"},
         // {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "default"},
+        {"8/3Q3k/7n/8/4K3/b7/8/8 b - - 3 69", ""},
         {"8/6b1/8/5k1p/5p1P/8/4K3/8 b - - 3 61", ""},
         {"8/8/5q2/7p/2K3k1/8/8/8 b - - 3 76", ""},
         {"r3k2r/pp1n2pp/2n1p3/2B1p3/7b/2N4P/PPPK2P1/R4B1R w kq - 0 17", ""},
@@ -178,10 +179,10 @@ void position_test()
         nnue nnue{};
         nnue.incbin_load();
         chess::Board start{pos};
-        table tt{64};
-        engine engine{nullptr, &nnue, &tt};
+        table tt{1024};
+        engine engine{nullptr, nullptr, &tt};
         search_param param;
-        param.movetime = 10000;
+        param.movetime = 5000;
         engine.search(start, param, true);
 
         std::cout << "oracle " << target << std::endl;

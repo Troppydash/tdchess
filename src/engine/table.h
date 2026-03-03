@@ -59,16 +59,6 @@ constexpr bool MATCHES(uint64_t hash, BUCKET_HASH partial)
     return BUCKET_HASH(hash) == partial;
 }
 
-// class test
-// {
-//     uint16_t m_hash;
-//     int16_t m_score;
-//     int16_t m_static_eval;
-//     int16_t m_depth;
-//     chess::Move m_best_move;
-//     uint8_t m_mask = 1;
-// };
-
 class table_entry
 {
   public:
@@ -82,12 +72,11 @@ class table_entry
     [[nodiscard]] table_entry_result get(uint64_t, int32_t ply, int32_t depth, int16_t alpha,
                                          int16_t beta, bool bucket_hit) const
     {
-        int16_t adj_score = param::VALUE_NONE;
-        bool can_use = false;
-        bool is_hit = false;
+
         if (bucket_hit)
         {
-            is_hit = true;
+            int16_t adj_score = param::VALUE_NONE;
+            bool can_use = false;
 
             if (param::IS_VALID(m_score))
             {
@@ -111,16 +100,25 @@ class table_entry
                 else if (flag == param::BETA_FLAG && adj_score >= beta)
                     can_use = true;
             }
+
+            return {.hit = true,
+                    .can_use = can_use,
+                    .score = adj_score,
+                    .depth = int16_t(m_depth + param::DEPTH_OFFSET),
+                    .move = m_best_move,
+                    .static_eval = m_static_eval,
+                    .is_pv = GET_PV(m_mask),
+                    .flag = GET_FLAG(m_mask)};
         }
 
-        return {.hit = is_hit,
-                .can_use = can_use,
-                .score = adj_score,
-                .depth = int16_t(m_depth + param::DEPTH_OFFSET),
-                .move = m_best_move,
-                .static_eval = m_static_eval,
-                .is_pv = GET_PV(m_mask),
-                .flag = GET_FLAG(m_mask)};
+        return {.hit = false,
+                .can_use = false,
+                .score = param::VALUE_NONE,
+                .depth = param::UNINIT_DEPTH,
+                .move = chess::Move::NO_MOVE,
+                .static_eval = param::VALUE_NONE,
+                .is_pv = false,
+                .flag = param::NO_FLAG};
     }
 
     void set(uint64_t hash, uint8_t flag, int16_t score, int32_t ply, int32_t depth,
@@ -146,7 +144,7 @@ class table_entry
             {
                 if (score > param::CHECKMATE)
                     score += ply;
-                if (score < -param::CHECKMATE)
+                else if (score < -param::CHECKMATE)
                     score -= ply;
             }
 
@@ -154,31 +152,6 @@ class table_entry
 
             m_mask = SET_AGE(age) | SET_FLAG(flag) | SET_PV(is_pv);
         }
-
-        // m_hash = hash >> 32;
-        // m_depth = depth;
-        // assert(depth <= 255);
-        // m_best_move = best_move;
-        // m_static_eval = static_eval;
-        //
-        // m_mask &= ~FLAG_MASK;
-        // m_mask |= SET_FLAG(flag);
-        // m_mask &= ~PV_MASK;
-        // m_mask |= SET_PV(is_pv);
-        //
-        // // to absolute depth
-        // if (param::IS_VALID(score))
-        // {
-        //     if (score > param::CHECKMATE)
-        //         score += ply;
-        //     if (score < -param::CHECKMATE)
-        //         score -= ply;
-        // }
-        //
-        // m_score = score;
-        //
-        // m_mask &= ~AGE_MASK;
-        // m_mask |= SET_AGE(age);
     }
 };
 
@@ -199,7 +172,7 @@ struct alignas(64) bucket
             m_entries[i].m_best_move = chess::Move::NO_MOVE;
 
             // zero mask, zero pv, one age, because we increase gen at search start
-            m_entries[i].m_mask = 1;
+            m_entries[i].m_mask = 0;
         }
     }
 
@@ -214,29 +187,6 @@ struct alignas(64) bucket
                 return m_entries[i];
             }
         }
-
-        // int best_slot = -1;
-        // int32_t worst_score = std::numeric_limits<int32_t>::max();
-        // uint32_t key = hash >> 32;
-        // for (int i = 0; i < NUM_BUCKETS; ++i)
-        // {
-        //     const auto &entry = m_entries[i];
-        //     if (key == entry.m_hash && entry.m_depth > param::UNINIT_DEPTH)
-        //     {
-        //         best_slot = i;
-        //         break;
-        //     }
-        //
-        //     uint8_t entry_age = GET_AGE(entry.m_mask);
-        //     uint8_t age_diff = (age - entry_age) & AGE_MASK;
-        //     int32_t replacement_score = entry.m_depth - age_diff * 8;
-        //
-        //     if (replacement_score < worst_score)
-        //     {
-        //         worst_score = replacement_score;
-        //         best_slot = i;
-        //     }
-        // }
 
         bucket_hit = false;
         return m_entries[0];
@@ -330,7 +280,8 @@ class table
             for (int j = 0; j < NUM_BUCKETS; ++j)
             {
                 // only care about ages in the current gen
-                count += ((m_buckets[i].m_entries[j].m_depth + param::DEPTH_OFFSET) != param::UNINIT_DEPTH &&
+                count += ((m_buckets[i].m_entries[j].m_depth + param::DEPTH_OFFSET) !=
+                              param::UNINIT_DEPTH &&
                           GET_AGE(m_buckets[i].m_entries[j].m_mask) == m_generation);
             }
         }

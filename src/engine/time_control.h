@@ -44,8 +44,8 @@ struct search_param
     {
         wtime = param::TIME_MAX;
         btime = param::TIME_MAX;
-        winc = param::TIME_MAX;
-        binc = param::TIME_MAX;
+        winc = 0;
+        binc = 0;
         depth = param::MAX_DEPTH;
         movetime = param::TIME_MAX;
         move_overhead = 0;

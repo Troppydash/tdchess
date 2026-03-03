@@ -14,7 +14,7 @@ constexpr int32_t DEPTH_OFFSET = 100;
 constexpr int16_t INF = 31000;
 constexpr int16_t CHECKMATE = INF - MAX_DEPTH - 10;
 constexpr int16_t NNUE_MAX = CHECKMATE - 10;
-constexpr int16_t VALUE_INF = INF + 10;
+constexpr int16_t VALUE_INF = INF;
 constexpr int16_t VALUE_NONE = VALUE_INF + 10;
 constexpr int16_t VALUE_DRAW = 0;
 
