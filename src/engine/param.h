@@ -4,11 +4,12 @@
 namespace param
 {
 
-constexpr int32_t MAX_DEPTH = 127;
-constexpr int32_t TB_DEPTH = 126;
+constexpr int32_t MAX_DEPTH = 220;
+constexpr int32_t TB_DEPTH = 219;
 constexpr int32_t QDEPTH = 0;
-constexpr int32_t UNSEARCHED_DEPTH = -49;
-constexpr int32_t UNINIT_DEPTH = -50;
+constexpr int32_t UNSEARCHED_DEPTH = -19;
+constexpr int32_t UNINIT_DEPTH = -20;
+constexpr int32_t DEPTH_OFFSET = 100;
 
 constexpr int16_t INF = 31000;
 constexpr int16_t CHECKMATE = INF - MAX_DEPTH - 10;

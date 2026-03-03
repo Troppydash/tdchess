@@ -58,12 +58,14 @@ template <int L> struct cuckoo_table
         std::pair<uint64_t, uint8_t> insert = {key, 1};
         size_t slot = h1(insert.first);
         int kicks = 0;
-        while (filter[slot].first != insert.first)
+        while (true)
         {
             // ignore if too many kicks
             // TODO: technically this is not correct since we miss a rep
-            if (kicks >= 16)
+            if (kicks >= 32)
+            {
                 break;
+            }
 
             std::swap(filter[slot], insert);
 
@@ -117,6 +119,7 @@ template <int L> struct cuckoo_table
         for (size_t i = 0; i < L; ++i)
         {
             filter[i].first = 0;
+            filter[i].second = 0;
         }
     }
 };
@@ -135,36 +138,38 @@ class rep_filter
 
     void add(const chess::Board &x)
     {
+        assert(current.lookup(x.hash()) == 0);
         current.set(x.hash());
     }
 
     void remove(const chess::Board &x)
     {
         current.unset(x.hash());
+        assert(current.lookup(x.hash()) == 0);
     }
 
     bool check(const chess::Board &board, int ply) const
     {
         // backup for misses
-        if (ply >= 40)
-        {
-            const auto &states = board.get_prev_state();
-            int maxDist = std::min((int)states.size(), (int)board.halfMoveClock());
-            bool hit = false;
-            for (int i = 4; i <= maxDist; i += 2)
-            {
-                if (states[states.size() - i].hash == board.hash())
-                {
-                    if (ply >= i)
-                        return true;
-                    if (hit)
-                        return true;
-                    hit = true;
-                    i += 2;
-                }
-            }
-            return false;
-        }
+        // if (ply >= 40)
+        // {
+        //     const auto &states = board.get_prev_state();
+        //     int maxDist = std::min((int)states.size(), (int)board.halfMoveClock());
+        //     bool hit = false;
+        //     for (int i = 4; i <= maxDist; i += 2)
+        //     {
+        //         if (states[states.size() - i].hash == board.hash())
+        //         {
+        //             if (ply >= i)
+        //                 return true;
+        //             if (hit)
+        //                 return true;
+        //             hit = true;
+        //             i += 2;
+        //         }
+        //     }
+        //     return false;
+        // }
 
         int c = current.lookup(board.hash());
         if (c >= 1)

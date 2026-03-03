@@ -101,7 +101,7 @@ class table_entry
             }
 
             // note that if depth exceeds and hit, def valid
-            if (m_depth >= depth && param::IS_VALID(m_score))
+            if ((m_depth + param::DEPTH_OFFSET) >= depth && param::IS_VALID(m_score))
             {
                 uint8_t flag = GET_FLAG(m_mask);
                 if (flag == param::EXACT_FLAG)
@@ -116,7 +116,7 @@ class table_entry
         return {.hit = is_hit,
                 .can_use = can_use,
                 .score = adj_score,
-                .depth = m_depth,
+                .depth = int16_t(m_depth + param::DEPTH_OFFSET),
                 .move = m_best_move,
                 .static_eval = m_static_eval,
                 .is_pv = GET_PV(m_mask),
@@ -135,11 +135,10 @@ class table_entry
 
         uint8_t age_diff = (age - GET_AGE(m_mask)) & AGE_MASK;
         if (flag == param::EXACT_FLAG || !MATCHES(hash, m_hash) ||
-            depth + 4 + 2 * is_pv > m_depth || age_diff >= 1)
+            depth + 4 + 2 * is_pv > (m_depth + param::DEPTH_OFFSET) || age_diff >= 1)
         {
             m_hash = BUCKET_HASH(hash);
-            assert(depth > -100 && depth <= 255);
-            m_depth = int8_t(depth);
+            m_depth = int8_t(depth - param::DEPTH_OFFSET);
             m_static_eval = static_eval;
 
             // to absolute depth
@@ -194,7 +193,7 @@ struct alignas(64) bucket
         for (size_t i = 0; i < NUM_BUCKETS; ++i)
         {
             m_entries[i].m_hash = 0;
-            m_entries[i].m_depth = param::UNINIT_DEPTH;
+            m_entries[i].m_depth = param::UNINIT_DEPTH - param::DEPTH_OFFSET;
             m_entries[i].m_static_eval = param::VALUE_NONE;
             m_entries[i].m_score = param::VALUE_NONE;
             m_entries[i].m_best_move = chess::Move::NO_MOVE;
@@ -211,7 +210,7 @@ struct alignas(64) bucket
         {
             if (key == m_entries[i].m_hash)
             {
-                bucket_hit = m_entries[i].m_depth > param::UNINIT_DEPTH;
+                bucket_hit = (m_entries[i].m_depth + param::DEPTH_OFFSET) > param::UNINIT_DEPTH;
                 return m_entries[i];
             }
         }
@@ -252,7 +251,7 @@ struct alignas(64) bucket
         for (int i = 0; i < NUM_BUCKETS; ++i)
         {
             const auto &entry = m_entries[i];
-            if (key == entry.m_hash && entry.m_depth > param::UNINIT_DEPTH)
+            if (key == entry.m_hash && (entry.m_depth + param::DEPTH_OFFSET) > param::UNINIT_DEPTH)
             {
                 best_slot = i;
                 break;
@@ -260,7 +259,7 @@ struct alignas(64) bucket
 
             uint8_t entry_age = GET_AGE(entry.m_mask);
             uint8_t age_diff = (age - entry_age) & AGE_MASK;
-            int32_t replacement_score = entry.m_depth - age_diff * 8;
+            int32_t replacement_score = (entry.m_depth + param::DEPTH_OFFSET) - age_diff * 8;
 
             if (replacement_score < worst_score)
             {
@@ -331,7 +330,7 @@ class table
             for (int j = 0; j < NUM_BUCKETS; ++j)
             {
                 // only care about ages in the current gen
-                count += (m_buckets[i].m_entries[j].m_depth != param::UNINIT_DEPTH &&
+                count += ((m_buckets[i].m_entries[j].m_depth + param::DEPTH_OFFSET) != param::UNINIT_DEPTH &&
                           GET_AGE(m_buckets[i].m_entries[j].m_mask) == m_generation);
             }
         }

@@ -163,6 +163,8 @@ void position_test()
         // {"6k1/7p/8/8/6P1/5p1q/PPP2P1B/3R3K b - - 0 55", "what"},
         // {"rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq - 0 1", "what"},
         // {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "default"},
+        {"8/6b1/8/5k1p/5p1P/8/4K3/8 b - - 3 61", ""},
+        {"8/8/5q2/7p/2K3k1/8/8/8 b - - 3 76", ""},
         {"r3k2r/pp1n2pp/2n1p3/2B1p3/7b/2N4P/PPPK2P1/R4B1R w kq - 0 17", ""},
         {"5rk1/1q2bpp1/4p2p/1N2P3/np5P/2r5/P3QPP1/1B1RR1K1 b - - 1 26", "c3c5 not c3c8, zero eval"},
         {"2r2rk1/1q2bp2/4p1pp/1N2P3/np5P/6Q1/P4PP1/1B1RR1K1 b - - 1 28", "b7b5, negative eval 1"}};
@@ -179,7 +181,7 @@ void position_test()
         table tt{64};
         engine engine{nullptr, &nnue, &tt};
         search_param param;
-        param.movetime = 5000;
+        param.movetime = 10000;
         engine.search(start, param, true);
 
         std::cout << "oracle " << target << std::endl;
