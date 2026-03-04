@@ -115,7 +115,7 @@ class nnue
     }
 
     static int translate(const chess::Color &perspective, const chess::Piece &piece,
-                         const chess::Square &square)
+                             const chess::Square &square)
     {
         return ((piece.color() == perspective ? 0 : 6) + piece.type()) * 64 +
                square.relative_square(perspective).index();
@@ -326,7 +326,6 @@ class nnue
         int current_ply = m_ply;
         for (; clean_ply <= current_ply; ++clean_ply)
         {
-            clone_ply(clean_ply - 1, clean_ply);
             m_ply = clean_ply;
             apply_move(m_entries[clean_ply]);
             m_entries[clean_ply].is_clean = true;
@@ -356,12 +355,13 @@ class nnue
             const chess::Piece piece = entry.piece;
             const chess::Piece promote_piece =
                 chess::Piece{piece.color(), entry.move.promotionType()};
-            remove_add_piece(piece, entry.move.from(), promote_piece, entry.move.to());
 
-            // handle capture
             const chess::Piece captured_piece = entry.captured;
             if (captured_piece != chess::Piece::NONE)
-                remove_piece(captured_piece, entry.move.to());
+                remove_add_remove_piece(piece, entry.move.from(), promote_piece, entry.move.to(),
+                                        captured_piece, entry.move.to());
+            else
+                remove_add_piece(piece, entry.move.from(), promote_piece, entry.move.to());
             break;
         }
         case chess::Move::ENPASSANT: {
@@ -382,8 +382,7 @@ class nnue
 
             const chess::Piece king_piece = entry.piece;
             const chess::Piece rook_piece = entry.captured;
-            move_piece(king_piece, king_sq, king_to);
-            move_piece(rook_piece, rook_sq, rook_to);
+            move_move_piece(king_piece, king_sq, king_to, rook_piece, rook_sq, rook_to);
             break;
         }
         default: {
@@ -393,23 +392,23 @@ class nnue
         }
     }
 
-    void add_feature(int side, int feature_idx)
-    {
-        const int16_t *__restrict weight = m_network.feature_weights[feature_idx].vals;
-        for (size_t i = 0; i < HIDDEN_SIZE; ++i)
-        {
-            m_sides[side][m_ply].vals[i] += weight[i];
-        }
-    }
+    // void add_feature(int side, int feature_idx)
+    // {
+    //     const int16_t *__restrict weight = m_network.feature_weights[feature_idx].vals;
+    //     for (size_t i = 0; i < HIDDEN_SIZE; ++i)
+    //     {
+    //         m_sides[side][m_ply].vals[i] += weight[i];
+    //     }
+    // }
 
-    void remove_feature(int side, int feature_idx)
-    {
-        const int16_t *__restrict weight = m_network.feature_weights[feature_idx].vals;
-        for (size_t i = 0; i < HIDDEN_SIZE; ++i)
-        {
-            m_sides[side][m_ply].vals[i] -= weight[i];
-        }
-    }
+    // void remove_feature(int side, int feature_idx)
+    // {
+    //     const int16_t *__restrict weight = m_network.feature_weights[feature_idx].vals;
+    //     for (size_t i = 0; i < HIDDEN_SIZE; ++i)
+    //     {
+    //         m_sides[side][m_ply].vals[i] -= weight[i];
+    //     }
+    // }
 
     void add_piece(const chess::Piece &piece, const chess::Square &square)
     {
@@ -435,6 +434,50 @@ class nnue
 #endif
     }
 
+    void remove_add_remove_piece(const chess::Piece &removed_piece,
+                                 const chess::Square &removed_square,
+                                 const chess::Piece &added_piece, const chess::Square &added_square,
+                                 const chess::Piece &removed_piece2,
+                                 const chess::Square &removed_square2)
+    {
+        int white_removed_feature_idx =
+            translate(chess::Color::WHITE, removed_piece, removed_square);
+        int black_removed_feature_idx =
+            translate(chess::Color::BLACK, removed_piece, removed_square);
+        const int16_t *__restrict white_removed_weights =
+            m_network.feature_weights[white_removed_feature_idx].vals;
+        const int16_t *__restrict black_removed_weights =
+            m_network.feature_weights[black_removed_feature_idx].vals;
+
+        int white_removed_feature_idx2 =
+            translate(chess::Color::WHITE, removed_piece2, removed_square2);
+        int black_removed_feature_idx2 =
+            translate(chess::Color::BLACK, removed_piece2, removed_square2);
+        const int16_t *__restrict white_removed_weights2 =
+            m_network.feature_weights[white_removed_feature_idx2].vals;
+        const int16_t *__restrict black_removed_weights2 =
+            m_network.feature_weights[black_removed_feature_idx2].vals;
+
+        int white_feature_idx = translate(chess::Color::WHITE, added_piece, added_square);
+        int black_feature_idx = translate(chess::Color::BLACK, added_piece, added_square);
+
+        const int16_t *__restrict white_weights = m_network.feature_weights[white_feature_idx].vals;
+        const int16_t *__restrict black_weights = m_network.feature_weights[black_feature_idx].vals;
+
+        int16_t *__restrict white_values_prev = m_sides[0][m_ply - 1].vals;
+        int16_t *__restrict black_values_prev = m_sides[1][m_ply - 1].vals;
+
+        int16_t *__restrict white_values = m_sides[0][m_ply].vals;
+        int16_t *__restrict black_values = m_sides[1][m_ply].vals;
+        for (size_t i = 0; i < HIDDEN_SIZE; ++i)
+        {
+            white_values[i] = white_values_prev[i] + white_weights[i] - white_removed_weights[i] -
+                              white_removed_weights2[i];
+            black_values[i] = black_values_prev[i] + black_weights[i] - black_removed_weights[i] -
+                              black_removed_weights2[i];
+        }
+    }
+
     void remove_add_piece(const chess::Piece &removed_piece, const chess::Square &removed_square,
                           const chess::Piece &added_piece, const chess::Square &added_square)
     {
@@ -454,6 +497,9 @@ class nnue
         const int16_t *__restrict white_weights = m_network.feature_weights[white_feature_idx].vals;
         const int16_t *__restrict black_weights = m_network.feature_weights[black_feature_idx].vals;
 
+        const int16_t *__restrict white_values_prev = m_sides[0][m_ply - 1].vals;
+        const int16_t *__restrict black_values_prev = m_sides[1][m_ply - 1].vals;
+
         int16_t *__restrict white_values = m_sides[0][m_ply].vals;
         int16_t *__restrict black_values = m_sides[1][m_ply].vals;
 
@@ -467,11 +513,11 @@ class nnue
 
             // --- PHASE 1: Structured Loads ---
             // Loads 32 elements (64 bytes) per side in one instruction
-            int16x8x4_t wv = vld1q_s16_x4(white_values + i);
+            int16x8x4_t wv = vld1q_s16_x4(white_values_prev + i);
             int16x8x4_t wa = vld1q_s16_x4(white_weights + i);
             int16x8x4_t wr = vld1q_s16_x4(white_removed_weights + i);
 
-            int16x8x4_t bv = vld1q_s16_x4(black_values + i);
+            int16x8x4_t bv = vld1q_s16_x4(black_values_prev + i);
             int16x8x4_t ba = vld1q_s16_x4(black_weights + i);
             int16x8x4_t br = vld1q_s16_x4(black_removed_weights + i);
 
@@ -516,28 +562,79 @@ class nnue
 #endif
     }
 
-    void remove_piece(const chess::Piece &piece, const chess::Square &square)
-    {
-#ifdef TDCHESS_NNUE_INLINE
-        // hand roll simd
-        int white_feature_idx = translate(chess::Color::WHITE, piece, square);
-        int black_feature_idx = translate(chess::Color::BLACK, piece, square);
+    //     void remove_piece(const chess::Piece &piece, const chess::Square &square)
+    //     {
+    // #ifdef TDCHESS_NNUE_INLINE
+    //         // hand roll simd
+    //         int white_feature_idx = translate(chess::Color::WHITE, piece, square);
+    //         int black_feature_idx = translate(chess::Color::BLACK, piece, square);
+    //
+    //         const int16_t *__restrict white_weights =
+    //         m_network.feature_weights[white_feature_idx].vals; const int16_t *__restrict
+    //         black_weights = m_network.feature_weights[black_feature_idx].vals; const int16_t
+    //         *__restrict white_values_prev = m_sides[0][m_ply - 1].vals; const int16_t *__restrict
+    //         black_values_prev = m_sides[1][m_ply - 1].vals; int16_t *__restrict white_values =
+    //         m_sides[0][m_ply].vals; int16_t *__restrict black_values = m_sides[1][m_ply].vals;
+    //         for (size_t i = 0; i < HIDDEN_SIZE; ++i)
+    //         {
+    //             white_values[i] = white_values_prev[i] - white_weights[i];
+    //             black_values[i] = black_values_prev[i] - black_weights[i];
+    //         }
+    // #else
+    //         int white_feature_idx = translate(chess::Color::WHITE, piece, square);
+    //         int black_feature_idx = translate(chess::Color::BLACK, piece, square);
+    //         remove_feature(static_cast<int>(chess::Color::WHITE), white_feature_idx);
+    //         remove_feature(static_cast<int>(chess::Color::BLACK), black_feature_idx);
+    // #endif
+    //     }
 
-        const int16_t *__restrict white_weights = m_network.feature_weights[white_feature_idx].vals;
-        const int16_t *__restrict black_weights = m_network.feature_weights[black_feature_idx].vals;
+    void move_move_piece(const chess::Piece &piece1, const chess::Square &start1,
+                         const chess::Square &end1, const chess::Piece &piece2,
+                         const chess::Square &start2, const chess::Square &end2)
+    {
+        int white_remove_feature_idx_1 = translate(chess::Color::WHITE, piece1, start1);
+        int black_remove_feature_idx_1 = translate(chess::Color::BLACK, piece1, start1);
+        int white_add_feature_idx_1 = translate(chess::Color::WHITE, piece1, end1);
+        int black_add_feature_idx_1 = translate(chess::Color::BLACK, piece1, end1);
+
+        int white_remove_feature_idx_2 = translate(chess::Color::WHITE, piece2, start2);
+        int black_remove_feature_idx_2 = translate(chess::Color::BLACK, piece2, start2);
+        int white_add_feature_idx_2 = translate(chess::Color::WHITE, piece2, end2);
+        int black_add_feature_idx_2 = translate(chess::Color::BLACK, piece2, end2);
+
+        const int16_t *__restrict white_remove_weights =
+            m_network.feature_weights[white_remove_feature_idx_1].vals;
+        const int16_t *__restrict white_add_weights =
+            m_network.feature_weights[white_add_feature_idx_1].vals;
+        const int16_t *__restrict black_remove_weights =
+            m_network.feature_weights[black_remove_feature_idx_1].vals;
+        const int16_t *__restrict black_add_weights =
+            m_network.feature_weights[black_add_feature_idx_1].vals;
+
+        const int16_t *__restrict white_remove_weights2 =
+            m_network.feature_weights[white_remove_feature_idx_2].vals;
+        const int16_t *__restrict white_add_weights2 =
+            m_network.feature_weights[white_add_feature_idx_2].vals;
+        const int16_t *__restrict black_remove_weights2 =
+            m_network.feature_weights[black_remove_feature_idx_2].vals;
+        const int16_t *__restrict black_add_weights2 =
+            m_network.feature_weights[black_add_feature_idx_2].vals;
+
+        const int16_t *__restrict white_values_prev = m_sides[0][m_ply - 1].vals;
+        const int16_t *__restrict black_values_prev = m_sides[1][m_ply - 1].vals;
+
         int16_t *__restrict white_values = m_sides[0][m_ply].vals;
         int16_t *__restrict black_values = m_sides[1][m_ply].vals;
-        for (size_t i = 0; i < HIDDEN_SIZE; ++i)
+
+        for (int i = 0; i < HIDDEN_SIZE; ++i)
         {
-            white_values[i] -= white_weights[i];
-            black_values[i] -= black_weights[i];
+            white_values[i] = white_values_prev[i] - white_remove_weights[i] +
+                              white_add_weights[i] - white_remove_weights2[i] +
+                              white_add_weights2[i];
+            black_values[i] = black_values_prev[i] - black_remove_weights[i] +
+                              black_add_weights[i] - black_remove_weights2[i] +
+                              black_add_weights2[i];
         }
-#else
-        int white_feature_idx = translate(chess::Color::WHITE, piece, square);
-        int black_feature_idx = translate(chess::Color::BLACK, piece, square);
-        remove_feature(static_cast<int>(chess::Color::WHITE), white_feature_idx);
-        remove_feature(static_cast<int>(chess::Color::BLACK), black_feature_idx);
-#endif
     }
 
     void move_piece(const chess::Piece &piece, const chess::Square &start, const chess::Square &end)
@@ -557,6 +654,10 @@ class nnue
             m_network.feature_weights[black_remove_feature_idx].vals;
         const int16_t *__restrict black_add_weights =
             m_network.feature_weights[black_add_feature_idx].vals;
+
+        const int16_t *__restrict white_values_prev = m_sides[0][m_ply - 1].vals;
+        const int16_t *__restrict black_values_prev = m_sides[1][m_ply - 1].vals;
+
         int16_t *__restrict white_values = m_sides[0][m_ply].vals;
         int16_t *__restrict black_values = m_sides[1][m_ply].vals;
 
@@ -570,12 +671,12 @@ class nnue
 
             // --- LOAD PHASE (Each call loads 32 elements/64 bytes) ---
             // White loads
-            int16x8x4_t wv = vld1q_s16_x4(white_values + i);
+            int16x8x4_t wv = vld1q_s16_x4(white_values_prev + i);
             int16x8x4_t wa = vld1q_s16_x4(white_add_weights + i);
             int16x8x4_t wr = vld1q_s16_x4(white_remove_weights + i);
 
             // Black loads
-            int16x8x4_t bv = vld1q_s16_x4(black_values + i);
+            int16x8x4_t bv = vld1q_s16_x4(black_values_prev + i);
             int16x8x4_t ba = vld1q_s16_x4(black_add_weights + i);
             int16x8x4_t br = vld1q_s16_x4(black_remove_weights + i);
 
@@ -655,6 +756,9 @@ class nnue
         const int16_t *__restrict white_weights = m_network.feature_weights[white_feature_idx].vals;
         const int16_t *__restrict black_weights = m_network.feature_weights[black_feature_idx].vals;
 
+        const int16_t *__restrict white_values_prev = m_sides[0][m_ply - 1].vals;
+        const int16_t *__restrict black_values_prev = m_sides[1][m_ply - 1].vals;
+
         int16_t *__restrict white_values = m_sides[0][m_ply].vals;
         int16_t *__restrict black_values = m_sides[1][m_ply].vals;
 
@@ -668,7 +772,7 @@ class nnue
 
             // --- WHITE SIDE ---
             // Load current values and the 3 weight sources
-            int16x8x4_t wv = vld1q_s16_x4(white_values + i);
+            int16x8x4_t wv = vld1q_s16_x4(white_values_prev + i);
             int16x8x4_t wa = vld1q_s16_x4(white_add_weights + i);
             int16x8x4_t wr = vld1q_s16_x4(white_remove_weights + i);
             int16x8x4_t wc = vld1q_s16_x4(white_weights + i);
@@ -688,7 +792,7 @@ class nnue
             vst1q_s16_x4(white_values + i, w_res);
 
             // --- BLACK SIDE ---
-            int16x8x4_t bv = vld1q_s16_x4(black_values + i);
+            int16x8x4_t bv = vld1q_s16_x4(black_values_prev + i);
             int16x8x4_t ba = vld1q_s16_x4(black_add_weights + i);
             int16x8x4_t br = vld1q_s16_x4(black_remove_weights + i);
             int16x8x4_t bc = vld1q_s16_x4(black_weights + i);
@@ -739,34 +843,34 @@ class nnue
         remove_piece(removed_piece, removed);
 #endif
     }
-
-    void clone_ply(int a, int b)
-    {
-#ifdef __ARM_NEON
-        const int16_t *__restrict sw = m_sides[0][a].vals;
-        const int16_t *__restrict sb = m_sides[1][a].vals;
-        int16_t *__restrict dw = m_sides[0][b].vals;
-        int16_t *__restrict db = m_sides[1][b].vals;
-
-        for (size_t i = 0; i < HIDDEN_SIZE; i += 32)
-        {
-            // --- WHITE SIDE (64 bytes / 32 elements) ---
-            int16x8x4_t w_block1 = vld1q_s16_x4(sw + i); // Loads 64 bytes into 4 registers
-
-            // --- BLACK SIDE (64 bytes / 32 elements) ---
-            int16x8x4_t b_block1 = vld1q_s16_x4(sb + i);
-
-            // --- STORES ---
-            vst1q_s16_x4(dw + i, w_block1);
-
-            vst1q_s16_x4(db + i, b_block1);
-        }
-#else
-        for (size_t i = 0; i < HIDDEN_SIZE; ++i)
-        {
-            m_sides[0][b].vals[i] = m_sides[0][a].vals[i];
-            m_sides[1][b].vals[i] = m_sides[1][a].vals[i];
-        }
-#endif
-    }
+    //
+    //     void clone_ply(int a, int b)
+    //     {
+    // #ifdef __ARM_NEON
+    //         const int16_t *__restrict sw = m_sides[0][a].vals;
+    //         const int16_t *__restrict sb = m_sides[1][a].vals;
+    //         int16_t *__restrict dw = m_sides[0][b].vals;
+    //         int16_t *__restrict db = m_sides[1][b].vals;
+    //
+    //         for (size_t i = 0; i < HIDDEN_SIZE; i += 32)
+    //         {
+    //             // --- WHITE SIDE (64 bytes / 32 elements) ---
+    //             int16x8x4_t w_block1 = vld1q_s16_x4(sw + i); // Loads 64 bytes into 4 registers
+    //
+    //             // --- BLACK SIDE (64 bytes / 32 elements) ---
+    //             int16x8x4_t b_block1 = vld1q_s16_x4(sb + i);
+    //
+    //             // --- STORES ---
+    //             vst1q_s16_x4(dw + i, w_block1);
+    //
+    //             vst1q_s16_x4(db + i, b_block1);
+    //         }
+    // #else
+    //         for (size_t i = 0; i < HIDDEN_SIZE; ++i)
+    //         {
+    //             m_sides[0][b].vals[i] = m_sides[0][a].vals[i];
+    //             m_sides[1][b].vals[i] = m_sides[1][a].vals[i];
+    //         }
+    // #endif
+    // }
 };
