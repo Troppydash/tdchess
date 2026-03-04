@@ -12,6 +12,8 @@
 #include <arm_neon.h>
 #endif
 
+// TODO: this section sucks, refactor this
+
 #define TDCHESS_NNUE_INLINE
 
 constexpr size_t HIDDEN_SIZE = 1024;
