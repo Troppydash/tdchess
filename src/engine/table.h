@@ -67,7 +67,7 @@ class table_entry
     int16_t m_static_eval;
     uint16_t m_best_move;
     int8_t m_depth;
-    uint8_t m_mask = 1;
+    uint8_t m_mask;
 
     [[nodiscard]] table_entry_result get(uint64_t, int32_t ply, int32_t depth, int16_t alpha,
                                          int16_t beta, bool bucket_hit) const
@@ -171,7 +171,7 @@ struct alignas(64) bucket
             m_entries[i].m_score = param::VALUE_NONE;
             m_entries[i].m_best_move = chess::Move::NO_MOVE;
 
-            // zero mask, zero pv, one age, because we increase gen at search start
+            // zero mask, zero pv, zero age
             m_entries[i].m_mask = 0;
         }
     }

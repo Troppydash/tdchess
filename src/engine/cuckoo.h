@@ -99,7 +99,6 @@ inline bool is_upcoming_rep(const chess::Board &pos, int ply)
     const auto &states = pos.get_prev_state();
     const int maxDist = std::min((int)pos.halfMoveClock(), (int)states.size());
 
-
     for (int i = 3; i <= maxDist; i += 2)
     {
         uint64_t moveKey = pos.hash() ^ states[states.size() - i].hash;
@@ -138,7 +137,6 @@ inline bool is_upcoming_rep(const chess::Board &pos, int ply)
             if (states[states.size() - j].hash == states[states.size() - i].hash)
                 return true;
         }
-        // std::cout << "missed\n";
     }
 
     return false;

@@ -15,7 +15,6 @@ struct search_param
     int32_t depth{};
     int64_t movetime{};
     int64_t move_overhead{};
-    double original_time_adjust{};
 
     struct result
     {
@@ -54,7 +53,6 @@ struct search_param
     void reset()
     {
         clear_some();
-        original_time_adjust = -1;
     }
 
     [[nodiscard]] result time_control(int moves, chess::Color side2move)

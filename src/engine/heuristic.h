@@ -35,19 +35,20 @@ using continuation_history = history_entry<int16_t, 8000>[12][64];
 using continuation_history_full = history_entry<int16_t, 8000>[2][2][13][64][12][64];
 constexpr int NUM_CONTINUATION = 6;
 
-constexpr int PAWN_STRUCTURE_SIZE = 1 << 13;
+constexpr int CORRECTION_LIMIT = 1024;
+constexpr int PAWN_STRUCTURE_SIZE = 1 << 10;
 constexpr int PAWN_STRUCTURE_SIZE_M1 = PAWN_STRUCTURE_SIZE - 1;
 using pawn_history = history_entry<int16_t, 20000>[PAWN_STRUCTURE_SIZE][12][64];
-using pawn_correction_history = history_entry<int16_t, 8000>[2][PAWN_STRUCTURE_SIZE];
 
 using king_history = history_entry<int16_t, 20000>[2][16][64][64];
 
-constexpr int NON_PAWN_SIZE = 1 << 13;
+constexpr int NON_PAWN_SIZE = 1 << 15;
 constexpr int NON_PAWN_SIZE_M1 = NON_PAWN_SIZE - 1;
-using non_pawn_correction_history = history_entry<int16_t, 8000>[2][NON_PAWN_SIZE];
+using pawn_correction_history = history_entry<int16_t, CORRECTION_LIMIT>[2][NON_PAWN_SIZE];
+using non_pawn_correction_history = history_entry<int16_t, CORRECTION_LIMIT>[2][NON_PAWN_SIZE];
 
-using continuation_correction_history = history_entry<int16_t, 8000>[13][64];
-using continuation_correction_history_full = history_entry<int16_t, 8000>[13][64][13][64];
+using continuation_correction_history = history_entry<int16_t, CORRECTION_LIMIT>[13][64];
+using continuation_correction_history_full = history_entry<int16_t, CORRECTION_LIMIT>[13][64][13][64];
 
 struct heuristics
 {
@@ -161,7 +162,7 @@ struct heuristics
 
     void update_corr_hist_score(const chess::Board &position, int bonus)
     {
-        correction_history[position.sideToMove()][get_pawn_key(position) & PAWN_STRUCTURE_SIZE_M1]
+        correction_history[position.sideToMove()][get_pawn_key(position) & NON_PAWN_SIZE_M1]
             .add_bonus(bonus);
         white_corrhist[position.sideToMove()]
                       [get_corrhist_key(position, chess::Color::WHITE) & NON_PAWN_SIZE_M1]
