@@ -47,8 +47,8 @@ constexpr int NON_PAWN_SIZE_M1 = NON_PAWN_SIZE - 1;
 using pawn_correction_history = history_entry<int16_t, CORRECTION_LIMIT>[2][NON_PAWN_SIZE];
 using non_pawn_correction_history = history_entry<int16_t, CORRECTION_LIMIT>[2][NON_PAWN_SIZE];
 
-using continuation_correction_history = history_entry<int16_t, CORRECTION_LIMIT>[13][64];
-using continuation_correction_history_full = history_entry<int16_t, CORRECTION_LIMIT>[13][64][13][64];
+using continuation_correction_history = history_entry<int16_t, CORRECTION_LIMIT>[12][64];
+using continuation_correction_history_full = history_entry<int16_t, CORRECTION_LIMIT>[13][64][12][64];
 
 struct heuristics
 {
