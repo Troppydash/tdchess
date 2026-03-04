@@ -19,7 +19,7 @@
 constexpr size_t HIDDEN_SIZE = 1024;
 constexpr int16_t QA = 255;
 constexpr int16_t QB = 64;
-constexpr int32_t SCALE = 400;
+constexpr int32_t SCALE = 300;
 constexpr size_t BUCKET_SIZE = 1;
 
 struct alignas(64) accumulator
