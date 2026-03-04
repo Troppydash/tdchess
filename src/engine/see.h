@@ -6,10 +6,10 @@
 struct see
 {
     static constexpr int16_t PAWN_VALUE = 100;
-    static constexpr int16_t KNIGHT_VALUE = 320;
-    static constexpr int16_t BISHOP_VALUE = 330;
-    static constexpr int16_t ROOK_VALUE = 600;
-    static constexpr int16_t QUEEN_VALUE = 900;
+    static constexpr int16_t KNIGHT_VALUE = 370;
+    static constexpr int16_t BISHOP_VALUE = 390;
+    static constexpr int16_t ROOK_VALUE = 610;
+    static constexpr int16_t QUEEN_VALUE = 1210;
 
     constexpr static std::array<int16_t, 7> PIECE_VALUES = {
         // pawn, knight, bishop, rook, queen, king, none
