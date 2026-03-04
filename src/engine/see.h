@@ -58,9 +58,6 @@ struct see
             return 0 >= threshold;
         }
 
-        if (move.to().rank() == chess::Rank::RANK_1 || move.to().rank() == chess::Rank::RANK_8)
-            return test_ge_promote(position, move, threshold);
-
         chess::Square from = move.from();
         chess::Square to = move.to();
         chess::Piece from_piece = position.at(from);
@@ -74,12 +71,21 @@ struct see
         if (swap <= 0)
             return true;
 
-        chess::Bitboard fil = chess::Bitboard::fromSquare(from) | chess::Bitboard::fromSquare(to);
+        std::pair<chess::Piece, chess::Square> removed[position.occ().count()];
+        int n_removed = 0;
+
+        auto remove_piece = [&](chess::Square s) {
+            assert(position.at(s) != chess::Piece::NONE);
+            removed[n_removed++] = {position.at(s), s};
+            position.removePiece(position.at(s), s);
+        };
+
         if (from_piece != chess::Piece::NONE)
-            position.removePiece(from_piece, from);
+            remove_piece(from);
         if (to_piece != chess::Piece::NONE)
-            position.removePiece(to_piece, to);
-        chess::Bitboard occ = position.occ() ^ fil;
+            remove_piece(to);
+
+        chess::Bitboard occ = position.occ();
         chess::Color stm = position.sideToMove();
         chess::Bitboard attackers = (chess::attacks::attackers(position, chess::Color::WHITE, to) |
                                      chess::attacks::attackers(position, chess::Color::BLACK, to));
@@ -116,6 +122,7 @@ struct see
                 if ((swap = PAWN_VALUE - swap) < res)
                     break;
 
+                remove_piece(bb.lsb());
                 occ.clear(bb.lsb());
                 attackers |=
                     chess::attacks::bishop(to, occ) & (position.pieces(chess::PieceType::BISHOP) |
@@ -126,6 +133,7 @@ struct see
                 if ((swap = KNIGHT_VALUE - swap) < res)
                     break;
 
+                remove_piece(bb.lsb());
                 occ.clear(bb.lsb());
             }
             else if ((bb = stm_attackers & position.pieces(chess::PieceType::BISHOP)))
@@ -133,6 +141,7 @@ struct see
                 if ((swap = BISHOP_VALUE - swap) < res)
                     break;
 
+                remove_piece(bb.lsb());
                 occ.clear(bb.lsb());
                 attackers |=
                     chess::attacks::bishop(to, occ) & (position.pieces(chess::PieceType::BISHOP) |
@@ -143,6 +152,7 @@ struct see
                 if ((swap = ROOK_VALUE - swap) < res)
                     break;
 
+                remove_piece(bb.lsb());
                 occ.clear(bb.lsb());
                 attackers |=
                     chess::attacks::rook(to, occ) & (position.pieces(chess::PieceType::ROOK) |
@@ -150,9 +160,11 @@ struct see
             }
             else if ((bb = stm_attackers & position.pieces(chess::PieceType::QUEEN)))
             {
-                swap = QUEEN_VALUE - swap;
-                occ.clear(bb.lsb());
+                if ((swap = QUEEN_VALUE - swap) < res)
+                    break;
 
+                remove_piece(bb.lsb());
+                occ.clear(bb.lsb());
                 attackers |=
                     (chess::attacks::bishop(to, occ) & (position.pieces(chess::PieceType::BISHOP) |
                                                         position.pieces(chess::PieceType::QUEEN))) |
@@ -161,20 +173,16 @@ struct see
             }
             else
             {
-                if (from_piece != chess::Piece::NONE)
-                    position.placePiece(from_piece, from);
-                if (to_piece != chess::Piece::NONE)
-                    position.placePiece(to_piece, to);
+                for (int i = n_removed - 1; i >= 0; --i)
+                    position.placePiece(removed[i].first, removed[i].second);
 
                 // king
                 return (attackers & position.them(stm)) ? res ^ 1 : res;
             }
         }
 
-        if (from_piece != chess::Piece::NONE)
-            position.placePiece(from_piece, from);
-        if (to_piece != chess::Piece::NONE)
-            position.placePiece(to_piece, to);
+        for (int i = n_removed - 1; i >= 0; --i)
+            position.placePiece(removed[i].first, removed[i].second);
         return static_cast<bool>(res);
     }
 
@@ -194,11 +202,11 @@ struct see
             return true;
 
         chess::Bitboard fil = chess::Bitboard::fromSquare(from) | chess::Bitboard::fromSquare(to);
+        chess::Bitboard occ = position.occ() ^ fil;
         if (from_piece != chess::Piece::NONE)
             position.removePiece(from_piece, from);
         if (to_piece != chess::Piece::NONE)
             position.removePiece(to_piece, to);
-        chess::Bitboard occ = position.occ() ^ fil;
         chess::Color stm = position.sideToMove();
         chess::Bitboard attackers = (chess::attacks::attackers(position, chess::Color::WHITE, to) |
                                      chess::attacks::attackers(position, chess::Color::BLACK, to));
