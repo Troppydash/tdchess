@@ -49,7 +49,6 @@ constexpr int32_t screlu(int16_t x)
 
 struct dirty_entry
 {
-    // uint64_t hash = 0;
     chess::Move move = chess::Move::NO_MOVE;
     chess::Piece piece = chess::Piece::NONE;
     chess::Piece captured = chess::Piece::NONE;
@@ -63,7 +62,7 @@ class nnue
     network m_network{};
     accumulator m_sides[2][param::MAX_DEPTH]{};
 
-    std::array<dirty_entry, param::MAX_DEPTH + 10> m_entries{};
+    std::array<dirty_entry, param::MAX_DEPTH + 2> m_entries{};
     int m_ply{0};
 
   public:
@@ -115,7 +114,7 @@ class nnue
     }
 
     static int translate(const chess::Color &perspective, const chess::Piece &piece,
-                             const chess::Square &square)
+                         const chess::Square &square)
     {
         return ((piece.color() == perspective ? 0 : 6) + piece.type()) * 64 +
                square.relative_square(perspective).index();
@@ -140,9 +139,17 @@ class nnue
         }
     }
 
-    [[nodiscard]] int32_t evaluate(int side2move, int bucket)
+    void clear()
     {
-        bucket = 0;
+        for (int i = 0; i < param::MAX_DEPTH; ++i)
+        {
+            m_entries[i].is_clean = false;
+        }
+    }
+
+    [[nodiscard]] int32_t evaluate(int side2move, int)
+    {
+        constexpr int bucket = 0;
         catchup();
 
         int32_t output = 0;
@@ -326,6 +333,7 @@ class nnue
         int current_ply = m_ply;
         for (; clean_ply <= current_ply; ++clean_ply)
         {
+            assert(!m_entries[clean_ply].is_clean);
             m_ply = clean_ply;
             apply_move(m_entries[clean_ply]);
             m_entries[clean_ply].is_clean = true;

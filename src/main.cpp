@@ -169,6 +169,12 @@ void position_test()
         {"r3k2r/pp1n2pp/2n1p3/2B1p3/7b/2N4P/PPPK2P1/R4B1R w kq - 0 17", ""},
         {"5rk1/1q2bpp1/4p2p/1N2P3/np5P/2r5/P3QPP1/1B1RR1K1 b - - 1 26", "c3c5 not c3c8, zero eval"},
         {"2r2rk1/1q2bp2/4p1pp/1N2P3/np5P/6Q1/P4PP1/1B1RR1K1 b - - 1 28", "b7b5, negative eval 1"}};
+
+    nnue nnue{};
+    nnue.incbin_load();
+    table tt{1024};
+    engine engine{nullptr, &nnue, &tt};
+
     for (auto &[pos, target] : positions)
     {
         // mcts_engine engine{};
@@ -176,11 +182,8 @@ void position_test()
         // search_param param;
         // param.movetime = 5000;
         // auto result = engine.search(chess::Board{pos}, param, true);
-        nnue nnue{};
-        nnue.incbin_load();
+
         chess::Board start{pos};
-        table tt{1024};
-        engine engine{nullptr, nullptr, &tt};
         search_param param;
         param.movetime = 5000;
         engine.search(start, param, true);
