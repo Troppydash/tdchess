@@ -318,7 +318,6 @@ class nnue
         m_ply -= 1;
     }
 
-  private:
     void catchup()
     {
         // scan back til clean entry
@@ -342,6 +341,7 @@ class nnue
         assert(current_ply == m_ply);
     }
 
+  private:
     void apply_move(const dirty_entry &entry)
     {
         switch (entry.move.typeOf())
