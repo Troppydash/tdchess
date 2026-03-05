@@ -124,6 +124,7 @@ class movegen
             case movegen_stage::PROB_CAPTURE_INIT: {
                 if (m_stage == static_cast<int>(movegen_stage::CAPTURE_INIT))
                 {
+                    // TODO: partial gen
                     chess::movegen::legalmoves(m_moves, m_position);
 
                     // sort capture moves first
@@ -158,10 +159,6 @@ class movegen
                                     .get_value();
 
                             int32_t score = mvv + capture_score;
-
-                            if (move.typeOf() == chess::Move::PROMOTION)
-                                score += see::PIECE_VALUES[move.promotionType()] * 2;
-
                             score = std::clamp(score, -32000, 32000);
                             move.setScore(score);
                         }
@@ -197,12 +194,6 @@ class movegen
                                                     .get_value();
 
                         int32_t score = mvv + capture_score;
-
-                        if (move.typeOf() == chess::Move::PROMOTION)
-                        {
-                            score += see::PIECE_VALUES[move.promotionType()] * 2;
-                        }
-
                         score = std::clamp(score, -32000, 32000);
                         move.setScore(score);
                     }
@@ -241,12 +232,10 @@ class movegen
                                                 [m_heuristics.get_capture(m_position, move)]
                                 .get_value();
 
+                        score *= 2;
+
                         // baseline
                         score += 20000;
-                        // additional
-                        if (move.typeOf() == chess::Move::PROMOTION)
-                            score += see::PIECE_VALUES[move.promotionType()] * 2;
-
                         score = std::clamp(score, -32000, 32000);
                         move.setScore(score);
                     }

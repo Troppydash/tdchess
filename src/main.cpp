@@ -183,7 +183,7 @@ void position_test()
         // param.movetime = 5000;
         // auto result = engine.search(chess::Board{pos}, param, true);
 
-        chess::Board start{pos};
+        chess::Board start{};
         search_param param;
         param.movetime = 5000;
         engine.search(start, param, true);
