@@ -30,7 +30,7 @@ enum class movegen_stage
     DONE
 };
 
-constexpr int16_t IGNORE_SCORE = -32300;
+constexpr int16_t IGNORE_SCORE = std::numeric_limits<int16_t>::min();
 
 class movegen
 {
@@ -39,7 +39,6 @@ class movegen
     // stack for regular: [bad capture, (bad quiet, good quiet)/good capture]
     chess::Movelist &m_moves;
     int m_bad_capture_end{0};
-    int m_bad_quiet_end{0};
     int m_move_index{0};
     int m_capture_end{0};
 
@@ -47,6 +46,7 @@ class movegen
     const heuristics &m_heuristics;
     chess::Move m_pv_move;
     int32_t m_ply;
+    int32_t m_depth;
     chess::Move m_prev_move;
 
     std::array<const continuation_history *, NUM_CONTINUATION> m_continuations{nullptr};
@@ -56,39 +56,41 @@ class movegen
 
   public:
     explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
-                     chess::Move pv_move, chess::Move prev_move, int32_t ply,
+                     chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth,
                      movegen_stage stage = movegen_stage::PV)
         : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
-          m_heuristics(heuristics), m_pv_move(pv_move), m_prev_move{prev_move}, m_ply(ply)
+          m_heuristics(heuristics), m_pv_move(pv_move), m_prev_move{prev_move}, m_ply(ply),
+          m_depth(depth)
     {
     }
 
     explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
-                     chess::Move pv_move, chess::Move prev_move, int32_t ply, int16_t margin,
-                     movegen_stage stage = movegen_stage::PV)
+                     chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth,
+                     int16_t margin, movegen_stage stage = movegen_stage::PV)
         : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
           m_heuristics(heuristics), m_pv_move(pv_move), m_prev_move{prev_move}, m_ply(ply),
-          m_prob_margin{margin}
+          m_prob_margin{margin}, m_depth(depth)
     {
     }
 
     explicit movegen(
         chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
-        chess::Move pv_move, chess::Move prev_move, int32_t ply,
+        chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth,
         const std::array<const continuation_history *, NUM_CONTINUATION> &continuations,
         movegen_stage stage = movegen_stage::PV)
         : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
           m_heuristics(heuristics), m_pv_move(pv_move), m_prev_move{prev_move}, m_ply(ply),
-          m_continuations{continuations}
+          m_continuations{continuations}, m_depth(depth)
     {
     }
 
     explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
-                     chess::Move pv_move, chess::Move prev_move, int32_t ply,
+                     chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth,
                      const continuation_history *continuation1,
                      movegen_stage stage = movegen_stage::PV)
         : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
-          m_heuristics(heuristics), m_pv_move(pv_move), m_prev_move{prev_move}, m_ply(ply)
+          m_heuristics(heuristics), m_pv_move(pv_move), m_prev_move{prev_move}, m_ply(ply),
+          m_depth(depth)
     {
         m_continuations[0] = continuation1;
     }
@@ -206,6 +208,8 @@ class movegen
                     }
                 }
 
+                sort_moves(m_moves, 0, m_capture_end);
+
                 m_bad_capture_end = 0;
                 m_move_index = 0;
                 m_stage++;
@@ -289,6 +293,8 @@ class movegen
                     }
                 }
 
+                sort_moves(m_moves, 0, m_moves.size());
+
                 m_stage++;
                 m_move_index = 0;
                 break;
@@ -318,82 +324,70 @@ class movegen
 
                 // generating all quiet moves and scoring them
             case movegen_stage::QUIET_INIT: {
-                m_bad_quiet_end = m_capture_end;
-                uint64_t pawn_key = m_heuristics.get_pawn_key(m_position);
-                for (int i = m_bad_quiet_end; i < m_moves.size(); ++i)
+                if (!m_skip_quiet)
                 {
-                    chess::Move &move = m_moves[i];
-                    if (move == m_pv_move)
+                    uint64_t pawn_key = m_heuristics.get_pawn_key(m_position);
+                    for (int i = m_capture_end; i < m_moves.size(); ++i)
                     {
-                        move.setScore(IGNORE_SCORE);
-                        continue;
+                        chess::Move &move = m_moves[i];
+                        if (move == m_pv_move)
+                        {
+                            move.setScore(IGNORE_SCORE);
+                            continue;
+                        }
+
+                        // killer move
+                        if (m_heuristics.killers[m_ply][0].first == move)
+                        {
+                            move.setScore(32500);
+                            continue;
+                        }
+
+                        assert(!m_heuristics.is_capture(m_position, move));
+
+                        int32_t score = 0;
+
+                        // normal
+                        score += m_heuristics
+                                     .main_history[m_position.sideToMove()][move.from().index()]
+                                                  [move.to().index()]
+                                     .get_value();
+
+                        // low ply
+                        if (m_ply < LOW_PLY)
+                        {
+                            score += features::QUIET_LOW_PLY_SCALE *
+                                     m_heuristics
+                                         .low_ply[m_position.sideToMove()][m_ply]
+                                                 [move.from().index()][move.to().index()]
+                                         .get_value() /
+                                     (1 + m_ply);
+                        }
+
+                        // pawn history
+                        score += m_heuristics
+                                     .pawn[pawn_key & PAWN_STRUCTURE_SIZE_M1]
+                                          [m_position.at(move.from())][move.to().index()]
+                                     .get_value();
+
+                        // continuation
+                        for (int i = 0; i < NUM_CONTINUATION; ++i)
+                        {
+                            if (m_continuations[i] != nullptr)
+                                score += (*m_continuations[i])[m_position.at(move.from())]
+                                                              [move.to().index()]
+                                                                  .get_value() /
+                                         2;
+                        }
+
+                        score = std::clamp(score, -32000, 32000);
+                        move.setScore(score);
                     }
 
-                    assert(!m_heuristics.is_capture(m_position, move));
-
-                    int32_t score = 0;
-
-                    // killer move
-                    if (m_heuristics.killers[m_ply][0].first == move)
-                    {
-                        move.setScore(32500);
-                        continue;
-                    }
-
-                    // normal
-                    score += m_heuristics
-                                 .main_history[m_position.sideToMove()][move.from().index()]
-                                              [move.to().index()]
-                                 .get_value();
-
-                    // low ply
-                    if (m_ply < LOW_PLY)
-                    {
-                        score += features::QUIET_LOW_PLY_SCALE *
-                                 m_heuristics
-                                     .low_ply[m_position.sideToMove()][m_ply][move.from().index()]
-                                             [move.to().index()]
-                                     .get_value() /
-                                 (1 + m_ply);
-                    }
-
-                    // pawn history
-                    score += m_heuristics
-                                 .pawn[pawn_key & PAWN_STRUCTURE_SIZE_M1]
-                                      [m_position.at(move.from())][move.to().index()]
-                                 .get_value();
-
-                    // continuation
-                    for (int i = 0; i < NUM_CONTINUATION; ++i)
-                    {
-                        if (m_continuations[i] != nullptr)
-                            score +=
-                                (*m_continuations[i])[m_position.at(move.from())][move.to().index()]
-                                    .get_value() /
-                                2;
-                    }
-
-                    // score +=
-                    //     m_heuristics
-                    //         .king[m_position.sideToMove()][m_heuristics.get_king_bucket(m_position)][move.from().index()]
-                    //              [move.to().index()]
-                    //         .get_value();
-
-                    // penalty for weak promotion
-                    if (move.typeOf() == chess::Move::PROMOTION)
-                        score -= 1000;
-
-                    score = std::clamp(score, -32000, 32000);
-                    move.setScore(score);
-
-                    if (score < features::QUIET_BAD_THRESHOLD)
-                    {
-                        std::swap(m_moves[m_bad_quiet_end], m_moves[i]);
-                        m_bad_quiet_end++;
-                    }
+                    sort_moves(m_moves, m_capture_end, m_moves.size(), -4000 * m_depth);
                 }
 
-                m_move_index = m_bad_quiet_end;
+                m_move_index = m_capture_end;
                 m_stage++;
                 break;
             }
@@ -406,8 +400,9 @@ class movegen
                     break;
                 }
 
-                m_move_index =
-                    pick_move(m_moves, m_move_index, m_moves.size(), [](auto &) { return true; });
+                m_move_index = pick_move(m_moves, m_move_index, m_moves.size(), [](auto &m) {
+                    return m.score() >= features::QUIET_BAD_THRESHOLD;
+                });
                 if (m_move_index < m_moves.size())
                     return m_moves[m_move_index++];
 
@@ -435,9 +430,10 @@ class movegen
                     break;
                 }
 
-                m_move_index =
-                    pick_move(m_moves, m_move_index, m_bad_quiet_end, [](auto &) { return true; });
-                if (m_move_index < m_bad_quiet_end)
+                m_move_index = pick_move(m_moves, m_move_index, m_moves.size(), [](auto &m) {
+                    return m.score() < features::QUIET_BAD_THRESHOLD;
+                });
+                if (m_move_index < m_moves.size())
                     return m_moves[m_move_index++];
 
                 m_stage = static_cast<int>(movegen_stage::DONE);
@@ -483,13 +479,12 @@ class movegen
         }
     }
 
+    // TODO: try sorting here using selection sort
     template <typename Pred>
     int pick_move(chess::Movelist &moves, const int start, const int end, Pred filter)
     {
         for (int i = start; i < end; ++i)
         {
-            sort_moves(moves, i, end);
-
             // ignore specific moves
             if (moves[i].score() == IGNORE_SCORE || !filter(moves[i]))
                 continue;
@@ -500,22 +495,22 @@ class movegen
         return end;
     }
 
-    static void sort_moves(chess::Movelist &moves, int i, int end = -1)
+    static void sort_moves(chess::Movelist &moves, int start, int end,
+                           int limit = std::numeric_limits<int16_t>::min())
     {
-        if (end == -1)
-            end = moves.size();
-
-        int highest_score = moves[i].score();
-        int highest_index = i;
-        for (int j = i + 1; j < end; ++j)
+        for (int i = start + 1; i < end; ++i)
         {
-            if (moves[j].score() > highest_score)
+            if (moves[i].score() >= limit)
             {
-                highest_score = moves[j].score();
-                highest_index = j;
+                chess::Move temp = moves[i];
+                int j = i - 1;
+                while (j >= start && moves[j].score() < temp.score())
+                {
+                    moves[j + 1] = moves[j];
+                    j--;
+                }
+                moves[j + 1] = temp;
             }
         }
-
-        std::swap(moves[i], moves[highest_index]);
     }
 };
