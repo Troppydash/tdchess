@@ -54,6 +54,8 @@ class movegen
     int16_t m_prob_margin;
     bool m_skip_quiet = false;
 
+    chess::movegen::precompute m_precompute;
+
   public:
     explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
                      chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth,
@@ -122,81 +124,36 @@ class movegen
             case movegen_stage::CAPTURE_INIT:
             case movegen_stage::QCAPTURE_INIT:
             case movegen_stage::PROB_CAPTURE_INIT: {
-                if (m_stage == static_cast<int>(movegen_stage::CAPTURE_INIT))
+                // direct capture generation
+                m_moves.clear();
+                chess::movegen::legalmoves_capture(
+                    m_moves, m_position, chess::movegen::legalmoves_precompute(m_position));
+                m_capture_end = m_moves.size();
+
+                // score
+                for (int i = 0; i < m_capture_end; ++i)
                 {
-                    // TODO: partial gen
-                    chess::movegen::legalmoves(m_moves, m_position);
-
-                    // sort capture moves first
-                    // [captures, quiet]
-                    m_capture_end = m_moves.size();
-                    for (int i = 0; i < m_capture_end; ++i)
+                    auto &move = m_moves[i];
+                    if (move == m_pv_move)
                     {
-                        auto &move = m_moves[i];
-                        if (!m_heuristics.is_capture(m_position, move))
-                        {
-                            m_capture_end--;
-                            std::swap(move, m_moves[m_capture_end]);
-                            i--;
-                        }
-                        else
-                        {
-                            // score captures
-                            if (move == m_pv_move)
-                            {
-                                move.setScore(IGNORE_SCORE);
-                                continue;
-                            }
-
-                            auto captured = m_heuristics.get_capture(m_position, move);
-                            int16_t mvv = see::PIECE_VALUES[captured] * features::CAPTURE_MVV_SCALE;
-
-                            // capture history
-                            int16_t capture_score =
-                                m_heuristics
-                                    .capture_history[m_position.at(move.from())][move.to().index()]
-                                                    [captured]
-                                    .get_value();
-
-                            int32_t score = mvv + capture_score;
-                            score = std::clamp(score, -32000, 32000);
-                            move.setScore(score);
-                        }
+                        move.setScore(IGNORE_SCORE);
+                        continue;
                     }
-                }
-                else
-                {
-                    // direct capture generation
-                    m_moves.clear();
-                    chess::movegen::legalmoves_capture(
-                        m_moves, m_position, chess::movegen::legalmoves_precompute(m_position));
-                    m_capture_end = m_moves.size();
 
-                    // score
-                    for (int i = 0; i < m_capture_end; ++i)
-                    {
-                        auto &move = m_moves[i];
-                        if (move == m_pv_move)
-                        {
-                            move.setScore(IGNORE_SCORE);
-                            continue;
-                        }
+                    assert(m_heuristics.is_capture(m_position, move));
 
-                        assert(m_heuristics.is_capture(m_position, move));
+                    auto captured = m_heuristics.get_capture(m_position, move);
+                    int16_t mvv = see::PIECE_VALUES[captured] * features::CAPTURE_MVV_SCALE;
 
-                        auto captured = m_heuristics.get_capture(m_position, move);
-                        int16_t mvv = see::PIECE_VALUES[captured] * features::CAPTURE_MVV_SCALE;
+                    // capture history
+                    int16_t capture_score = m_heuristics
+                                                .capture_history[m_position.at(move.from())]
+                                                                [move.to().index()][captured]
+                                                .get_value();
 
-                        // capture history
-                        int16_t capture_score = m_heuristics
-                                                    .capture_history[m_position.at(move.from())]
-                                                                    [move.to().index()][captured]
-                                                    .get_value();
-
-                        int32_t score = mvv + capture_score;
-                        score = std::clamp(score, -32000, 32000);
-                        move.setScore(score);
-                    }
+                    int32_t score = mvv + capture_score;
+                    score = std::clamp(score, -32000, 32000);
+                    move.setScore(score);
                 }
 
                 sort_moves(m_moves, 0, m_capture_end);
@@ -315,6 +272,9 @@ class movegen
             case movegen_stage::QUIET_INIT: {
                 if (!m_skip_quiet)
                 {
+                    chess::movegen::legalmoves_quiet(
+                                     m_moves, m_position, chess::movegen::legalmoves_precompute(m_position));
+
                     uint64_t pawn_key = m_heuristics.get_pawn_key(m_position);
                     for (int i = m_capture_end; i < m_moves.size(); ++i)
                     {
