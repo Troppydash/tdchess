@@ -10,6 +10,7 @@ enum class movegen_stage
     PV,
     CAPTURE_INIT,
     GOOD_CAPTURE,
+    KILLER,
     QUIET_INIT,
     GOOD_QUIET,
     BAD_CAPTURE,
@@ -128,15 +129,16 @@ class movegen
                 m_precompute = chess::movegen::legalmoves_precompute(m_position);
                 m_moves.clear();
                 chess::movegen::legalmoves_capture(m_moves, m_position, m_precompute);
-                m_capture_end = m_moves.size();
 
                 // score
-                for (int i = 0; i < m_capture_end; ++i)
+                for (int i = 0; i < m_moves.size(); ++i)
                 {
                     auto &move = m_moves[i];
                     if (move == m_pv_move)
                     {
-                        move.setScore(IGNORE_SCORE);
+                        std::swap(move, m_moves.back());
+                        m_moves.decr();
+                        i--;
                         continue;
                     }
 
@@ -156,6 +158,7 @@ class movegen
                     move.setScore(score);
                 }
 
+                m_capture_end = m_moves.size();
                 sort_moves(m_moves, 0, m_capture_end);
 
                 m_bad_capture_end = 0;
@@ -171,11 +174,14 @@ class movegen
 
                 // score
                 uint64_t pawn_key = m_heuristics.get_pawn_key(m_position);
-                for (auto &move : m_moves)
+                for (int i = 0; i < m_moves.size(); ++i)
                 {
+                    chess::Move &move = m_moves[i];
                     if (move == m_pv_move)
                     {
-                        move.setScore(IGNORE_SCORE);
+                        std::swap(move, m_moves.back());
+                        m_moves.decr();
+                        i -= 1;
                         continue;
                     }
 
@@ -198,6 +204,8 @@ class movegen
                     }
                     else
                     {
+                        // TODO: killer move here
+
                         int32_t score = m_heuristics
                                             .main_history[m_position.sideToMove()]
                                                          [move.from().index()][move.to().index()]
@@ -268,6 +276,19 @@ class movegen
                 break;
             }
 
+            case movegen_stage::KILLER: {
+                m_stage++;
+                if (!m_skip_quiet)
+                {
+                    auto move = m_heuristics.killers[m_ply][0].first;
+                    if (move != chess::Move::NO_MOVE && legal::is_legal_full(m_position, move))
+                    {
+                        return move;
+                    }
+                }
+
+                break;
+            }
                 // generating all quiet moves and scoring them
             case movegen_stage::QUIET_INIT: {
                 if (!m_skip_quiet)
@@ -280,24 +301,29 @@ class movegen
                         chess::Move &move = m_moves[i];
                         if (move == m_pv_move)
                         {
-                            move.setScore(IGNORE_SCORE);
+                            std::swap(move, m_moves.back());
+                            m_moves.decr();
+                            i -= 1;
                             continue;
                         }
 
-                        if (move.typeOf() == chess::Move::PROMOTION && (move.promotionType() == chess::PieceType::QUEEN || move.promotionType() == chess::PieceType::KNIGHT))
+                        if (move.typeOf() == chess::Move::PROMOTION &&
+                            move.promotionType() == chess::PieceType::QUEEN)
                         {
-                            move.setScore(IGNORE_SCORE);
+                            std::swap(move, m_moves.back());
+                            m_moves.decr();
+                            i -= 1;
                             continue;
                         }
 
                         // killer move
                         if (m_heuristics.killers[m_ply][0].first == move)
                         {
-                            move.setScore(32500);
+                            std::swap(move, m_moves.back());
+                            m_moves.decr();
+                            i -= 1;
                             continue;
                         }
-                        // std::cout << m_position << std::endl;
-                        // std::cout << chess::uci::moveToUci(move) << std::endl;
 
                         assert(!m_heuristics.is_capture(m_position, move));
 
@@ -435,7 +461,6 @@ class movegen
         }
     }
 
-    // TODO: try sorting here using selection sort
     template <typename Pred>
     int pick_move(chess::Movelist &moves, const int start, const int end, Pred filter)
     {

@@ -74,8 +74,7 @@ struct heuristics
     bool is_capture(const chess::Board &position, const chess::Move &move) const
     {
         return position.isCapture(move) || (move.typeOf() == chess::Move::PROMOTION &&
-                                            (move.promotionType() == chess::PieceType::QUEEN ||
-                                             move.promotionType() == chess::PieceType::KNIGHT));
+                                            (move.promotionType() == chess::PieceType::QUEEN));
     }
 
     chess::PieceType get_capture(const chess::Board &position, const chess::Move &move) const
