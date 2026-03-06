@@ -132,7 +132,7 @@ class table_entry
             m_best_move = best_move.move();
         }
 
-        uint8_t age_diff = (MAX_AGE + age - GET_AGE(m_mask)) & AGE_MASK;
+        int age_diff = (MAX_AGE + age - GET_AGE(m_mask)) & AGE_MASK;
         if (flag == param::EXACT_FLAG || !MATCHES(hash, m_hash) ||
             depth + 4 + 2 * is_pv > (m_depth + param::DEPTH_OFFSET) || age_diff >= 1)
         {
@@ -188,14 +188,15 @@ struct alignas(32) bucket
             }
         }
 
-        int32_t worst_score = std::numeric_limits<int32_t>::max();
-        int best_slot = -1;
-        for (int i = 0; i < NUM_BUCKETS; ++i)
+        int best_slot = 0;
+        int worst_score = m_entries[0].m_depth + param::DEPTH_OFFSET -
+                          ((MAX_AGE + age - GET_AGE(m_entries[0].m_mask)) & AGE_MASK) * 8;
+
+        for (int i = 1; i < NUM_BUCKETS; ++i)
         {
             const auto &entry = m_entries[i];
-            uint8_t entry_age = GET_AGE(entry.m_mask);
-            uint8_t age_diff = (MAX_AGE + age - entry_age) & AGE_MASK;
-            int32_t replacement_score = (entry.m_depth + param::DEPTH_OFFSET) - age_diff * 8;
+            int age_diff = (MAX_AGE + age - GET_AGE(entry.m_mask)) & AGE_MASK;
+            int replacement_score = (entry.m_depth + param::DEPTH_OFFSET) - age_diff * 8;
 
             if (replacement_score < worst_score)
             {
@@ -227,7 +228,7 @@ class table
     {
         size_t bytes = size_in_mb * 1024 * 1024;
         m_size = bytes / sizeof(bucket);
-        m_buckets = static_cast<bucket *>(std::aligned_alloc(32, m_size * sizeof(bucket)));
+        m_buckets = static_cast<bucket *>(std::aligned_alloc(32, bytes));
         assert(m_buckets != nullptr);
         clear();
     }
