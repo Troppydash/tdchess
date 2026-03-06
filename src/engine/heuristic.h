@@ -25,9 +25,8 @@ using history_heuristic = history_entry<int16_t, 20000>[2][64][64];
 using capture_heuristic = history_entry<int16_t, 20000>[12][64][7];
 using killer_heuristic =
     std::array<std::pair<chess::Move, bool>, param::NUMBER_KILLERS>[param::MAX_DEPTH];
-using counter_moves = chess::Move[12][64];
 
-constexpr int LOW_PLY = 5;
+constexpr int LOW_PLY = 6;
 using low_ply_history = history_entry<int16_t, 20000>[2][LOW_PLY][64][64];
 
 // indexed by [piece][to]
