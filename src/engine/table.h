@@ -18,6 +18,7 @@ struct table_entry_result
     uint8_t flag;
 };
 
+constexpr int MAX_AGE = 1 << 5;
 constexpr uint8_t AGE_MASK = 0b00011111;
 constexpr uint8_t PV_MASK = 0b00100000;
 constexpr uint8_t FLAG_MASK = 0b11000000;
@@ -52,7 +53,7 @@ constexpr uint8_t SET_AGE(uint8_t age)
     return age & AGE_MASK;
 }
 
-using BUCKET_HASH = uint32_t;
+using BUCKET_HASH = uint16_t;
 
 constexpr bool MATCHES(uint64_t hash, BUCKET_HASH partial)
 {
@@ -131,7 +132,7 @@ class table_entry
             m_best_move = best_move.move();
         }
 
-        uint8_t age_diff = (age - GET_AGE(m_mask)) & AGE_MASK;
+        uint8_t age_diff = (MAX_AGE + age - GET_AGE(m_mask)) & AGE_MASK;
         if (flag == param::EXACT_FLAG || !MATCHES(hash, m_hash) ||
             depth + 4 + 2 * is_pv > (m_depth + param::DEPTH_OFFSET) || age_diff >= 1)
         {
@@ -149,17 +150,16 @@ class table_entry
             }
 
             m_score = score;
-
             m_mask = SET_AGE(age) | SET_FLAG(flag) | SET_PV(is_pv);
         }
     }
 };
 
-constexpr int NUM_BUCKETS = 5;
+constexpr int NUM_BUCKETS = 3;
 
-struct alignas(64) bucket
+struct alignas(32) bucket
 {
-    std::array<table_entry, NUM_BUCKETS> m_entries;
+    table_entry m_entries[NUM_BUCKETS];
 
     void clear()
     {
@@ -176,39 +176,25 @@ struct alignas(64) bucket
         }
     }
 
-    table_entry &probe(const uint64_t hash, bool &bucket_hit)
+    table_entry &probe(const uint64_t hash, bool &bucket_hit, uint8_t age)
     {
         const BUCKET_HASH key = hash;
         for (int i = 0; i < NUM_BUCKETS; ++i)
         {
             if (key == m_entries[i].m_hash)
             {
-                bucket_hit = (m_entries[i].m_depth + param::DEPTH_OFFSET) > param::UNINIT_DEPTH;
+                bucket_hit = !(m_entries[i].m_score == 0 && m_entries[i].m_mask == 0);
                 return m_entries[i];
             }
         }
 
-        bucket_hit = false;
-        return m_entries[0];
-    }
-
-    void store(uint64_t hash, uint8_t flag, int16_t score, int32_t ply, int32_t depth,
-               const chess::Move &best_move, int16_t static_eval, bool is_pv, uint8_t age)
-    {
-        int best_slot = -1;
         int32_t worst_score = std::numeric_limits<int32_t>::max();
-        BUCKET_HASH key = hash;
+        int best_slot = -1;
         for (int i = 0; i < NUM_BUCKETS; ++i)
         {
             const auto &entry = m_entries[i];
-            if (key == entry.m_hash && (entry.m_depth + param::DEPTH_OFFSET) > param::UNINIT_DEPTH)
-            {
-                best_slot = i;
-                break;
-            }
-
             uint8_t entry_age = GET_AGE(entry.m_mask);
-            uint8_t age_diff = (age - entry_age) & AGE_MASK;
+            uint8_t age_diff = (MAX_AGE + age - entry_age) & AGE_MASK;
             int32_t replacement_score = (entry.m_depth + param::DEPTH_OFFSET) - age_diff * 8;
 
             if (replacement_score < worst_score)
@@ -218,7 +204,15 @@ struct alignas(64) bucket
             }
         }
 
-        m_entries[best_slot].set(hash, flag, score, ply, depth, best_move, static_eval, is_pv, age);
+        bucket_hit = false;
+        return m_entries[best_slot];
+    }
+
+    void store(uint64_t hash, uint8_t flag, int16_t score, int32_t ply, int32_t depth,
+               const chess::Move &best_move, int16_t static_eval, bool is_pv, uint8_t age,
+               table_entry &entry)
+    {
+        entry.set(hash, flag, score, ply, depth, best_move, static_eval, is_pv, age);
     }
 };
 
@@ -231,8 +225,10 @@ class table
 
     explicit table(size_t size_in_mb)
     {
-        m_size = size_in_mb * 1024 * 1024 / sizeof(bucket);
-        m_buckets = static_cast<bucket *>(std::aligned_alloc(64, m_size * sizeof(bucket)));
+        size_t bytes = size_in_mb * 1024 * 1024;
+        m_size = bytes / sizeof(bucket);
+        m_buckets = static_cast<bucket *>(std::aligned_alloc(32, m_size * sizeof(bucket)));
+        assert(m_buckets != nullptr);
         clear();
     }
 
