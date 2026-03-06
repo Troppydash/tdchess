@@ -204,7 +204,7 @@ class movegen
                     }
                     else
                     {
-                        // TODO: killer move here
+
 
                         int32_t score = m_heuristics
                                             .main_history[m_position.sideToMove()]
@@ -236,13 +236,18 @@ class movegen
                                                                   .get_value() /
                                          2;
                         }
+
+                        if (m_heuristics.killers[m_ply][0].first == move)
+                        {
+                            score += 10000;
+                        }
                         //
                         // score += m_heuristics
                         //     .king[m_position.sideToMove()][m_heuristics.get_king_bucket(m_position)][move.from().index()]
                         //          [move.to().index()]
                         //     .get_value();
 
-                        score = std::clamp(score, -32000, 32000);
+                        score = std::clamp(score, -32000, 20000);
                         move.setScore(score);
                     }
                 }
@@ -467,7 +472,7 @@ class movegen
         for (int i = start; i < end; ++i)
         {
             // ignore specific moves
-            if (moves[i].score() == IGNORE_SCORE || !filter(moves[i]))
+            if (!filter(moves[i]))
                 continue;
 
             return i;
