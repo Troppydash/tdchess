@@ -156,7 +156,6 @@ class table_entry
 };
 
 constexpr int NUM_BUCKETS = 3;
-
 struct alignas(32) bucket
 {
     table_entry m_entries[NUM_BUCKETS];
@@ -228,15 +227,16 @@ class table
     {
         size_t bytes = size_in_mb * 1024 * 1024;
         m_size = bytes / sizeof(bucket);
-        m_buckets = static_cast<bucket *>(std::aligned_alloc(32, bytes));
+
+        constexpr size_t alignment = 1 << 14;
+        m_buckets = static_cast<bucket *>(std::aligned_alloc(alignment, bytes));
         assert(m_buckets != nullptr);
         clear();
     }
 
     ~table()
     {
-        if (m_buckets != nullptr)
-            std::free(m_buckets);
+        std::free(m_buckets);
     }
 
     void clear()
@@ -255,18 +255,11 @@ class table
         m_generation &= AGE_MASK;
     }
 
-    bucket &probe(const uint64_t hash)
+    bucket &probe(const uint64_t hash) const
     {
         using uint128 = unsigned __int128;
         uint64_t index = (uint128(hash) * uint128(m_size)) >> 64;
         return m_buckets[index];
-    }
-
-    bucket *probe_ptr(const uint64_t hash)
-    {
-        using uint128 = unsigned __int128;
-        uint64_t index = (uint128(hash) * uint128(m_size)) >> 64;
-        return &m_buckets[index];
     }
 
     int16_t occupied() const
@@ -286,8 +279,8 @@ class table
         return count / NUM_BUCKETS;
     }
 
-    void prefetch(uint64_t key)
+    void prefetch(const uint64_t key) const
     {
-        __builtin_prefetch(probe_ptr(key));
+        __builtin_prefetch(&probe(key));
     }
 };

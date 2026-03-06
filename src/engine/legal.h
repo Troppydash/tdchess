@@ -68,8 +68,17 @@ inline bool is_legal(const chess::Board &board, const chess::Move move)
     {
         // TODO: better
         Movelist moves;
-        chess::movegen::generatePawnMoves<c, chess::movegen::MoveGenType::ALL>(
-            board, moves, pin_d, pin_hv, checkmask, occ_opp);
+        if (board.isCapture(move))
+        {
+            chess::movegen::generatePawnMoves<c, chess::movegen::MoveGenType::CAPTURE>(
+                board, moves, pin_d, pin_hv, checkmask, occ_opp);
+        }
+        else
+        {
+            chess::movegen::generatePawnMoves<c, chess::movegen::MoveGenType::QUIET>(
+                board, moves, pin_d, pin_hv, checkmask, occ_opp);
+        }
+
         return std::find(moves.begin(), moves.end(), move) != moves.end();
     }
 
