@@ -5,8 +5,118 @@
 namespace legal
 {
 
+template <chess::Color::underlying c, bool is_capture>
+static inline bool is_legal_pawn(const chess::Board &board, const chess::Move move, chess::Bitboard pin_hv,
+                          chess::Bitboard pin_d, chess::Bitboard checkmask, chess::Bitboard occ_opp)
+{
+    using namespace chess;
+
+    constexpr auto UP = make_direction(Direction::NORTH, c);
+    constexpr auto UP_LEFT = make_direction(Direction::NORTH_WEST, c);
+    constexpr auto UP_RIGHT = make_direction(Direction::NORTH_EAST, c);
+
+    constexpr auto RANK_B_PROMO = Rank::rank(Rank::RANK_7, c).bb();
+    constexpr auto RANK_PROMO = Rank::rank(Rank::RANK_8, c).bb();
+    constexpr auto DOUBLE_PUSH_RANK = Rank::rank(Rank::RANK_3, c).bb();
+
+    const auto pawns = chess::Bitboard::fromSquare(move.from());
+
+    // These pawns can maybe take Left or Right
+    const Bitboard pawns_lr = pawns & ~pin_hv;
+    const Bitboard unpinned_pawns_lr = pawns_lr & ~pin_d;
+    const Bitboard pinned_pawns_lr = pawns_lr & pin_d;
+
+    auto l_pawns = attacks::shift<UP_LEFT>(unpinned_pawns_lr) |
+                   (attacks::shift<UP_LEFT>(pinned_pawns_lr) & pin_d);
+    auto r_pawns = attacks::shift<UP_RIGHT>(unpinned_pawns_lr) |
+                   (attacks::shift<UP_RIGHT>(pinned_pawns_lr) & pin_d);
+
+    // Prune moves that don't capture a piece and are not on the checkmask.
+    l_pawns &= occ_opp & checkmask;
+    r_pawns &= occ_opp & checkmask;
+
+    // These pawns can walk Forward
+    const auto pawns_hv = pawns & ~pin_d;
+
+    const auto pawns_pinned_hv = pawns_hv & pin_hv;
+    const auto pawns_unpinned_hv = pawns_hv & ~pin_hv;
+
+    // Prune moves that are blocked by a piece
+    const auto single_push_unpinned = attacks::shift<UP>(pawns_unpinned_hv) & ~board.occ();
+    const auto single_push_pinned = attacks::shift<UP>(pawns_pinned_hv) & pin_hv & ~board.occ();
+
+    // Prune moves that are not on the checkmask.
+    Bitboard single_push = (single_push_unpinned | single_push_pinned) & checkmask;
+
+    auto to = Bitboard::fromSquare(move.to());
+
+    if (move.typeOf() == Move::PROMOTION)
+    {
+        if (pawns & RANK_B_PROMO)
+        {
+            Bitboard promo_left = l_pawns & RANK_PROMO;
+            Bitboard promo_right = r_pawns & RANK_PROMO;
+            Bitboard promo_push = single_push & RANK_PROMO;
+
+            if constexpr (is_capture)
+                if (promo_left & to)
+                    return true;
+
+            if constexpr (is_capture)
+                if (promo_right & to)
+                    return true;
+
+            if (promo_push & to)
+                return true;
+        }
+
+        return false;
+    }
+
+    if (move.typeOf() == chess::Move::ENPASSANT)
+    {
+        const Square ep = board.enpassantSq();
+        if (ep != Square::NO_SQ)
+        {
+            auto m = chess::movegen::generateEPMove(board, checkmask, pin_d, pawns_lr, ep, c);
+            for (const auto &move_ : m)
+            {
+                if (move == move_)
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    Bitboard double_push =
+        ((attacks::shift<UP>(single_push_unpinned & DOUBLE_PUSH_RANK) & ~board.occ()) |
+         (attacks::shift<UP>(single_push_pinned & DOUBLE_PUSH_RANK) & ~board.occ())) &
+        checkmask;
+
+    single_push &= ~RANK_PROMO;
+    l_pawns &= ~RANK_PROMO;
+    r_pawns &= ~RANK_PROMO;
+
+    if constexpr (is_capture)
+        if (l_pawns & to)
+            return true;
+
+    if constexpr (is_capture)
+        if (r_pawns & to)
+            return true;
+
+    if (single_push & to)
+        return true;
+
+    if (double_push & to)
+        return true;
+
+    return false;
+}
+
 template <chess::Color::underlying c>
-inline bool is_legal(const chess::Board &board, const chess::Move move)
+static inline bool is_legal(const chess::Board &board, const chess::Move move)
 {
     using namespace chess;
 
@@ -66,20 +176,20 @@ inline bool is_legal(const chess::Board &board, const chess::Move move)
     movable_square &= checkmask;
     if (piece == PieceType::PAWN)
     {
-        // TODO: better
-        Movelist moves;
-        if (board.isCapture(move))
+        bool is_capture = board.at(move.to()) != chess::Piece::NONE;
+        if (board.sideToMove() == chess::Color::WHITE)
         {
-            chess::movegen::generatePawnMoves<c, chess::movegen::MoveGenType::CAPTURE>(
-                board, moves, pin_d, pin_hv, checkmask, occ_opp);
-        }
-        else
-        {
-            chess::movegen::generatePawnMoves<c, chess::movegen::MoveGenType::QUIET>(
-                board, moves, pin_d, pin_hv, checkmask, occ_opp);
+            if (is_capture)
+                return is_legal_pawn<Color::WHITE, true>(board, move, pin_hv, pin_d, checkmask,
+                                                         occ_opp);
+            return is_legal_pawn<Color::WHITE, false>(board, move, pin_hv, pin_d, checkmask,
+                                                      occ_opp);
         }
 
-        return std::find(moves.begin(), moves.end(), move) != moves.end();
+        if (is_capture)
+            return is_legal_pawn<Color::BLACK, true>(board, move, pin_hv, pin_d, checkmask,
+                                                     occ_opp);
+        return is_legal_pawn<Color::BLACK, false>(board, move, pin_hv, pin_d, checkmask, occ_opp);
     }
 
     if (!(to & movable_square))
