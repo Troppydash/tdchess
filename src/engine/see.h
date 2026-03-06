@@ -71,7 +71,7 @@ struct see
         if (swap <= 0)
             return true;
 
-        std::pair<chess::Piece, chess::Square> removed[position.occ().count()];
+        static std::pair<chess::Piece, chess::Square> removed[64]{};
         int n_removed = 0;
 
         auto remove_piece = [&](chess::Square s) {
