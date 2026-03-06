@@ -40,7 +40,7 @@ constexpr int PAWN_STRUCTURE_SIZE = 1 << 10;
 constexpr int PAWN_STRUCTURE_SIZE_M1 = PAWN_STRUCTURE_SIZE - 1;
 using pawn_history = history_entry<int16_t, 20000>[PAWN_STRUCTURE_SIZE][12][64];
 
-using king_history = history_entry<int16_t, 20000>[2][16][64][64];
+using king_history = history_entry<int16_t, 20000>[16][16][12][64];
 
 constexpr int NON_PAWN_SIZE = 1 << 15;
 constexpr int NON_PAWN_SIZE_M1 = NON_PAWN_SIZE - 1;
@@ -48,7 +48,8 @@ using pawn_correction_history = history_entry<int16_t, CORRECTION_LIMIT>[2][NON_
 using non_pawn_correction_history = history_entry<int16_t, CORRECTION_LIMIT>[2][NON_PAWN_SIZE];
 
 using continuation_correction_history = history_entry<int16_t, CORRECTION_LIMIT>[12][64];
-using continuation_correction_history_full = history_entry<int16_t, CORRECTION_LIMIT>[13][64][12][64];
+using continuation_correction_history_full =
+    history_entry<int16_t, CORRECTION_LIMIT>[13][64][12][64];
 
 struct heuristics
 {
@@ -63,11 +64,12 @@ struct heuristics
     non_pawn_correction_history black_corrhist;
     continuation_correction_history_full cont_corr;
 
-    king_history king;
+    // king_history king;
 
     heuristics()
         : main_history{}, capture_history{}, killers{}, low_ply{}, continuation{}, pawn{},
-          correction_history{}, white_corrhist{}, black_corrhist{}, cont_corr{}, king{}
+          correction_history{}, white_corrhist{}, black_corrhist{}, cont_corr{}
+    // king{}
     {
     }
 
@@ -112,9 +114,9 @@ struct heuristics
             [move.to().index()]
                 .add_bonus(bonus);
 
-        // king[position.sideToMove()][get_king_bucket(position)][move.from().index()]
-        //     [move.to().index()]
-        //         .add_bonus(bonus);
+        // king[get_king_bucket(position, chess::Color::WHITE)][get_king_bucket(
+        //     position, chess::Color::BLACK)][position.at(move.from())][move.to().index()]
+        //     .add_bonus(bonus);
     }
 
     // clang-format off
@@ -130,9 +132,9 @@ struct heuristics
     };
     // clang-format on
 
-    int get_king_bucket(const chess::Board &pos) const
+    int get_king_bucket(const chess::Board &pos, chess::Color c) const
     {
-        return KING_BUCKET[pos.kingSq(pos.sideToMove()).index()];
+        return KING_BUCKET[pos.kingSq(c).index()];
     }
 
     [[nodiscard]] uint64_t get_pawn_key(const chess::Board &position) const

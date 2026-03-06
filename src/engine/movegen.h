@@ -205,7 +205,6 @@ class movegen
                     else
                     {
 
-
                         int32_t score = m_heuristics
                                             .main_history[m_position.sideToMove()]
                                                          [move.from().index()][move.to().index()]
@@ -366,6 +365,13 @@ class movegen
                                                                   .get_value() /
                                          2;
                         }
+
+                        // score +=
+                        //     m_heuristics.king
+                        //              [m_heuristics.get_king_bucket(m_position, chess::Color::WHITE)]
+                        //              [m_heuristics.get_king_bucket(m_position, chess::Color::BLACK)]
+                        //              [m_position.at(move.from())][move.to().index()]
+                        //         .get_value() ;
 
                         score = std::clamp(score, -32000, 32000);
                         move.setScore(score);
