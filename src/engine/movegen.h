@@ -54,7 +54,7 @@ class movegen
     int16_t m_prob_margin;
     bool m_skip_quiet = false;
 
-    chess::movegen::precompute m_precompute;
+    chess::movegen::precompute m_precompute{};
 
   public:
     explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
@@ -125,9 +125,9 @@ class movegen
             case movegen_stage::QCAPTURE_INIT:
             case movegen_stage::PROB_CAPTURE_INIT: {
                 // direct capture generation
+                m_precompute = chess::movegen::legalmoves_precompute(m_position);
                 m_moves.clear();
-                chess::movegen::legalmoves_capture(
-                    m_moves, m_position, chess::movegen::legalmoves_precompute(m_position));
+                chess::movegen::legalmoves_capture(m_moves, m_position, m_precompute);
                 m_capture_end = m_moves.size();
 
                 // score
@@ -272,8 +272,7 @@ class movegen
             case movegen_stage::QUIET_INIT: {
                 if (!m_skip_quiet)
                 {
-                    chess::movegen::legalmoves_quiet(
-                                     m_moves, m_position, chess::movegen::legalmoves_precompute(m_position));
+                    chess::movegen::legalmoves_quiet(m_moves, m_position, m_precompute);
 
                     uint64_t pawn_key = m_heuristics.get_pawn_key(m_position);
                     for (int i = m_capture_end; i < m_moves.size(); ++i)
@@ -285,12 +284,20 @@ class movegen
                             continue;
                         }
 
+                        if (move.typeOf() == chess::Move::PROMOTION && (move.promotionType() == chess::PieceType::QUEEN || move.promotionType() == chess::PieceType::KNIGHT))
+                        {
+                            move.setScore(IGNORE_SCORE);
+                            continue;
+                        }
+
                         // killer move
                         if (m_heuristics.killers[m_ply][0].first == move)
                         {
                             move.setScore(32500);
                             continue;
                         }
+                        // std::cout << m_position << std::endl;
+                        // std::cout << chess::uci::moveToUci(move) << std::endl;
 
                         assert(!m_heuristics.is_capture(m_position, move));
 
