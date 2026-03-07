@@ -134,7 +134,7 @@ class table_entry
 
         int age_diff = (MAX_AGE + age - GET_AGE(m_mask)) & AGE_MASK;
         if (flag == param::EXACT_FLAG || !MATCHES(hash, m_hash) ||
-            depth + 4 + 2 * is_pv > (m_depth + param::DEPTH_OFFSET) || age_diff >= 1)
+            depth + 5 + 2 * is_pv > (m_depth + param::DEPTH_OFFSET) || age_diff >= 1)
         {
             m_hash = BUCKET_HASH(hash);
             m_depth = int8_t(depth - param::DEPTH_OFFSET);
@@ -189,13 +189,13 @@ struct alignas(32) bucket
 
         int best_slot = 0;
         int worst_score = m_entries[0].m_depth + param::DEPTH_OFFSET -
-                          ((MAX_AGE + age - GET_AGE(m_entries[0].m_mask)) & AGE_MASK) * 8;
+                          ((MAX_AGE + age - GET_AGE(m_entries[0].m_mask)) & AGE_MASK) * 4;
 
         for (int i = 1; i < NUM_BUCKETS; ++i)
         {
             const auto &entry = m_entries[i];
             int age_diff = (MAX_AGE + age - GET_AGE(entry.m_mask)) & AGE_MASK;
-            int replacement_score = (entry.m_depth + param::DEPTH_OFFSET) - age_diff * 8;
+            int replacement_score = (entry.m_depth + param::DEPTH_OFFSET) - age_diff * 4;
 
             if (replacement_score < worst_score)
             {
