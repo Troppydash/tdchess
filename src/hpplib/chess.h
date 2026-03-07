@@ -1421,6 +1421,7 @@ class Movelist {
 
     void decr()
     {
+        assert(size_ > 0);
         size_ -= 1;
     }
 

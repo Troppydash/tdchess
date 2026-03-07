@@ -54,6 +54,7 @@ class movegen
 
     int16_t m_prob_margin;
     bool m_skip_quiet = false;
+    chess::Move m_killer = chess::Move::NO_MOVE;
 
     chess::movegen::precompute m_precompute{};
 
@@ -115,6 +116,7 @@ class movegen
             case movegen_stage::EPV:
             case movegen_stage::PROBPV: {
                 m_stage++;
+                // TODO: legal check here
                 if (m_pv_move != chess::Move::NO_MOVE)
                     return m_pv_move;
 
@@ -131,8 +133,11 @@ class movegen
                 chess::movegen::legalmoves_capture(m_moves, m_position, m_precompute);
 
                 // score
-                for (int i = 0; i < m_moves.size(); ++i)
+                for (int i = 0;; ++i)
                 {
+                    if (i >= m_moves.size())
+                        break;
+
                     auto &move = m_moves[i];
                     if (move == m_pv_move)
                     {
@@ -174,8 +179,11 @@ class movegen
 
                 // score
                 uint64_t pawn_key = m_heuristics.get_pawn_key(m_position);
-                for (int i = 0; i < m_moves.size(); ++i)
+                for (int i = 0;; ++i)
                 {
+                    if (i >= m_moves.size())
+                        break;
+
                     chess::Move &move = m_moves[i];
                     if (move == m_pv_move)
                     {
@@ -284,11 +292,11 @@ class movegen
                 m_stage++;
                 if (!m_skip_quiet)
                 {
-                    auto move = m_heuristics.killers[m_ply][0].first;
-                    if (move != chess::Move::NO_MOVE && legal::is_legal_full(m_position, move))
-                    {
-                        return move;
-                    }
+                    m_killer = m_heuristics.killers[m_ply][0].first;
+                    if (m_killer != chess::Move::NO_MOVE && m_killer != m_pv_move &&
+                        !m_heuristics.is_capture(m_position, m_killer) &&
+                        legal::is_legal_full(m_position, m_killer))
+                        return m_killer;
                 }
 
                 break;
@@ -300,8 +308,11 @@ class movegen
                     chess::movegen::legalmoves_quiet(m_moves, m_position, m_precompute);
 
                     uint64_t pawn_key = m_heuristics.get_pawn_key(m_position);
-                    for (int i = m_capture_end; i < m_moves.size(); ++i)
+                    for (int i = m_capture_end;; ++i)
                     {
+                        if (i >= m_moves.size())
+                            break;
+
                         chess::Move &move = m_moves[i];
                         if (move == m_pv_move)
                         {
@@ -320,8 +331,9 @@ class movegen
                             continue;
                         }
 
+                        assert(!m_heuristics.is_capture(m_position, move));
                         // killer move
-                        if (m_heuristics.killers[m_ply][0].first == move)
+                        if (move == m_killer)
                         {
                             std::swap(move, m_moves.back());
                             m_moves.decr();
@@ -368,8 +380,10 @@ class movegen
 
                         // score +=
                         //     m_heuristics.king
-                        //              [m_heuristics.get_king_bucket(m_position, chess::Color::WHITE)]
-                        //              [m_heuristics.get_king_bucket(m_position, chess::Color::BLACK)]
+                        //              [m_heuristics.get_king_bucket(m_position,
+                        //              chess::Color::WHITE)]
+                        //              [m_heuristics.get_king_bucket(m_position,
+                        //              chess::Color::BLACK)]
                         //              [m_position.at(move.from())][move.to().index()]
                         //         .get_value() ;
 

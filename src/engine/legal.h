@@ -231,7 +231,8 @@ static inline bool is_legal(const chess::Board &board, const chess::Move move)
         return bool(to & moves);
     }
 
-    assert(false);
+    std::cout << "impossible\n";
+    exit(0);
 }
 
 inline bool is_legal(const chess::Board &board, const chess::Move move)

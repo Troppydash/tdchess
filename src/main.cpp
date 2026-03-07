@@ -172,7 +172,7 @@ void position_test()
 
     nnue nnue{};
     nnue.incbin_load();
-    table tt{1024};
+    table tt{512};
     engine engine{nullptr, &nnue, &tt};
 
     for (auto &[pos, target] : positions)
@@ -183,7 +183,7 @@ void position_test()
         // param.movetime = 5000;
         // auto result = engine.search(chess::Board{pos}, param, true);
 
-        chess::Board start{"3r2k1/5ppb/r1pq1n2/pp5p/3Pp3/PQN1P1NP/1P3PP1/1RR3K1 w - - 4 29"};
+        chess::Board start{"r5bk/1pqnb1rp/2p1pppQ/p3P3/P2P1P2/3N1N2/1P3PBP/2R1R1K1 b - - 2 27"};
         search_param param;
         param.movetime = 5000;
         engine.search(start, param, true);
