@@ -116,8 +116,8 @@ class movegen
             case movegen_stage::EPV:
             case movegen_stage::PROBPV: {
                 m_stage++;
-                // TODO: legal check here
-                if (m_pv_move != chess::Move::NO_MOVE)
+                if (m_pv_move != chess::Move::NO_MOVE &&
+                    legal::is_legal_full(m_position, m_pv_move))
                     return m_pv_move;
 
                 break;
