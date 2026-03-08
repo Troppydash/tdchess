@@ -340,9 +340,8 @@ class uci_handler
                     }
                     else if (parts[i] == "ponder")
                     {
-                        // no limit
-                        m_param = search_param{};
-                        break;
+                        m_param.ponder = true;
+                        i += 1;
                     }
                 }
 
@@ -355,7 +354,8 @@ class uci_handler
             }
             else if (lead == "ponderhit")
             {
-                // ignore
+                m_param.ponder = false;
+                m_engine->ponderhit(m_position, m_param, true);
             }
             else if (lead == "perft")
             {
