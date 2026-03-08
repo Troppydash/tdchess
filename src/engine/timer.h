@@ -5,72 +5,57 @@
 class timer
 {
   private:
-    std::chrono::milliseconds m_target{};
-    std::chrono::milliseconds m_start{};
-    std::chrono::milliseconds m_opt_time{};
-    bool m_is_stopped = false;
-    bool m_forced_stopped = false;
+    std::atomic<std::chrono::milliseconds> m_target{};
+    std::atomic<std::chrono::milliseconds> m_start{};
+    std::atomic<std::chrono::milliseconds> m_opt_time{};
+    std::atomic<bool> m_is_stopped = false;
+    std::atomic<bool> m_forced_stopped = false;
 
   public:
     void stop()
     {
-        m_forced_stopped = true;
+        m_forced_stopped.store(true, std::memory_order_relaxed);
     }
 
     void unstop()
     {
-        m_forced_stopped = false;
+        m_forced_stopped.store(false, std::memory_order_relaxed);
     }
 
     bool is_opt_time_stop() const
     {
-        return now() >= m_opt_time;
+        return now() >= m_opt_time.load(std::memory_order_relaxed);
     }
 
     void start(int64_t ms, int64_t opt_ms)
     {
-        m_start = now();
-        m_target = m_start + std::chrono::milliseconds(ms);
-        m_opt_time = m_start + std::chrono::milliseconds(opt_ms);
-        m_is_stopped = false;
-        m_forced_stopped = false;
-    }
-
-    bool is_delta(int64_t ms) const
-    {
-        return now() - m_start >= std::chrono::milliseconds(ms);
-    }
-
-    void add(int ms)
-    {
-        m_target = m_target + std::chrono::milliseconds(ms);
-        m_is_stopped = false;
-    }
-
-    long delta()
-    {
-        return (now() - m_start).count();
+        m_start.store(now(), std::memory_order_relaxed);
+        m_target = m_start.load(std::memory_order_relaxed) + std::chrono::milliseconds(ms);
+        m_opt_time = m_start.load(std::memory_order_relaxed) + std::chrono::milliseconds(opt_ms);
+        m_is_stopped.store(false, std::memory_order_relaxed);
+        m_forced_stopped.store(false, std::memory_order_relaxed);
     }
 
     bool is_force_stopped() const
     {
-        return m_forced_stopped;
+        return m_forced_stopped.load(std::memory_order_relaxed);
     }
 
     bool is_stopped() const
     {
-        return m_is_stopped || m_forced_stopped;
+        return m_is_stopped.load(std::memory_order_relaxed) ||
+               m_forced_stopped.load(std::memory_order_relaxed);
     }
 
     void check()
     {
-        if (m_is_stopped || m_forced_stopped)
+        if (is_stopped())
             return;
 
         auto current = now();
-        if (current >= m_target)
+        if (current >= m_target.load(std::memory_order_relaxed))
         {
-            m_is_stopped = true;
+            m_is_stopped.store(true, std::memory_order_relaxed);
         }
     }
 

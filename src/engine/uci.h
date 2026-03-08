@@ -341,7 +341,6 @@ class uci_handler
                     else if (parts[i] == "ponder")
                     {
                         m_param.ponder = true;
-                        i += 1;
                     }
                 }
 

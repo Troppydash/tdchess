@@ -92,6 +92,6 @@ struct search_param
         int64_t max_time = time * 0.8 - move_overhead;
         int64_t optimum_time = opt_scale * time_left;
 
-        return {depth, max_time, optimum_time, true};
+        return {depth, std::max((int64_t)1, max_time), std::max((int64_t)1, optimum_time), true};
     }
 };
