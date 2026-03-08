@@ -246,6 +246,8 @@ class uci_handler
             }
             else if (lead == "position")
             {
+                stop_task();
+
                 size_t moves = 2;
                 if (parts[1] == "fen")
                 {
@@ -335,6 +337,12 @@ class uci_handler
                     {
                         m_param.binc = parse_i64(parts[i + 1]);
                         i += 1;
+                    }
+                    else if (parts[i] == "ponder")
+                    {
+                        // no limit
+                        m_param = search_param{};
+                        break;
                     }
                 }
 
