@@ -150,13 +150,13 @@ class movegen
                     assert(m_heuristics.is_capture(m_position, move));
 
                     auto captured = m_heuristics.get_capture(m_position, move);
-                    int16_t mvv = see::PIECE_VALUES[captured] * features::CAPTURE_MVV_SCALE;
+                    int mvv = see::PIECE_VALUES[captured] * features::CAPTURE_MVV_SCALE;
 
                     // capture history
-                    int16_t capture_score = m_heuristics
-                                                .capture_history[m_position.at(move.from())]
-                                                                [move.to().index()][captured]
-                                                .get_value();
+                    int capture_score = m_heuristics
+                                            .capture_history[m_position.at(move.from())]
+                                                            [move.to().index()][captured]
+                                            .get_value();
 
                     int32_t score = mvv + capture_score;
                     score = std::clamp(score, -32000, 32000);
