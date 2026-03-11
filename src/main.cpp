@@ -170,10 +170,10 @@ void position_test()
         // {"5rk1/1q2bpp1/4p2p/1N2P3/np5P/2r5/P3QPP1/1B1RR1K1 b - - 1 26", "c3c5 not c3c8, zero eval"},
         {"2r2rk1/1q2bp2/4p1pp/1N2P3/np5P/6Q1/P4PP1/1B1RR1K1 b - - 1 28", "b7b5, negative eval 1"}};
 
-    nnue nnue{};
-    nnue.incbin_load();
+    auto *nnue = new nnue2::net{};
+    nnue->incbin_load();
     table tt{512};
-    engine engine{nullptr, &nnue, &tt};
+    engine engine{nullptr, nnue, &tt};
 
     for (auto &[pos, target] : positions)
     {
@@ -184,13 +184,15 @@ void position_test()
         // auto result = engine.search(chess::Board{pos}, param, true);
 
         // chess::Board start{"3k4/8/5p1B/2R4p/q2p4/6P1/5P1K/8 w - - 0 44"};
-        chess::Board start{};
+        chess::Board start{"rn1qk2r/pbp1bppp/1p1p1n2/4p3/3P4/1PPBPN2/PB1N1PPP/R2QK2R w KQkq - 0 9"};
         search_param param;
         param.movetime = 5000;
         engine.search(start, param, true);
 
         std::cout << "oracle " << target << std::endl;
     }
+
+    delete nnue;
 }
 
 int main()

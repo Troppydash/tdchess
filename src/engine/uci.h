@@ -47,7 +47,7 @@ class uci_handler
   private:
     chess::Board m_position;
     endgame_table *m_endgame_table = nullptr;
-    nnue *m_nnue = nullptr;
+    nnue2::net *m_nnue = nullptr;
     int m_thread_aff = -1;
     int64_t m_move_overhead = 10;
     search_param m_param{};
@@ -60,7 +60,7 @@ class uci_handler
     explicit uci_handler()
     {
         m_tt = new table{128};
-        m_nnue = new nnue{};
+        m_nnue = new nnue2::net{};
         m_nnue->incbin_load();
         m_engine = std::make_unique<engine>(m_endgame_table, m_nnue, m_tt);
     }
@@ -190,7 +190,7 @@ class uci_handler
                 else if (parts[2] == "EVALFILE")
                 {
                     delete m_nnue;
-                    m_nnue = new nnue{};
+                    m_nnue = new nnue2::net{};
                     if (!m_nnue->load_network(parts[4]))
                     {
                         delete m_nnue;
@@ -285,9 +285,6 @@ class uci_handler
 
                 // to reset tt to empty
                 m_tt->clear();
-
-                // need to empty nnue
-                m_nnue->clear();
 
                 // reset engine
                 m_engine = std::make_unique<engine>(m_endgame_table, m_nnue, m_tt);
