@@ -6,8 +6,6 @@
 
 #include <arm_neon.h>
 
-// TODO: finny tables
-
 namespace simd
 {
 
@@ -35,31 +33,20 @@ constexpr Vec c(int16_t i)
     return vdupq_n_s16(i);
 }
 
-// constexpr Vec min(Vec a, Vec b)
-// {
-//     return vminq_s16(a, b);
-// }
-//
-// constexpr Vec max(Vec a, Vec b)
-// {
-//     return vmaxq_s16(a, b);
-// }
-//
-// constexpr Vec mul(Vec a, Vec b)
-// {
-//     return vmulq_s16(a, b);
-// }
-
 } // namespace simd
+
+// TODO: finny tables
 
 namespace nnue2
 {
+// TODO: try renegade net
 
 constexpr int HL = 1536;
 constexpr int KINGS = 8;
 constexpr int OUTPUTS = 1;
 constexpr int QA = 403;
 constexpr int QB = 81;
+constexpr int SCALE = 400;
 
 // clang-format off
 constexpr int KING_BUCKET[] = {
@@ -259,58 +246,49 @@ struct net
         assert(m_side[m_head].is_clean[0]);
 
         // compute output_bucket
-        // int bucket = (ref.occ().count() - 2) / 4;
+        // int bucket = std::min(OUTPUTS - 1, (ref.occ().count() - 2) / 4);
         int bucket = 0;
 
-        // TODO: improve evaluate
         const int16x8_t *__restrict us = (int16x8_t *)m_side[m_head].vals[ref.sideToMove()];
         const int16x8_t *__restrict them = (int16x8_t *)m_side[m_head].vals[ref.sideToMove() ^ 1];
 
         const int16x8_t *__restrict us_weights =
-            (int16x8_t *)m_network.output_weights + bucket * 2 * HL;
-        const int16x8_t *__restrict them_weights = us_weights + HL;
+            (int16x8_t *)(m_network.output_weights + bucket * 2 * HL);
+        const int16x8_t *__restrict them_weights =
+            (int16x8_t *)(m_network.output_weights + bucket * 2 * HL + HL);
 
         const int16x8_t v_zero = vdupq_n_s16(0);
         const int16x8_t v_qa = vdupq_n_s16(QA);
 
-        // int32x4_t us_output = vdupq_n_s32(0);
-        // int32x4_t them_output = vdupq_n_s32(0);
+        int32x4_t us_output1 = vdupq_n_s32(0);
+        int32x4_t us_output2 = vdupq_n_s32(0);
+        int32x4_t them_output1 = vdupq_n_s32(0);
+        int32x4_t them_output2 = vdupq_n_s32(0);
 
-        // for (int i = 0; i < HL / 8; i += 1)
-        // {
-        //     int16x8_t us_clamped = vminq_s16(vmaxq_s16(us[i], v_zero), v_qa);
-        //     int16x8_t them_clamped = vminq_s16(vmaxq_s16(them[i], v_zero), v_qa);
-        //
-        //     int16x8_t us_premult = vmulq_s16(us_clamped, us_weights[i]);
-        //     int16x8_t them_premult = vmulq_s16(them_clamped, them_weights[i]);
-        //
-        //     us_output = vmlal_s16(us_output, vget_low_s16(us_premult), vget_low_s16(us_clamped));
-        //     us_output = vmlal_s16(us_output, vget_high_s16(us_premult),
-        //     vget_high_s16(us_clamped));
-        //
-        //     them_output =
-        //         vmlal_s16(them_output, vget_low_s16(them_premult), vget_low_s16(them_clamped));
-        //     them_output =
-        //         vmlal_s16(them_output, vget_high_s16(them_premult), vget_high_s16(them_clamped));
-        // }
-
-        int64_t output = 0;
-        for (int i = 0; i < HL; ++i)
+        for (int i = 0; i < HL / 8; i += 1)
         {
-            output += std::clamp((int)m_side[m_head].vals[ref.sideToMove()][i], 0, QA) *
-                      std::clamp((int)m_side[m_head].vals[ref.sideToMove()][i], 0, QA) *
-                      m_network.output_weights[i];
+            int16x8_t us_clamped = vminq_s16(vmaxq_s16(us[i], v_zero), v_qa);
+            int16x8_t them_clamped = vminq_s16(vmaxq_s16(them[i], v_zero), v_qa);
 
-            output += std::clamp((int)m_side[m_head].vals[ref.sideToMove() ^ 1][i], 0, QA) *
-                      std::clamp((int)m_side[m_head].vals[ref.sideToMove() ^ 1][i], 0, QA) *
-                      m_network.output_weights[i + HL];
+            int16x8_t us_premult = vmulq_s16(us_clamped, us_weights[i]);
+            int16x8_t them_premult = vmulq_s16(them_clamped, them_weights[i]);
+
+            us_output1 = vmlal_s16(us_output1, vget_low_s16(us_premult), vget_low_s16(us_clamped));
+            us_output2 =
+                vmlal_s16(us_output2, vget_high_s16(us_premult), vget_high_s16(us_clamped));
+
+            them_output1 =
+                vmlal_s16(them_output1, vget_low_s16(them_premult), vget_low_s16(them_clamped));
+            them_output2 =
+                vmlal_s16(them_output2, vget_high_s16(them_premult), vget_high_s16(them_clamped));
         }
 
-        // int32_t output = vaddvq_s32(vaddq_s32(us_output, them_output));
+        int32_t output = vaddvq_s32(
+            vaddq_s32(vaddq_s32(us_output1, us_output2), vaddq_s32(them_output1, them_output2)));
         output /= QA;
         output += m_network.output_bias[bucket];
 
-        output *= 400;
+        output *= SCALE;
         output /= QA * QB;
 
         return std::clamp((int)output, -param::NNUE_MAX, (int)param::NNUE_MAX);
@@ -388,7 +366,7 @@ struct net
 
     void refresh(const chess::Board &position, chess::Color side, int index)
     {
-        memcpy(m_side[index].vals[side], m_network.feature_bias, HL * sizeof(int16_t));
+        fused_copy<HL>((simd::Vec *)m_side[index].vals[side], (simd::Vec *)m_network.feature_bias);
 
         chess::Square king_sq = position.kingSq(side);
         chess::Bitboard occ = position.occ();
@@ -450,6 +428,12 @@ struct net
     // }
 
     /// fused updates ///
+
+    template <int Size> static void fused_copy(simd::Vec *out, simd::Vec *in)
+    {
+        for (int i = 0; i < Size / simd::WIDTH; ++i)
+            out[i] = in[i];
+    }
 
     template <int Size> static void fused_add(simd::Vec *out, simd::Vec *in, simd::Vec *add)
     {
