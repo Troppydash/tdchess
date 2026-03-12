@@ -184,7 +184,7 @@ void position_test()
         // auto result = engine.search(chess::Board{pos}, param, true);
 
         // chess::Board start{"3k4/8/5p1B/2R4p/q2p4/6P1/5P1K/8 w - - 0 44"};
-        chess::Board start{"rn1qk2r/pbp1bppp/1p1p1n2/4p3/3P4/1PPBPN2/PB1N1PPP/R2QK2R w KQkq - 0 9"};
+        chess::Board start{"8/6p1/8/6k1/1p6/pPr2KP1/P4R1P/8 w - - 7 38"};
         search_param param;
         param.movetime = 5000;
         engine.search(start, param, true);
