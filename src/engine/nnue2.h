@@ -102,7 +102,7 @@ struct finny_table
     };
 
     // [is_mirrored][king_bucket]
-    entry ent[2][KINGS];
+    entry ent[2][KINGS][2];
 
     // full clear
     void clear()
@@ -385,7 +385,55 @@ struct net
         assert(king_sq.file() == king_sq.relative_square(side).file());
         int is_mirrored = king_sq.file() >= chess::File::FILE_E;
 
-        auto *ref = &m_table.ent[is_mirrored][bucket];
+        auto get_cost = [](const finny_table::entry *ref, chess::Color side,
+                           const chess::Board &board) {
+            int count = 0;
+
+            for (int color = 0; color <= 1; ++color)
+            {
+                for (int piece = 0; piece < 6; ++piece)
+                {
+                    chess::PieceType piece_type{(chess::PieceType::underlying)piece};
+
+                    auto old_bb = ref->bycolor[side][color] & ref->bypiece[side][piece];
+                    auto new_bb = board.pieces(piece_type, color);
+
+                    auto added = new_bb & ~old_bb;
+                    auto removed = old_bb & ~new_bb;
+
+                    count += std::max(added.count(), removed.count());
+                }
+            }
+
+            return count;
+        };
+
+        auto *ref = &m_table.ent[is_mirrored][bucket][0];
+        auto *ref_alt = &m_table.ent[is_mirrored][bucket][1];
+        if (board.hash() % 2 != 0 && get_cost(ref_alt, side, board) < get_cost(ref, side, board))
+            ref = ref_alt;
+
+        // if simple refresh is faster, do it
+        // +1 due to the initial fused_copy for biases
+        // if (get_cost(ref) > board.occ().count() + 1)
+        // {
+        //     fused_copy<HL>((simd::Vec *)m_side[index].vals[side],
+        //                    (simd::Vec *)m_network.feature_bias);
+        //
+        //     chess::Bitboard occ = board.occ();
+        //     while (occ)
+        //     {
+        //         chess::Square sq = occ.pop();
+        //         acc_add_piece(m_side[index], side, king_sq, board.at(sq), sq);
+        //     }
+        //
+        //     fused_copy<HL>((simd::Vec *)ref->acc.vals[side], (simd::Vec
+        //     *)m_side[index].vals[side]); ref->acc.is_clean[side] = true;
+        //     memcpy(&ref->bycolor[side], &board.occ_bb_, sizeof(ref->bycolor[0]));
+        //     memcpy(&ref->bypiece[side], &board.pieces_bb_, sizeof(ref->bypiece[0]));
+        //     m_side[index].is_clean[side] = true;
+        //     return;
+        // }
 
         // initial bias
         if (!ref->acc.is_clean[side])
@@ -431,23 +479,10 @@ struct net
         memcpy(&ref->bycolor[side], &board.occ_bb_, sizeof(ref->bycolor[0]));
         memcpy(&ref->bypiece[side], &board.pieces_bb_, sizeof(ref->bypiece[0]));
         m_side[index].is_clean[side] = true;
-
-        // fused_copy<HL>((simd::Vec *)m_side[index].vals[side], (simd::Vec
-        // *)m_network.feature_bias);
-        //
-        // chess::Square king_sq = board.kingSq(side);
-        // chess::Bitboard occ = board.occ();
-        // while (occ)
-        // {
-        //     chess::Square sq = occ.pop();
-        //     acc_add_piece(m_side[index], side, king_sq, board.at(sq), sq);
-        // }
-        // m_side[index].is_clean[side] = true;
     }
 
     void initialize(const chess::Board &position)
     {
-        // fully clear to reset state
         m_table.clear();
 
         m_head = 0;
@@ -459,7 +494,6 @@ struct net
 
     void clear()
     {
-        // TODO: explore clearing finny only here
         // m_table.clear();
     }
 
