@@ -28,33 +28,33 @@ constexpr Vec sub16(Vec a, Vec b)
 namespace nnue2
 {
 
-constexpr int HL = 1600;
-constexpr int KINGS = 14;
-constexpr int OUTPUTS = 8;
-constexpr int QA = 255;
-constexpr int QB = 64;
+constexpr int HL = 1536;
+constexpr int KINGS = 8;
+constexpr int OUTPUTS = 1;
+constexpr int QA = 403;
+constexpr int QB = 81;
 constexpr int SCALE = 400;
 
 // clang-format off
 constexpr int KING_BUCKET[] = {
-    0,  1,  2,  3,  3,  2,  1,  0,
-  4,  5,  6,  7,  7,  6,  5,  4,
-  8,  8,  9,  9,  9,  9,  8,  8,
- 10, 10, 11, 11, 11, 11, 10, 10,
- 10, 10, 11, 11, 11, 11, 10, 10,
- 12, 12, 13, 13, 13, 13, 12, 12,
- 12, 12, 13, 13, 13, 13, 12, 12,
- 12, 12, 13, 13, 13, 13, 12, 12,
+      0, 1, 2, 3, 11, 10, 9, 8,
+      4, 4, 5, 5, 13, 13, 12, 12,
+      6, 6, 6, 6, 14, 14, 14, 14,
+      6, 6, 6, 6, 14, 14, 14, 14,
+      7, 7, 7, 7, 15, 15, 15, 15,
+      7, 7, 7, 7, 15, 15, 15, 15,
+      7, 7, 7, 7, 15, 15, 15, 15,
+      7, 7, 7, 7, 15, 15, 15, 15,
 };
 // clang-format on
 
 constexpr int GET_KING_BUCKET(int sq)
 {
-    return KING_BUCKET[sq];
+    return KING_BUCKET[sq] % KINGS;
 }
 
 #include "../hpplib/incbin.h"
-INCBIN(Embed2, "../nets/renegade-net-35.bin");
+INCBIN(Embed2, "../nets/motor.bin");
 
 // horizontally mirrored, king input buckets, output buckets, single layer nnue
 struct network
@@ -259,7 +259,7 @@ struct net
         assert(m_side[m_head].is_clean[0]);
 
         // compute output_bucket
-        int bucket = (ref.occ().count() - 2) / 4;
+        int bucket = 0;
 
         const int16x8_t *__restrict us = (int16x8_t *)m_side[m_head].vals[ref.sideToMove()];
         const int16x8_t *__restrict them = (int16x8_t *)m_side[m_head].vals[ref.sideToMove() ^ 1];
@@ -321,7 +321,6 @@ struct net
                 {
                     // full refresh head
                     refresh(position, side, m_head);
-                    m_side[m_head].is_clean[side] = true;
                     break;
                 }
 
@@ -467,6 +466,9 @@ struct net
   private:
     static bool need_refresh(chess::Color side, chess::Square old_king, chess::Square new_king)
     {
+        if (old_king == new_king)
+            return false;
+
         if ((old_king.index() & 0b100) != (new_king.index() & 0b100))
             return true;
 
