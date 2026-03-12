@@ -3193,7 +3193,7 @@ class Board {
 
     virtual void removePiece(Piece piece, Square sq) { removePieceInternal(piece, sq); }
 
-   protected:
+   public:
     std::vector<State> prev_states_;
 
     std::array<Bitboard, 6> pieces_bb_ = {};

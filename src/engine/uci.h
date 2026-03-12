@@ -286,6 +286,8 @@ class uci_handler
                 // to reset tt to empty
                 m_tt->clear();
 
+                m_nnue->clear();
+
                 // reset engine
                 m_engine = std::make_unique<engine>(m_endgame_table, m_nnue, m_tt);
             }

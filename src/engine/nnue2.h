@@ -11,7 +11,7 @@ namespace simd
 
 using Vec = int16x8_t;
 constexpr size_t WIDTH = 8;
-constexpr size_t ALIGN = WIDTH * 8;
+constexpr size_t ALIGN = 64;
 
 constexpr Vec add16(Vec a, Vec b)
 {
@@ -23,51 +23,38 @@ constexpr Vec sub16(Vec a, Vec b)
     return vsubq_s16(a, b);
 }
 
-constexpr Vec zero()
-{
-    return vdupq_n_s16(0);
-}
-
-constexpr Vec c(int16_t i)
-{
-    return vdupq_n_s16(i);
-}
-
 } // namespace simd
-
-// TODO: finny tables
 
 namespace nnue2
 {
-// TODO: try renegade net
 
-constexpr int HL = 1536;
-constexpr int KINGS = 8;
-constexpr int OUTPUTS = 1;
-constexpr int QA = 403;
-constexpr int QB = 81;
+constexpr int HL = 1600;
+constexpr int KINGS = 14;
+constexpr int OUTPUTS = 8;
+constexpr int QA = 255;
+constexpr int QB = 64;
 constexpr int SCALE = 400;
 
 // clang-format off
 constexpr int KING_BUCKET[] = {
-     0, 1, 2, 3, 11, 10, 9, 8,
-     4, 4, 5, 5, 13, 13, 12, 12,
-     6, 6, 6, 6, 14, 14, 14, 14,
-     6, 6, 6, 6, 14, 14, 14, 14,
-     7, 7, 7, 7, 15, 15, 15, 15,
-     7, 7, 7, 7, 15, 15, 15, 15,
-     7, 7, 7, 7, 15, 15, 15, 15,
-     7, 7, 7, 7, 15, 15, 15, 15,
+    0,  1,  2,  3,  3,  2,  1,  0,
+  4,  5,  6,  7,  7,  6,  5,  4,
+  8,  8,  9,  9,  9,  9,  8,  8,
+ 10, 10, 11, 11, 11, 11, 10, 10,
+ 10, 10, 11, 11, 11, 11, 10, 10,
+ 12, 12, 13, 13, 13, 13, 12, 12,
+ 12, 12, 13, 13, 13, 13, 12, 12,
+ 12, 12, 13, 13, 13, 13, 12, 12,
 };
 // clang-format on
 
 constexpr int GET_KING_BUCKET(int sq)
 {
-    return KING_BUCKET[sq] % KINGS;
+    return KING_BUCKET[sq];
 }
 
 #include "../hpplib/incbin.h"
-INCBIN(Embed2, "../nets/motor.bin");
+INCBIN(Embed2, "../nets/renegade-net-35.bin");
 
 // horizontally mirrored, king input buckets, output buckets, single layer nnue
 struct network
@@ -103,13 +90,39 @@ struct accumulator
     update up;
 };
 
+struct finny_table
+{
+    struct entry
+    {
+        accumulator acc;
+        // [side][color]
+        chess::Bitboard bycolor[2][2];
+        // [side][piece_type]
+        chess::Bitboard bypiece[2][6];
+    };
+
+    // [is_mirrored][king_bucket]
+    entry ent[2][KINGS];
+
+    // full clear
+    void clear()
+    {
+        memset(ent, 0, sizeof(ent));
+    }
+};
+
 struct net
 {
     network m_network{};
     accumulator m_side[param::MAX_DEPTH]{};
     int m_head{0};
 
-    net() = default;
+    finny_table m_table{};
+
+    net()
+    {
+        clear();
+    };
 
     void incbin_load() const
     {
@@ -246,8 +259,7 @@ struct net
         assert(m_side[m_head].is_clean[0]);
 
         // compute output_bucket
-        // int bucket = std::min(OUTPUTS - 1, (ref.occ().count() - 2) / 4);
-        int bucket = 0;
+        int bucket = (ref.occ().count() - 2) / 4;
 
         const int16x8_t *__restrict us = (int16x8_t *)m_side[m_head].vals[ref.sideToMove()];
         const int16x8_t *__restrict them = (int16x8_t *)m_side[m_head].vals[ref.sideToMove() ^ 1];
@@ -364,27 +376,92 @@ struct net
         }
     }
 
-    void refresh(const chess::Board &position, chess::Color side, int index)
+    void refresh(const chess::Board &board, chess::Color side, int index)
     {
-        fused_copy<HL>((simd::Vec *)m_side[index].vals[side], (simd::Vec *)m_network.feature_bias);
+        // TODO: explore perf by skipping finny refresh
 
-        chess::Square king_sq = position.kingSq(side);
-        chess::Bitboard occ = position.occ();
-        while (occ)
+        // finny table refresh
+        chess::Square king_sq = board.kingSq(side);
+        int bucket = GET_KING_BUCKET(king_sq.relative_square(side).index());
+        assert(king_sq.file() == king_sq.relative_square(side).file());
+        int is_mirrored = king_sq.file() >= chess::File::FILE_E;
+
+        auto *ref = &m_table.ent[is_mirrored][bucket];
+
+        // initial bias
+        if (!ref->acc.is_clean[side])
         {
-            chess::Square sq = occ.pop();
-            acc_add_piece(m_side[index], side, king_sq, position.at(sq), sq);
+            fused_copy<HL>((simd::Vec *)ref->acc.vals[side], (simd::Vec *)m_network.feature_bias);
+            ref->acc.is_clean[side] = true;
         }
+
+        for (int color = 0; color <= 1; ++color)
+        {
+            for (int piece = 0; piece < 6; ++piece)
+            {
+                chess::PieceType piece_type{(chess::PieceType::underlying)piece};
+
+                auto old_bb = ref->bycolor[side][color] & ref->bypiece[side][piece];
+                auto new_bb = board.pieces(piece_type, color);
+
+                auto added = new_bb & ~old_bb;
+                auto removed = old_bb & ~new_bb;
+
+                while (added && removed)
+                {
+                    chess::Square sq_to = added.pop();
+                    chess::Square sq_from = removed.pop();
+                    acc_move_piece(ref->acc, side, king_sq, {piece_type, color}, sq_from, sq_to);
+                }
+
+                while (added)
+                {
+                    chess::Square sq = added.pop();
+                    acc_add_piece(ref->acc, side, king_sq, {piece_type, color}, sq);
+                }
+
+                while (removed)
+                {
+                    chess::Square sq = removed.pop();
+                    acc_remove_piece(ref->acc, side, king_sq, {piece_type, color}, sq);
+                }
+            }
+        }
+
+        fused_copy<HL>((simd::Vec *)m_side[index].vals[side], (simd::Vec *)ref->acc.vals[side]);
+        memcpy(&ref->bycolor[side], &board.occ_bb_, sizeof(ref->bycolor[0]));
+        memcpy(&ref->bypiece[side], &board.pieces_bb_, sizeof(ref->bypiece[0]));
         m_side[index].is_clean[side] = true;
+
+        // fused_copy<HL>((simd::Vec *)m_side[index].vals[side], (simd::Vec
+        // *)m_network.feature_bias);
+        //
+        // chess::Square king_sq = board.kingSq(side);
+        // chess::Bitboard occ = board.occ();
+        // while (occ)
+        // {
+        //     chess::Square sq = occ.pop();
+        //     acc_add_piece(m_side[index], side, king_sq, board.at(sq), sq);
+        // }
+        // m_side[index].is_clean[side] = true;
     }
 
     void initialize(const chess::Board &position)
     {
+        // fully clear to reset state
+        m_table.clear();
+
         m_head = 0;
         m_side[0].up.king_sq[0] = position.kingSq(chess::Color::WHITE);
         m_side[0].up.king_sq[1] = position.kingSq(chess::Color::BLACK);
         refresh(position, chess::Color::WHITE, 0);
         refresh(position, chess::Color::BLACK, 0);
+    }
+
+    void clear()
+    {
+        // TODO: explore clearing finny only here
+        // m_table.clear();
     }
 
   private:
@@ -420,51 +497,63 @@ struct net
                       feature_lookup(king_sq, side, piece, square));
     }
 
-    // void acc_remove_piece(accumulator &acc, chess::Color side, chess::Square king_sq,
-    //                       chess::Piece piece, chess::Square square)
-    // {
-    //     fused_sub<HL>(simd::load16(acc.vals[side]), simd::load16(acc.vals[side]),
-    //                   feature_lookup(king_sq, side, piece, square));
-    // }
+    void acc_remove_piece(accumulator &acc, chess::Color side, chess::Square king_sq,
+                          chess::Piece piece, chess::Square square)
+    {
+        fused_sub<HL>((simd::Vec *)(acc.vals[side]), (simd::Vec *)(acc.vals[side]),
+                      feature_lookup(king_sq, side, piece, square));
+    }
+
+    void acc_move_piece(accumulator &acc, chess::Color side, chess::Square king_sq,
+                        chess::Piece piece, chess::Square square_from, chess::Square square_to)
+    {
+        fused_add_sub<HL>((simd::Vec *)acc.vals[side], (simd::Vec *)acc.vals[side],
+                          feature_lookup(king_sq, side, piece, square_to),
+                          feature_lookup(king_sq, side, piece, square_from));
+    }
 
     /// fused updates ///
 
-    template <int Size> static void fused_copy(simd::Vec *out, simd::Vec *in)
+    template <int Size> static void fused_copy(simd::Vec *out, const simd::Vec *in)
     {
         for (int i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = in[i];
     }
 
-    template <int Size> static void fused_add(simd::Vec *out, simd::Vec *in, simd::Vec *add)
+    template <int Size>
+    static void fused_add(simd::Vec *out, const simd::Vec *in, const simd::Vec *add)
     {
         for (int i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::add16(in[i], add[i]);
     }
 
-    template <int Size> static void fused_sub(simd::Vec *out, simd::Vec *in, simd::Vec *sub)
+    template <int Size>
+    static void fused_sub(simd::Vec *out, const simd::Vec *in, const simd::Vec *sub)
     {
         for (int i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::sub16(in[i], sub[i]);
     }
 
     template <int Size>
-    static void fused_add_sub(simd::Vec *out, simd::Vec *in, simd::Vec *add, simd::Vec *sub)
+    static void fused_add_sub(simd::Vec *out, const simd::Vec *in, const simd::Vec *add,
+                              const simd::Vec *sub)
     {
         for (int i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::sub16(simd::add16(in[i], add[i]), sub[i]);
     }
 
     template <int Size>
-    static void fused_add_sub_sub(simd::Vec *out, simd::Vec *in, simd::Vec *add, simd::Vec *sub1,
-                                  simd::Vec *sub2)
+    static void fused_add_sub_sub(simd::Vec *out, const simd::Vec *in, const simd::Vec *add,
+                                  const simd::Vec *sub1, const simd::Vec *sub2)
     {
         for (int i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::sub16(simd::sub16(simd::add16(in[i], add[i]), sub1[i]), sub2[i]);
     }
 
     template <int Size>
-    static void fused_add_add_sub_sub(simd::Vec *out, simd::Vec *in, simd::Vec *add1,
-                                      simd::Vec *add2, simd::Vec *sub1, simd::Vec *sub2)
+    static void fused_add_add_sub_sub(simd::Vec *out, const simd::Vec *in, const simd::Vec *add1,
+                                      const simd::Vec *add2, const simd::Vec *sub1,
+                                      const simd::Vec *sub2)
     {
         for (int i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::sub16(
