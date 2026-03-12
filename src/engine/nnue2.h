@@ -90,6 +90,7 @@ struct accumulator
     update up;
 };
 
+constexpr int FINNY_TABLE_ENTRIES = 2;
 struct finny_table
 {
     struct entry
@@ -102,7 +103,7 @@ struct finny_table
     };
 
     // [is_mirrored][king_bucket]
-    entry ent[2][KINGS][2];
+    entry ent[2][KINGS][FINNY_TABLE_ENTRIES];
 
     // full clear
     void clear()
@@ -377,63 +378,73 @@ struct net
 
     void refresh(const chess::Board &board, chess::Color side, int index)
     {
-        // TODO: explore perf by skipping finny refresh
-
         // finny table refresh
         chess::Square king_sq = board.kingSq(side);
         int bucket = GET_KING_BUCKET(king_sq.relative_square(side).index());
         assert(king_sq.file() == king_sq.relative_square(side).file());
         int is_mirrored = king_sq.file() >= chess::File::FILE_E;
 
-        auto get_cost = [](const finny_table::entry *ref, chess::Color side,
-                           const chess::Board &board) {
-            int count = 0;
+        auto *ref = &m_table.ent[is_mirrored][bucket][0];
 
+        // select better table entry randomly
+        if (board.hash() % 2)
+        {
+            auto *ref_alt = &m_table.ent[is_mirrored][bucket][1];
+
+            int count[2] = {0, 0};
             for (int color = 0; color <= 1; ++color)
             {
                 for (int piece = 0; piece < 6; ++piece)
                 {
                     chess::PieceType piece_type{(chess::PieceType::underlying)piece};
-
-                    auto old_bb = ref->bycolor[side][color] & ref->bypiece[side][piece];
                     auto new_bb = board.pieces(piece_type, color);
 
-                    auto added = new_bb & ~old_bb;
-                    auto removed = old_bb & ~new_bb;
+                    {
+                        auto old_bb = ref->bycolor[side][color] & ref->bypiece[side][piece];
+                        auto added = new_bb & ~old_bb;
+                        auto removed = old_bb & ~new_bb;
+                        count[0] += std::max(added.count(), removed.count());
+                    }
 
-                    count += std::max(added.count(), removed.count());
+                    {
+                        auto old_bb = ref_alt->bycolor[side][color] & ref_alt->bypiece[side][piece];
+                        auto added = new_bb & ~old_bb;
+                        auto removed = old_bb & ~new_bb;
+                        count[1] += std::max(added.count(), removed.count());
+                    }
                 }
             }
 
-            return count;
-        };
+            // // if simple refresh is faster, do it
+            // // +1 due to the initial fused_copy for biases
+            // if (std::min(count[0], count[1]) > board.occ().count() + 1) [[unlikely]]
+            // {
+            //     // update the worst one
+            //     if (count[1] > count[0])
+            //         ref = ref_alt;
+            //
+            //     fused_copy<HL>((simd::Vec *)m_side[index].vals[side],
+            //                    (simd::Vec *)m_network.feature_bias);
+            //
+            //     chess::Bitboard occ = board.occ();
+            //     while (occ)
+            //     {
+            //         chess::Square sq = occ.pop();
+            //         acc_add_piece(m_side[index], side, king_sq, board.at(sq), sq);
+            //     }
+            //
+            //     fused_copy<HL>((simd::Vec *)ref->acc.vals[side],
+            //                    (simd::Vec *)m_side[index].vals[side]);
+            //     ref->acc.is_clean[side] = true;
+            //     memcpy(&ref->bycolor[side], &board.occ_bb_, sizeof(ref->bycolor[0]));
+            //     memcpy(&ref->bypiece[side], &board.pieces_bb_, sizeof(ref->bypiece[0]));
+            //     m_side[index].is_clean[side] = true;
+            //     return;
+            // }
 
-        auto *ref = &m_table.ent[is_mirrored][bucket][0];
-        auto *ref_alt = &m_table.ent[is_mirrored][bucket][1];
-        if (board.hash() % 2 != 0 && get_cost(ref_alt, side, board) < get_cost(ref, side, board))
-            ref = ref_alt;
-
-        // if simple refresh is faster, do it
-        // +1 due to the initial fused_copy for biases
-        // if (get_cost(ref) > board.occ().count() + 1)
-        // {
-        //     fused_copy<HL>((simd::Vec *)m_side[index].vals[side],
-        //                    (simd::Vec *)m_network.feature_bias);
-        //
-        //     chess::Bitboard occ = board.occ();
-        //     while (occ)
-        //     {
-        //         chess::Square sq = occ.pop();
-        //         acc_add_piece(m_side[index], side, king_sq, board.at(sq), sq);
-        //     }
-        //
-        //     fused_copy<HL>((simd::Vec *)ref->acc.vals[side], (simd::Vec
-        //     *)m_side[index].vals[side]); ref->acc.is_clean[side] = true;
-        //     memcpy(&ref->bycolor[side], &board.occ_bb_, sizeof(ref->bycolor[0]));
-        //     memcpy(&ref->bypiece[side], &board.pieces_bb_, sizeof(ref->bypiece[0]));
-        //     m_side[index].is_clean[side] = true;
-        //     return;
-        // }
+            if (count[1] < count[0])
+                ref = ref_alt;
+        }
 
         // initial bias
         if (!ref->acc.is_clean[side])
@@ -483,6 +494,7 @@ struct net
 
     void initialize(const chess::Board &position)
     {
+        // empty, since likely to be not close
         m_table.clear();
 
         m_head = 0;
@@ -494,7 +506,7 @@ struct net
 
     void clear()
     {
-        // m_table.clear();
+        // nothing
     }
 
   private:
