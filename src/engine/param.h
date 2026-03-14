@@ -5,7 +5,7 @@ namespace param
 {
 
 constexpr int32_t MAX_DEPTH = 220;
-constexpr int32_t TB_DEPTH = 219;
+// constexpr int32_t TB_DEPTH = 219;
 constexpr int32_t QDEPTH = 0;
 constexpr int32_t UNSEARCHED_DEPTH = -19;
 constexpr int32_t UNINIT_DEPTH = -20;
@@ -13,12 +13,12 @@ constexpr int32_t DEPTH_OFFSET = 100;
 
 constexpr int16_t INF = 32760;
 constexpr int16_t CHECKMATE = INF - MAX_DEPTH - 10;
-constexpr int16_t NNUE_MAX = CHECKMATE - 10;
+// Higher than NNUE but below CHECKMATE
+constexpr int16_t VALUE_SYZYGY = CHECKMATE - 1;
+constexpr int16_t NNUE_MAX = VALUE_SYZYGY - MAX_DEPTH;
 constexpr int16_t VALUE_INF = INF;
 constexpr int16_t VALUE_NONE = VALUE_INF + 1;
 constexpr int16_t VALUE_DRAW = 0;
-
-constexpr int16_t VALUE_SYZYGY = NNUE_MAX - 10;
 
 constexpr size_t NUMBER_KILLERS = 1;
 

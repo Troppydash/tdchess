@@ -12,8 +12,8 @@ struct tb_cache_entry
     int16_t move50 = 0;
 };
 
-constexpr int TB_MASK_BITS = 16;
-constexpr uint64_t TB_ENTRIES = 1 << TB_MASK_BITS; // 1mb
+constexpr int TB_MASK_BITS = 14;
+constexpr uint64_t TB_ENTRIES = 1 << TB_MASK_BITS;
 constexpr uint64_t TB_MASK = TB_ENTRIES - 1;
 
 struct endgame_table
@@ -38,9 +38,8 @@ struct endgame_table
     bool is_stored(const chess::Board &position) const
     {
         int pieces = position.occ().count();
-        return 3 <= pieces && pieces <= 5 &&
-               !(position.castlingRights().has(chess::Color::WHITE) ||
-                 position.castlingRights().has(chess::Color::BLACK));
+        return pieces <= 5 && !(position.castlingRights().has(chess::Color::WHITE) ||
+                                position.castlingRights().has(chess::Color::BLACK));
     }
 
     std::pair<std::vector<chess::Move>, int32_t> probe_dtm(const chess::Board &reference,
@@ -177,20 +176,18 @@ struct endgame_table
     int16_t probe_wdl(const chess::Board &position)
     {
         // technically this is wrong, since we don't have dtz data, but yolo
-
         tb_cache_entry &cache = m_entries[position.hash() & TB_MASK];
         if (cache.hash == position.hash())
         {
             // assuming the wdl is computed against the dtz clock, fix later if needed
-
-            if (std::abs(cache.score) == 2 && (int)position.halfMoveClock() <= cache.move50)
-                return cache.score;
-
-            if (std::abs(cache.score) == 1 && (int)position.halfMoveClock() >= cache.move50)
-                return cache.score;
-
-            if (cache.score == 0)
-                return cache.score;
+            // if (std::abs(cache.score) == 2 && (int)position.halfMoveClock() <= cache.move50)
+            //     return cache.score;
+            //
+            // if (std::abs(cache.score) == 1 && (int)position.halfMoveClock() >= cache.move50)
+            //     return cache.score;
+            //
+            // if (cache.score == 0)
+            return cache.score;
         }
 
         unsigned ep =
@@ -235,7 +232,6 @@ struct endgame_table
             std::cout << "impossible wdl value\n";
             exit(0);
         }
-
 
         cache.hash = position.hash();
         cache.score = ret;
