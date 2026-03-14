@@ -184,14 +184,18 @@ class rep_filter
 
     void load(const chess::Board &position)
     {
-        current.clear();
-        history.clear();
-
         const auto &states = position.get_prev_state();
         const int maxDist = std::min((int)position.halfMoveClock(), (int)states.size());
         for (int i = 1; i <= maxDist; ++i)
         {
             history.set(states[states.size() - i].hash);
         }
+    }
+
+    void clear()
+    {
+        current.clear();
+        history.clear();
+
     }
 };

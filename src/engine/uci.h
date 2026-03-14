@@ -88,6 +88,8 @@ class uci_handler
 
             std::cout << m_engine->m_stats.nodes_searched << " nodes "
                       << m_engine->m_stats.get_nps() << " nps" << std::endl;
+
+            m_engine->post_search();
             return;
         }
 
@@ -116,6 +118,7 @@ class uci_handler
                 m_tt->clear();
                 m_engine = std::make_unique<engine>(m_endgame_table, m_nnue, m_tt);
                 m_engine->search(position, param, true);
+                m_engine->post_search();
             }
 
             return;
@@ -439,6 +442,8 @@ class uci_handler
             }
             std::cout << std::endl;
             std::cout << std::flush;
+
+            m_engine->post_search();
         });
     }
 
@@ -457,6 +462,8 @@ class uci_handler
 
             std::cout << m_engine->m_stats.nodes_searched << " nodes "
                       << m_engine->m_stats.get_nps() << " nps" << std::endl;
+
+            m_engine->post_search();
         });
     }
 };

@@ -494,9 +494,6 @@ struct net
 
     void initialize(const chess::Board &position)
     {
-        // empty, since likely to be not close
-        m_table.clear();
-
         m_head = 0;
         m_side[0].up.king_sq[0] = position.kingSq(chess::Color::WHITE);
         m_side[0].up.king_sq[1] = position.kingSq(chess::Color::BLACK);
@@ -507,6 +504,7 @@ struct net
     void clear()
     {
         // nothing
+
     }
 
   private:

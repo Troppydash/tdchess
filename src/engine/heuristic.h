@@ -17,7 +17,7 @@ template <typename I, I LIMIT> struct history_entry
 
     void decay()
     {
-        value /= 8;
+        value = value * 15 / 16;
     }
 };
 
@@ -190,5 +190,31 @@ struct heuristics
 
     void begin()
     {
+        // for (auto &side : correction_history)
+        //     for (auto &entry : side)
+        //         entry.decay();
+        //
+        // for (auto &side : white_corrhist)
+        //     for (auto &entry : side)
+        //         entry.decay();
+        //
+        // for (auto &side : black_corrhist)
+        //     for (auto &entry : side)
+        //         entry.decay();
+        //
+        // for (auto &a : cont_corr)
+        //     for (auto &b : a)
+        //         for (auto &c : b)
+        //             for (auto &entry : c)
+        //                 entry.decay();
+        //
+        // for (auto &killer : killers)
+        //     killer[0].first = chess::Move::NO_MOVE;
+        //
+        // for (auto &a : low_ply)
+        //     for (auto &b : a)
+        //         for (auto &c : b)
+        //             for (auto &entry : c)
+        //                 entry.decay();
     }
 };
