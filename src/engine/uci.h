@@ -81,7 +81,7 @@ class uci_handler
         {
             // depth x
             search_param param{};
-            param.depth = 22;
+            param.depth = 24;
             chess::Board position{};
             search_param temp_param = param;
             m_engine->search(position, temp_param, false);

@@ -136,19 +136,6 @@ struct heuristics
         return KING_BUCKET[pos.kingSq(c).index()];
     }
 
-    [[nodiscard]] uint64_t get_pawn_key(const chess::Board &position) const
-    {
-        auto pieces = position.pieces(chess::PieceType::PAWN);
-        uint64_t pawn_key = 0;
-        while (pieces)
-        {
-            const chess::Square sq = pieces.pop();
-            pawn_key ^= chess::Zobrist::piece(position.at(sq), sq);
-        }
-
-        return pawn_key;
-    }
-
     void update_capture_history(const chess::Board &position, const chess::Move &move, int bonus)
     {
         capture_history[position.at(move.from())][move.to().index()][get_capture(position, move)]
@@ -160,32 +147,12 @@ struct heuristics
         killers[ply][0] = {killer, is_mate};
     }
 
-    void update_corr_hist_score(const chess::Board &position, int bonus)
+    void update_corr_hist_score(const chess::Board &position, uint64_t pawn_key, uint64_t white_key,
+                                uint64_t black_key, int bonus)
     {
-        correction_history[position.sideToMove()][get_pawn_key(position) & NON_PAWN_SIZE_M1]
-            .add_bonus(bonus);
-        white_corrhist[position.sideToMove()]
-                      [get_corrhist_key(position, chess::Color::WHITE) & NON_PAWN_SIZE_M1]
-                          .add_bonus(bonus);
-        black_corrhist[position.sideToMove()]
-                      [get_corrhist_key(position, chess::Color::BLACK) & NON_PAWN_SIZE_M1]
-                          .add_bonus(bonus);
-    }
-
-    uint64_t get_corrhist_key(const chess::Board &position, chess::Color color) const
-    {
-        auto pieces = position.us(color);
-        auto pawns = position.pieces(chess::PieceType::PAWN);
-        pieces = pieces & ~pawns;
-
-        uint64_t key = 0;
-        while (pieces)
-        {
-            const chess::Square sq = pieces.pop();
-            key ^= chess::Zobrist::piece(position.at(sq), sq);
-        }
-
-        return key;
+        correction_history[position.sideToMove()][pawn_key & NON_PAWN_SIZE_M1].add_bonus(bonus);
+        white_corrhist[position.sideToMove()][white_key & NON_PAWN_SIZE_M1].add_bonus(bonus);
+        black_corrhist[position.sideToMove()][black_key & NON_PAWN_SIZE_M1].add_bonus(bonus);
     }
 
     void begin()
