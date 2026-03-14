@@ -105,6 +105,11 @@ struct finny_table
     // [is_mirrored][king_bucket]
     entry ent[2][KINGS][FINNY_TABLE_ENTRIES];
 
+    finny_table()
+    {
+        clear();
+    }
+
     // full clear
     void clear()
     {
@@ -421,7 +426,7 @@ struct net
             {
                 // update the worst one
                 // if (count[1] > count[0])
-                    // ref = ref_alt;
+                // ref = ref_alt;
 
                 fused_copy<HL>((simd::Vec *)m_side[index].vals[side],
                                (simd::Vec *)m_network.feature_bias);
