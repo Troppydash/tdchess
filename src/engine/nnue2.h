@@ -270,42 +270,50 @@ struct net
         // compute output_bucket
         int bucket = 0;
 
-        const int16x8_t *__restrict us = (int16x8_t *)m_side[m_head].vals[ref.sideToMove()];
-        const int16x8_t *__restrict them = (int16x8_t *)m_side[m_head].vals[ref.sideToMove() ^ 1];
+        const int16x8_t *__restrict us =
+            (int16x8_t *)__builtin_assume_aligned(m_side[m_head].vals[ref.sideToMove()], 64);
+        const int16x8_t *__restrict them =
+            (int16x8_t *)__builtin_assume_aligned(m_side[m_head].vals[ref.sideToMove() ^ 1], 64);
 
         const int16x8_t *__restrict us_weights =
-            (int16x8_t *)(m_network.output_weights + bucket * 2 * HL);
-        const int16x8_t *__restrict them_weights =
-            (int16x8_t *)(m_network.output_weights + bucket * 2 * HL + HL);
+            (int16x8_t *)__builtin_assume_aligned((m_network.output_weights + bucket * 2 * HL), 64);
+        const int16x8_t *__restrict them_weights = (int16x8_t *)__builtin_assume_aligned(
+            (m_network.output_weights + bucket * 2 * HL + HL), 64);
 
         const int16x8_t v_zero = vdupq_n_s16(0);
         const int16x8_t v_qa = vdupq_n_s16(QA);
 
-        int32x4_t us_output1 = vdupq_n_s32(0);
-        int32x4_t us_output2 = vdupq_n_s32(0);
-        int32x4_t them_output1 = vdupq_n_s32(0);
-        int32x4_t them_output2 = vdupq_n_s32(0);
+        int32x4_t us_out1 = vdupq_n_s32(0), us_out2 = vdupq_n_s32(0);
+        int32x4_t them_out1 = vdupq_n_s32(0), them_out2 = vdupq_n_s32(0);
 
-        for (int i = 0; i < HL / 8; i += 1)
+        for (int i = 0; i < HL / 8; i += 2)
         {
-            int16x8_t us_clamped = vminq_s16(vmaxq_s16(us[i], v_zero), v_qa);
-            int16x8_t them_clamped = vminq_s16(vmaxq_s16(them[i], v_zero), v_qa);
+            int16x8_t us0 = vminq_s16(vmaxq_s16(us[i + 0], v_zero), v_qa);
+            int16x8_t us1 = vminq_s16(vmaxq_s16(us[i + 1], v_zero), v_qa);
 
-            int16x8_t us_premult = vmulq_s16(us_clamped, us_weights[i]);
-            int16x8_t them_premult = vmulq_s16(them_clamped, them_weights[i]);
+            int16x8_t them0 = vminq_s16(vmaxq_s16(them[i + 0], v_zero), v_qa);
+            int16x8_t them1 = vminq_s16(vmaxq_s16(them[i + 1], v_zero), v_qa);
 
-            us_output1 = vmlal_s16(us_output1, vget_low_s16(us_premult), vget_low_s16(us_clamped));
-            us_output2 =
-                vmlal_s16(us_output2, vget_high_s16(us_premult), vget_high_s16(us_clamped));
+            int16x8_t us_pm0 = vmulq_s16(us0, us_weights[i + 0]);
+            int16x8_t us_pm1 = vmulq_s16(us1, us_weights[i + 1]);
 
-            them_output1 =
-                vmlal_s16(them_output1, vget_low_s16(them_premult), vget_low_s16(them_clamped));
-            them_output2 =
-                vmlal_s16(them_output2, vget_high_s16(them_premult), vget_high_s16(them_clamped));
+            int16x8_t them_pm0 = vmulq_s16(them0, them_weights[i + 0]);
+            int16x8_t them_pm1 = vmulq_s16(them1, them_weights[i + 1]);
+
+            us_out1 = vmlal_s16(us_out1, vget_low_s16(us_pm0), vget_low_s16(us0));
+            us_out2 = vmlal_high_s16(us_out2, us_pm0, us0);
+            us_out1 = vmlal_s16(us_out1, vget_low_s16(us_pm1), vget_low_s16(us1));
+            us_out2 = vmlal_high_s16(us_out2, us_pm1, us1);
+
+            them_out1 = vmlal_s16(them_out1, vget_low_s16(them_pm0), vget_low_s16(them0));
+            them_out2 = vmlal_high_s16(them_out2, them_pm0, them0);
+            them_out1 = vmlal_s16(them_out1, vget_low_s16(them_pm1), vget_low_s16(them1));
+            them_out2 = vmlal_high_s16(them_out2, them_pm1, them1);
         }
 
-        int32_t output = vaddvq_s32(
-            vaddq_s32(vaddq_s32(us_output1, us_output2), vaddq_s32(them_output1, them_output2)));
+        int32_t output =
+            vaddvq_s32(vaddq_s32(vaddq_s32(us_out1, us_out2), vaddq_s32(them_out1, them_out2)));
+
         output /= QA;
         output += m_network.output_bias[bucket];
 
