@@ -9,18 +9,19 @@
 namespace simd
 {
 
-using Vec = int16x8_t;
-constexpr size_t WIDTH = 8;
+// needs this to prevent aliasing in evaluate/catchup
+using Vec __attribute__((may_alias)) = int16x8x2_t;
+constexpr size_t WIDTH = 16;
 constexpr size_t ALIGN = 64;
 
-constexpr Vec add16(Vec a, Vec b)
+inline __attribute__((always_inline)) Vec add16(Vec a, Vec b)
 {
-    return vaddq_s16(a, b);
+    return {vaddq_s16(a.val[0], b.val[0]), vaddq_s16(a.val[1], b.val[1])};
 }
 
-constexpr Vec sub16(Vec a, Vec b)
+inline __attribute__((always_inline)) Vec sub16(Vec a, Vec b)
 {
-    return vsubq_s16(a, b);
+    return {vsubq_s16(a.val[0], b.val[0]), vsubq_s16(a.val[1], b.val[1])};
 }
 
 } // namespace simd
