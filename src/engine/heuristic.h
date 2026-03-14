@@ -94,21 +94,8 @@ struct heuristics
         return position.at(move.to()).type();
     }
 
-    [[nodiscard]] uint64_t get_pawn_key(const chess::Board &position) const
-    {
-        auto pieces = position.pieces(chess::PieceType::PAWN);
-        uint64_t pawn_key = 0;
-        while (pieces)
-        {
-            const chess::Square sq = pieces.pop();
-            pawn_key ^= chess::Zobrist::piece(position.at(sq), sq);
-        }
-
-        return pawn_key;
-    }
-
     void update_main_history(const chess::Board &position, const chess::Move &move, int32_t ply,
-                             int bonus)
+                             uint64_t pawn_key, int bonus)
     {
         // update lowply
         if (ply < LOW_PLY)
@@ -122,7 +109,7 @@ struct heuristics
             bonus);
 
         // update pawn history
-        pawn[get_pawn_key(position) & PAWN_STRUCTURE_SIZE_M1][position.at(move.from())]
+        pawn[pawn_key & PAWN_STRUCTURE_SIZE_M1][position.at(move.from())]
             [move.to().index()]
                 .add_bonus(bonus);
 

@@ -57,44 +57,45 @@ class movegen
     chess::Move m_killer = chess::Move::NO_MOVE;
 
     chess::movegen::precompute m_precompute{};
+    uint64_t m_pawn_key{};
 
   public:
     explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
                      chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth,
-                     movegen_stage stage = movegen_stage::PV)
+                     uint64_t pawn_key, movegen_stage stage = movegen_stage::PV)
         : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
           m_heuristics(heuristics), m_pv_move(pv_move), m_prev_move{prev_move}, m_ply(ply),
-          m_depth(depth)
+          m_depth(depth), m_pawn_key{pawn_key}
     {
     }
 
     explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
                      chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth,
-                     int16_t margin, movegen_stage stage = movegen_stage::PV)
+                     int16_t margin, uint64_t pawn_key, movegen_stage stage = movegen_stage::PV)
         : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
           m_heuristics(heuristics), m_pv_move(pv_move), m_prev_move{prev_move}, m_ply(ply),
-          m_prob_margin{margin}, m_depth(depth)
+          m_prob_margin{margin}, m_depth(depth), m_pawn_key{pawn_key}
     {
     }
 
     explicit movegen(
         chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
-        chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth,
+        chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth, uint64_t pawn_key,
         const std::array<const continuation_history *, NUM_CONTINUATION> &continuations,
         movegen_stage stage = movegen_stage::PV)
         : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
           m_heuristics(heuristics), m_pv_move(pv_move), m_prev_move{prev_move}, m_ply(ply),
-          m_continuations{continuations}, m_depth(depth)
+          m_continuations{continuations}, m_depth(depth), m_pawn_key(pawn_key)
     {
     }
 
     explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
                      chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth,
-                     const continuation_history *continuation1,
+                     uint64_t pawn_key, const continuation_history *continuation1,
                      movegen_stage stage = movegen_stage::PV)
         : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
           m_heuristics(heuristics), m_pv_move(pv_move), m_prev_move{prev_move}, m_ply(ply),
-          m_depth(depth)
+          m_depth(depth), m_pawn_key(pawn_key)
     {
         m_continuations[0] = continuation1;
     }
@@ -178,7 +179,6 @@ class movegen
                 chess::movegen::legalmoves(m_moves, m_position);
 
                 // score
-                uint64_t pawn_key = m_heuristics.get_pawn_key(m_position);
                 for (int i = 0;; ++i)
                 {
                     if (i >= m_moves.size())
@@ -230,7 +230,7 @@ class movegen
 
                         // pawn history
                         score += m_heuristics
-                                     .pawn[pawn_key & PAWN_STRUCTURE_SIZE_M1]
+                                     .pawn[m_pawn_key & PAWN_STRUCTURE_SIZE_M1]
                                           [m_position.at(move.from())][move.to().index()]
                                      .get_value();
 
@@ -307,7 +307,6 @@ class movegen
                 {
                     chess::movegen::legalmoves_quiet(m_moves, m_position, m_precompute);
 
-                    uint64_t pawn_key = m_heuristics.get_pawn_key(m_position);
                     for (int i = m_capture_end;; ++i)
                     {
                         if (i >= m_moves.size())
@@ -364,7 +363,7 @@ class movegen
 
                         // pawn history
                         score += m_heuristics
-                                     .pawn[pawn_key & PAWN_STRUCTURE_SIZE_M1]
+                                     .pawn[m_pawn_key & PAWN_STRUCTURE_SIZE_M1]
                                           [m_position.at(move.from())][move.to().index()]
                                      .get_value();
 

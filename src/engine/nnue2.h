@@ -339,6 +339,7 @@ struct net
                         m_side[i].is_clean[side] = true;
                     }
 
+                    assert(m_side[m_head].is_clean[side]);
                     break;
                 }
 
