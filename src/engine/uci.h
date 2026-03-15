@@ -434,6 +434,15 @@ class uci_handler
         start_task([&, position]() {
             auto result = m_engine->search(position, m_param, true);
 
+            if (result.pv_line.empty())
+            {
+                std::cout << "empty pv line, crashing\n";
+                std::cout << result.score << std::endl;
+                std::cout << result.depth << std::endl;
+                std::cout << std::flush;
+                exit(0);
+            }
+
             // display results
             std::cout << "bestmove " << chess::uci::moveToUci(result.pv_line[0]);
             if (result.pv_line.size() >= 2)
