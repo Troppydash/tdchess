@@ -53,8 +53,6 @@ struct see
      */
     static bool test_ge(chess::Board &position, const chess::Move &move, int32_t threshold)
     {
-        // TODO: this is slow
-
         if (move.typeOf() != chess::Move::NORMAL)
         {
             return 0 >= threshold;
@@ -72,6 +70,14 @@ struct see
         swap = PIECE_VALUES[position.at(from).type()] - swap;
         if (swap <= 0)
             return true;
+
+        const auto queens = position.pieces(chess::PieceType::QUEEN);
+        const auto rooks = position.pieces(chess::PieceType::ROOK);
+        const auto bishops = position.pieces(chess::PieceType::BISHOP);
+        const auto knights = position.pieces(chess::PieceType::KNIGHT);
+        const auto pawns = position.pieces(chess::PieceType::PAWN);
+        const chess::Bitboard occs[2] = {position.us(chess::Color::WHITE),
+                                   position.us(chess::Color::BLACK)};
 
         auto old_pieces = position.pieces_bb_;
         auto old_occ = position.occ_bb_;
@@ -104,32 +110,29 @@ struct see
             if (!stm_attackers)
                 break;
 
-            // remove opp pinned pieces
-            // TODO: verify that this is correct
-            if (stm == chess::Color::WHITE)
-                stm_attackers = remove_pinned<chess::Color::BLACK>(
-                    position, occ & position.us(~stm), occ & position.us(stm), stm_attackers);
-            else
-                stm_attackers = remove_pinned<chess::Color::WHITE>(
-                    position, occ & position.us(~stm), occ & position.us(stm), stm_attackers);
-
-            if (!stm_attackers)
-                break;
+            // remove opp pinned pieces, temp disabled since it is slow
+            // if (stm == chess::Color::WHITE)
+            //     stm_attackers = remove_pinned<chess::Color::BLACK>(position, occ & occs[~stm],
+            //                                                        occ & occs[stm], stm_attackers);
+            // else
+            //     stm_attackers = remove_pinned<chess::Color::WHITE>(position, occ & occs[~stm],
+            //                                                        occ & occs[stm], stm_attackers);
+            //
+            // if (!stm_attackers)
+            //     break;
 
             res ^= 1;
 
-            if ((bb = stm_attackers & position.pieces(chess::PieceType::PAWN)))
+            if ((bb = stm_attackers & pawns))
             {
                 if ((swap = PAWN_VALUE - swap) < res)
                     break;
 
                 remove_piece(bb.lsb());
                 occ.clear(bb.lsb());
-                attackers |=
-                    chess::attacks::bishop(to, occ) & (position.pieces(chess::PieceType::BISHOP) |
-                                                       position.pieces(chess::PieceType::QUEEN));
+                attackers |= chess::attacks::bishop(to, occ) & (bishops | queens);
             }
-            else if ((bb = stm_attackers & position.pieces(chess::PieceType::KNIGHT)))
+            else if ((bb = stm_attackers & knights))
             {
                 if ((swap = KNIGHT_VALUE - swap) < res)
                     break;
@@ -137,40 +140,33 @@ struct see
                 remove_piece(bb.lsb());
                 occ.clear(bb.lsb());
             }
-            else if ((bb = stm_attackers & position.pieces(chess::PieceType::BISHOP)))
+            else if ((bb = stm_attackers & bishops))
             {
                 if ((swap = BISHOP_VALUE - swap) < res)
                     break;
 
                 remove_piece(bb.lsb());
                 occ.clear(bb.lsb());
-                attackers |=
-                    chess::attacks::bishop(to, occ) & (position.pieces(chess::PieceType::BISHOP) |
-                                                       position.pieces(chess::PieceType::QUEEN));
+                attackers |= chess::attacks::bishop(to, occ) & (bishops | queens);
             }
-            else if ((bb = stm_attackers & position.pieces(chess::PieceType::ROOK)))
+            else if ((bb = stm_attackers & rooks))
             {
                 if ((swap = ROOK_VALUE - swap) < res)
                     break;
 
                 remove_piece(bb.lsb());
                 occ.clear(bb.lsb());
-                attackers |=
-                    chess::attacks::rook(to, occ) & (position.pieces(chess::PieceType::ROOK) |
-                                                     position.pieces(chess::PieceType::QUEEN));
+                attackers |= chess::attacks::rook(to, occ) & (rooks | queens);
             }
-            else if ((bb = stm_attackers & position.pieces(chess::PieceType::QUEEN)))
+            else if ((bb = stm_attackers & queens))
             {
                 if ((swap = QUEEN_VALUE - swap) < res)
                     break;
 
                 remove_piece(bb.lsb());
                 occ.clear(bb.lsb());
-                attackers |=
-                    (chess::attacks::bishop(to, occ) & (position.pieces(chess::PieceType::BISHOP) |
-                                                        position.pieces(chess::PieceType::QUEEN))) |
-                    (chess::attacks::rook(to, occ) & (position.pieces(chess::PieceType::ROOK) |
-                                                      position.pieces(chess::PieceType::QUEEN)));
+                attackers |= (chess::attacks::bishop(to, occ) & (bishops | queens)) |
+                             (chess::attacks::rook(to, occ) & (rooks | queens));
             }
             else
             {
