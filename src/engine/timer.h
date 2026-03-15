@@ -11,6 +11,8 @@ class timer
     std::atomic<bool> m_is_stopped = false;
     std::atomic<bool> m_forced_stopped = false;
 
+    // double extension = 1.0;
+
   public:
     void stop()
     {

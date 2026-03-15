@@ -158,18 +158,9 @@ void position_test()
     // exit(0);
 
     std::vector<std::pair<std::string, std::string>> positions{
-        // {"rnbqkbnr/pppp1ppp/8/4p3/2P5/2N5/PP1PPPPP/R1BQKBNR b KQkq - 1 2", ""},
-        // {"rnbqkbnr/pppp1ppp/8/4p3/2P5/8/PP1PPPPP/RNBQKBNR w KQkq - 0 2", "s"},
-        // {"6k1/7p/8/8/6P1/5p1q/PPP2P1B/3R3K b - - 0 55", "what"},
-        // {"rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq - 0 1", "what"},
-        // {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "default"},
-        // {"8/3Q3k/7n/8/4K3/b7/8/8 b - - 3 69", ""},
-        // {"8/6b1/8/5k1p/5p1P/8/4K3/8 b - - 3 61", ""},
-        // {"8/8/5q2/7p/2K3k1/8/8/8 b - - 3 76", ""},
-        // {"r3k2r/pp1n2pp/2n1p3/2B1p3/7b/2N4P/PPPK2P1/R4B1R w kq - 0 17", ""},
-        // {"5rk1/1q2bpp1/4p2p/1N2P3/np5P/2r5/P3QPP1/1B1RR1K1 b - - 1 26", "c3c5 not c3c8, zero
-        // eval"},
-        {"2r2rk1/1q2bp2/4p1pp/1N2P3/np5P/6Q1/P4PP1/1B1RR1K1 b - - 1 28", "b7b5, negative eval 1"}};
+        {"1k1br3/pp1R4/3nB3/1Pp2P2/2P5/1K2QP1p/P3N2q/8 b - - 1 36", "d8f8"}
+
+    };
 
     for (auto &[pos, target] : positions)
     {
@@ -183,12 +174,12 @@ void position_test()
         // chess::Board start{"8/6p1/8/6k1/1p6/pPr2KP1/P4R1P/8 w - - 7 38"};
         auto *nnue = new nnue2::net{};
         nnue->incbin_load();
-        table tt{512};
+        table tt{32};
         engine engine{nullptr, nnue, &tt};
 
-        chess::Board start{};
+        chess::Board start{pos};
         search_param param;
-        param.movetime = 50000;
+        param.movetime = 200;
         engine.search(start, param, true);
 
         std::cout << "oracle " << target << std::endl;
