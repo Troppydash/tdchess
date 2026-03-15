@@ -109,9 +109,8 @@ struct heuristics
             bonus);
 
         // update pawn history
-        pawn[pawn_key & PAWN_STRUCTURE_SIZE_M1][position.at(move.from())]
-            [move.to().index()]
-                .add_bonus(bonus);
+        pawn[pawn_key & PAWN_STRUCTURE_SIZE_M1][position.at(move.from())][move.to().index()]
+            .add_bonus(bonus);
 
         // king[get_king_bucket(position, chess::Color::WHITE)][get_king_bucket(
         //     position, chess::Color::BLACK)][position.at(move.from())][move.to().index()]
@@ -144,7 +143,11 @@ struct heuristics
 
     void store_killer(const chess::Move &killer, int32_t ply, bool is_mate)
     {
-        killers[ply][0] = {killer, is_mate};
+        if (killers[ply][0].first != killer)
+        {
+            killers[ply][1] = killers[ply][0];
+            killers[ply][0].first = killer;
+        }
     }
 
     void update_corr_hist_score(const chess::Board &position, uint64_t pawn_key, uint64_t white_key,

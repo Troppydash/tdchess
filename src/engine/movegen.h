@@ -54,7 +54,7 @@ class movegen
 
     int16_t m_prob_margin;
     bool m_skip_quiet = false;
-    chess::Move m_killer = chess::Move::NO_MOVE;
+    chess::Move m_killer[param::NUMBER_KILLERS]{chess::Move::NO_MOVE};
 
     chess::movegen::precompute m_precompute{};
     uint64_t m_pawn_key{};
@@ -285,20 +285,25 @@ class movegen
 
                 // note here that bad_capture_end should point to end of bad captures
                 m_stage++;
+                m_move_index = 0;
                 break;
             }
 
             case movegen_stage::KILLER: {
-                m_stage++;
                 if (!m_skip_quiet)
                 {
-                    m_killer = m_heuristics.killers[m_ply][0].first;
-                    if (m_killer != chess::Move::NO_MOVE && m_killer != m_pv_move &&
-                        !m_heuristics.is_capture(m_position, m_killer) &&
-                        legal::is_legal_full(m_position, m_killer))
-                        return m_killer;
+                    while (m_move_index < param::NUMBER_KILLERS)
+                    {
+                        auto killer = m_heuristics.killers[m_ply][m_move_index].first;
+                        m_killer[m_move_index++] = killer;
+                        if (killer != chess::Move::NO_MOVE && killer != m_pv_move &&
+                            !m_heuristics.is_capture(m_position, killer) &&
+                            legal::is_legal_full(m_position, killer))
+                            return killer;
+                    }
                 }
 
+                m_stage++;
                 break;
             }
                 // generating all quiet moves and scoring them
@@ -332,7 +337,7 @@ class movegen
 
                         assert(!m_heuristics.is_capture(m_position, move));
                         // killer move
-                        if (move == m_killer)
+                        if (move == m_killer[0] || move == m_killer[1])
                         {
                             std::swap(move, m_moves.back());
                             m_moves.decr();

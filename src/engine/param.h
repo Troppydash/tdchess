@@ -20,7 +20,7 @@ constexpr int16_t VALUE_INF = INF;
 constexpr int16_t VALUE_NONE = VALUE_INF + 1;
 constexpr int16_t VALUE_DRAW = 0;
 
-constexpr size_t NUMBER_KILLERS = 1;
+constexpr size_t NUMBER_KILLERS = 2;
 
 constexpr uint8_t EXACT_FLAG = 3;
 constexpr uint8_t BETA_FLAG = 2;
