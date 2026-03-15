@@ -73,12 +73,11 @@ struct see
         if (swap <= 0)
             return true;
 
-        static std::pair<chess::Piece, chess::Square> removed[64]{};
-        int n_removed = 0;
-
+        auto old_pieces = position.pieces_bb_;
+        auto old_occ = position.occ_bb_;
+        auto old_board = position.board_;
         auto remove_piece = [&](chess::Square s) {
             assert(position.at(s) != chess::Piece::NONE);
-            removed[n_removed++] = {position.at(s), s};
             position.removePiece(position.at(s), s);
         };
 
@@ -175,16 +174,18 @@ struct see
             }
             else
             {
-                for (int i = n_removed - 1; i >= 0; --i)
-                    position.placePiece(removed[i].first, removed[i].second);
+                position.pieces_bb_ = old_pieces;
+                position.occ_bb_ = old_occ;
+                position.board_ = old_board;
 
                 // king
                 return (attackers & position.them(stm)) ? res ^ 1 : res;
             }
         }
 
-        for (int i = n_removed - 1; i >= 0; --i)
-            position.placePiece(removed[i].first, removed[i].second);
+        position.pieces_bb_ = old_pieces;
+        position.occ_bb_ = old_occ;
+        position.board_ = old_board;
         return static_cast<bool>(res);
     }
 
