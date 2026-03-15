@@ -9,7 +9,7 @@ struct see
     static constexpr int16_t KNIGHT_VALUE = 370;
     static constexpr int16_t BISHOP_VALUE = 390;
     static constexpr int16_t ROOK_VALUE = 610;
-    static constexpr int16_t QUEEN_VALUE = 1210;
+    static constexpr int16_t QUEEN_VALUE = 1010;
 
     constexpr static std::array<int16_t, 7> PIECE_VALUES = {
         // pawn, knight, bishop, rook, queen, king, none
