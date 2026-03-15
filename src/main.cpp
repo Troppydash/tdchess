@@ -158,7 +158,8 @@ void position_test()
     // exit(0);
 
     std::vector<std::pair<std::string, std::string>> positions{
-        {"1k1br3/pp1R4/3nB3/1Pp2P2/2P5/1K2QP1p/P3N2q/8 b - - 1 36", "d8f8"}
+        {"1k1br3/pp1R4/3nB3/1Pp2P2/2P5/1K2QP1p/P3N2q/8 b - - 1 36", "d8f8"},
+        {"r3q1k1/1R1b2rp/2p2Bn1/p1np3Q/5P2/b2B2N1/2P3PP/5R1K w - - 2 24", "no zero"}
 
     };
 
@@ -179,7 +180,7 @@ void position_test()
 
         chess::Board start{pos};
         search_param param;
-        param.movetime = 200;
+        param.movetime = 1000;
         engine.search(start, param, true);
 
         std::cout << "oracle " << target << std::endl;
