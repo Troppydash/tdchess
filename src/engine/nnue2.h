@@ -40,20 +40,20 @@ constexpr int SCALE = 400;
 
 // clang-format off
 constexpr int KING_BUCKET[] = {
-      0, 1, 2, 3, 11, 10, 9, 8,
-      4, 4, 5, 5, 13, 13, 12, 12,
-      6, 6, 6, 6, 14, 14, 14, 14,
-      6, 6, 6, 6, 14, 14, 14, 14,
-      7, 7, 7, 7, 15, 15, 15, 15,
-      7, 7, 7, 7, 15, 15, 15, 15,
-      7, 7, 7, 7, 15, 15, 15, 15,
-      7, 7, 7, 7, 15, 15, 15, 15,
+      0, 1, 2, 3, 3, 2, 1, 0,
+      4, 4, 5, 5, 5, 5, 4, 4,
+      6, 6, 6, 6, 6, 6, 6, 6,
+      6, 6, 6, 6, 6, 6, 6, 6,
+      7, 7, 7, 7, 7, 7, 7, 7,
+      7, 7, 7, 7, 7, 7, 7, 7,
+      7, 7, 7, 7, 7, 7, 7, 7,
+      7, 7, 7, 7, 7, 7, 7, 7,
 };
 // clang-format on
 
 constexpr int GET_KING_BUCKET(int sq)
 {
-    return KING_BUCKET[sq] % KINGS;
+    return KING_BUCKET[sq];
 }
 
 #include "../hpplib/incbin.h"
@@ -65,7 +65,7 @@ struct network
     alignas(simd::ALIGN) int16_t feature_weights[KINGS][768][HL];
     alignas(simd::ALIGN) int16_t feature_bias[HL];
 
-    alignas(simd::ALIGN) int16_t output_weights[OUTPUTS * 2 * HL];
+    alignas(simd::ALIGN) int16_t output_weights[OUTPUTS][2 * HL];
     int16_t output_bias[OUTPUTS];
 };
 
@@ -93,7 +93,7 @@ struct accumulator
     update up;
 };
 
-constexpr int FINNY_TABLE_ENTRIES = 2;
+constexpr int FINNY_TABLE_ENTRIES = 1;
 struct finny_table
 {
     struct entry
@@ -130,7 +130,7 @@ struct net
 
     net()
     {
-        m_table.clear();
+        clear();
     }
 
     void incbin_load() const
@@ -254,6 +254,8 @@ struct net
             update->sub2 = {move.to(), to};
             break;
         }
+        default:
+            assert(false);
         }
     }
 
@@ -268,6 +270,8 @@ struct net
         assert(m_side[m_head].is_clean[0]);
 
         // compute output_bucket
+        // constexpr int divisor = (32 + OUTPUTS - 1) / OUTPUTS;
+        // int bucket = (ref.occ().count() - 2) / divisor;
         int bucket = 0;
 
         const int16x8_t *__restrict us =
@@ -276,9 +280,9 @@ struct net
             (int16x8_t *)__builtin_assume_aligned(m_side[m_head].vals[ref.sideToMove() ^ 1], 64);
 
         const int16x8_t *__restrict us_weights =
-            (int16x8_t *)__builtin_assume_aligned((m_network.output_weights + bucket * 2 * HL), 64);
-        const int16x8_t *__restrict them_weights = (int16x8_t *)__builtin_assume_aligned(
-            (m_network.output_weights + bucket * 2 * HL + HL), 64);
+            (int16x8_t *)__builtin_assume_aligned((m_network.output_weights[bucket]), 64);
+        const int16x8_t *__restrict them_weights =
+            (int16x8_t *)__builtin_assume_aligned((m_network.output_weights[bucket] + HL), 64);
 
         const int16x8_t v_zero = vdupq_n_s16(0);
         const int16x8_t v_qa = vdupq_n_s16(QA);
@@ -293,6 +297,8 @@ struct net
 
             int16x8_t them0 = vminq_s16(vmaxq_s16(them[i + 0], v_zero), v_qa);
             int16x8_t them1 = vminq_s16(vmaxq_s16(them[i + 1], v_zero), v_qa);
+
+            // TODO: faster nnue by nnz table, skipping 0 clamped results
 
             int16x8_t us_pm0 = vmulq_s16(us0, us_weights[i + 0]);
             int16x8_t us_pm1 = vmulq_s16(us1, us_weights[i + 1]);
@@ -403,73 +409,6 @@ struct net
 
         auto *ref = &m_table.ent[is_mirrored][bucket][0];
 
-        // select better table entry randomly
-        if (board.hash() % 2 || index == 0)
-        {
-            auto *ref_alt = &m_table.ent[is_mirrored][bucket][1];
-
-            int count[2] = {0, 0};
-            for (int color = 0; color <= 1; ++color)
-            {
-                for (int piece = 0; piece < 6; ++piece)
-                {
-                    chess::PieceType piece_type{(chess::PieceType::underlying)piece};
-                    auto new_bb = board.pieces(piece_type, color);
-
-                    {
-                        auto old_bb = ref->bycolor[side][color] & ref->bypiece[side][piece];
-                        auto added = new_bb & ~old_bb;
-                        auto removed = old_bb & ~new_bb;
-                        count[0] += std::max(added.count(), removed.count());
-                    }
-
-                    {
-                        auto old_bb = ref_alt->bycolor[side][color] & ref_alt->bypiece[side][piece];
-                        auto added = new_bb & ~old_bb;
-                        auto removed = old_bb & ~new_bb;
-                        count[1] += std::max(added.count(), removed.count());
-                    }
-                }
-            }
-
-            // if simple refresh is faster, do it
-            // +1 due to the initial fused_copy for biases
-            if (std::min(count[0], count[1]) > board.occ().count() + 1)
-            {
-                // update the worst one
-                // if (count[1] > count[0])
-                // ref = ref_alt;
-
-                fused_copy<HL>((simd::Vec *)m_side[index].vals[side],
-                               (simd::Vec *)m_network.feature_bias);
-
-                chess::Bitboard occ = board.occ();
-                while (occ)
-                {
-                    chess::Square sq = occ.pop();
-                    acc_add_piece(m_side[index], side, king_sq, board.at(sq), sq);
-                }
-
-                fused_copy<HL>((simd::Vec *)ref->acc.vals[side],
-                               (simd::Vec *)m_side[index].vals[side]);
-                ref->acc.is_clean[side] = true;
-                memcpy(&ref->bycolor[side], &board.occ_bb_, sizeof(ref->bycolor[0]));
-                memcpy(&ref->bypiece[side], &board.pieces_bb_, sizeof(ref->bypiece[0]));
-                m_side[index].is_clean[side] = true;
-                return;
-            }
-
-            if (count[1] < count[0])
-                ref = ref_alt;
-        }
-
-        // initial bias
-        if (!ref->acc.is_clean[side])
-        {
-            fused_copy<HL>((simd::Vec *)ref->acc.vals[side], (simd::Vec *)m_network.feature_bias);
-            ref->acc.is_clean[side] = true;
-        }
-
         for (int color = 0; color <= 1; ++color)
         {
             for (int piece = 0; piece < 6; ++piece)
@@ -520,6 +459,20 @@ struct net
 
     void clear()
     {
+        m_table.clear();
+        for (auto &a : m_table.ent)
+        {
+            for (auto &b : a)
+            {
+                for (auto &en : b)
+                {
+                    fused_copy<HL>((simd::Vec *)en.acc.vals[0],
+                                   (simd::Vec *)m_network.feature_bias);
+                    fused_copy<HL>((simd::Vec *)en.acc.vals[1],
+                                   (simd::Vec *)m_network.feature_bias);
+                }
+            }
+        }
     }
 
   private:
