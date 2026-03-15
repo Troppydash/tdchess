@@ -182,20 +182,20 @@ struct alignas(32) bucket
         {
             if (key == m_entries[i].m_hash)
             {
-                bucket_hit = !(m_entries[i].m_score == 0 && m_entries[i].m_mask == 0);
+                bucket_hit = m_entries[i].m_depth + param::DEPTH_OFFSET != param::UNINIT_DEPTH;
                 return m_entries[i];
             }
         }
 
         int best_slot = 0;
         int worst_score = m_entries[0].m_depth + param::DEPTH_OFFSET -
-                          ((MAX_AGE + age - GET_AGE(m_entries[0].m_mask)) & AGE_MASK) * 4;
+                          ((MAX_AGE + age - GET_AGE(m_entries[0].m_mask)) & AGE_MASK) * 2;
 
         for (int i = 1; i < NUM_BUCKETS; ++i)
         {
             const auto &entry = m_entries[i];
             int age_diff = (MAX_AGE + age - GET_AGE(entry.m_mask)) & AGE_MASK;
-            int replacement_score = (entry.m_depth + param::DEPTH_OFFSET) - age_diff * 4;
+            int replacement_score = (entry.m_depth + param::DEPTH_OFFSET) - age_diff * 2;
 
             if (replacement_score < worst_score)
             {
