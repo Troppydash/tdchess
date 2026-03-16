@@ -2,128 +2,6 @@
 #include <algorithm>
 #include <cstdint>
 
-constexpr uint64_t REP_FILTER_SIZE = 1 << 15;
-constexpr uint64_t REP_FILTER_SIZE_M1 = REP_FILTER_SIZE - 1;
-constexpr size_t h1(uint64_t key)
-{
-    return key & REP_FILTER_SIZE_M1;
-}
-
-constexpr size_t h2(uint64_t key)
-{
-    size_t value = (key >> 32) & REP_FILTER_SIZE_M1;
-    if (value == h1(key))
-        return (value + 1) & REP_FILTER_SIZE_M1;
-    return value;
-}
-
-template <int L> struct cuckoo_table
-{
-    std::pair<uint64_t, uint8_t> *filter;
-    cuckoo_table()
-    {
-        filter = new std::pair<uint64_t, uint8_t>[L];
-        for (int i = 0; i < L; ++i)
-        {
-            filter[i].first = 0;
-            filter[i].second = 0;
-        }
-    }
-
-    ~cuckoo_table()
-    {
-        delete[] filter;
-    }
-
-    // returns if exists
-    void set(uint64_t key)
-    {
-        assert(key != 0);
-        assert(h1(key) != h2(key));
-
-        // first check that it is in the table
-        if (filter[h1(key)].first == key)
-        {
-            filter[h1(key)].second++;
-            return;
-        }
-
-        if (filter[h2(key)].first == key)
-        {
-            filter[h2(key)].second++;
-            return;
-        }
-
-        // insert
-        std::pair<uint64_t, uint8_t> insert = {key, 1};
-        size_t slot = h1(insert.first);
-        int kicks = 0;
-        while (true)
-        {
-            // ignore if too many kicks
-            // TODO: technically this is not correct since we miss a rep
-            if (kicks >= 32)
-            {
-                break;
-            }
-
-            std::swap(filter[slot], insert);
-
-            // inserted
-            if (insert.first == 0)
-                break;
-
-            // Use the other slot
-            slot = (slot == h1(insert.first)) ? h2(insert.first) : h1(insert.first);
-            kicks += 1;
-        }
-    }
-
-    void unset(uint64_t key)
-    {
-        assert(key != 0);
-
-        auto *ref = &filter[h1(key)];
-        if (ref->first != key)
-        {
-            ref = &filter[h2(key)];
-            // skip if not exist
-            if (ref->first != key)
-                return;
-        }
-
-        assert(ref->second > 0);
-        if (ref->second == 1)
-        {
-            ref->first = 0;
-            ref->second = 0;
-        }
-        else
-            ref->second -= 1;
-    }
-
-    int lookup(uint64_t key) const
-    {
-        assert(key != 0);
-        if (filter[h1(key)].first == key)
-            return filter[h1(key)].second;
-
-        if (filter[h2(key)].first == key)
-            return filter[h2(key)].second;
-
-        return 0;
-    }
-
-    void clear()
-    {
-        for (size_t i = 0; i < L; ++i)
-        {
-            filter[i].first = 0;
-            filter[i].second = 0;
-        }
-    }
-};
-
 constexpr int CURRENT_BUCKET_SIZE = 1 << 15;
 constexpr int CURRENT_BUCKET_MASK = CURRENT_BUCKET_SIZE - 1;
 
@@ -209,16 +87,95 @@ struct bucket_map
     }
 };
 
+struct bucket_map2
+{
+    struct alignas(32) bucket
+    {
+        uint64_t items[3]{};
+        bool reps[3]{};
+
+        void clear()
+        {
+            std::memset(items, 0, sizeof(items));
+            std::memset(reps, 0, sizeof(reps));
+        }
+    };
+
+    bucket *buckets;
+    int size;
+
+    bucket_map2()
+    {
+        size = CURRENT_BUCKET_SIZE;
+        buckets = (bucket *)std::aligned_alloc(1 << 14, size * sizeof(bucket));
+    }
+
+    ~bucket_map2()
+    {
+        std::free(buckets);
+    }
+
+    void set(uint64_t key)
+    {
+        auto &bucket = buckets[key & CURRENT_BUCKET_MASK];
+        for (int i = 0; i < 3; ++i)
+        {
+            if (bucket.items[i] == key)
+            {
+                bucket.reps[i] = true;
+                return;
+            }
+        }
+
+        for (int i = 0; i < 3; ++i)
+        {
+            if (bucket.items[i] == 0)
+            {
+                bucket.items[i] = key;
+                bucket.reps[i] = false;
+                return;
+            }
+        }
+
+        assert(false);
+    }
+
+    int lookup(uint64_t key) const
+    {
+        auto &bucket = buckets[key & CURRENT_BUCKET_MASK];
+        for (int i = 0; i < 3; ++i)
+        {
+            if (bucket.items[i] == key && bucket.reps[i])
+                return 1;
+        }
+
+        return 0;
+    }
+
+    void clear()
+    {
+        for (size_t i = 0; i < size; ++i)
+        {
+            buckets[i].clear();
+        }
+    }
+
+    void prefetch(uint64_t key) const
+    {
+        return __builtin_prefetch(&buckets[key & CURRENT_BUCKET_MASK]);
+    }
+};
+
 class rep_filter
 {
-    cuckoo_table<REP_FILTER_SIZE> history{};
+    bucket_map2 history{};
     bucket_map current{};
 
   public:
     void prefetch(uint64_t key) const
     {
         current.prefetch(key);
-        __builtin_prefetch(history.filter + h1(key));
+        history.prefetch(key);
     }
 
     void add(const chess::Board &x)
@@ -257,11 +214,11 @@ class rep_filter
         // }
 
         int c = current.lookup(board.hash());
-        if (c >= 1)
+        if (c)
             return true;
 
         c = history.lookup(board.hash());
-        if (c >= 2)
+        if (c)
             return true;
 
         return false;
