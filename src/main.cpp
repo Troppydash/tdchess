@@ -180,7 +180,7 @@ void position_test()
 
         chess::Board start{pos};
         search_param param;
-        param.movetime = 1000;
+        param.movetime = 10000;
         engine.search(start, param, true);
 
         std::cout << "oracle " << target << std::endl;

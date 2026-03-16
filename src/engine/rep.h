@@ -124,15 +124,92 @@ template <int L> struct cuckoo_table
     }
 };
 
+struct bucket_map
+{
+    struct alignas(32) bucket
+    {
+        uint64_t items[4]{};
+
+        void clear()
+        {
+            std::memset(items, 0, sizeof(items));
+        }
+    };
+
+    bucket *buckets;
+    int size;
+
+    bucket_map()
+    {
+        size = 1 << 15;
+        buckets = (bucket *)std::aligned_alloc(1 << 14, size * sizeof(bucket));
+    }
+
+    ~bucket_map()
+    {
+        std::free(buckets);
+    }
+
+    void set(uint64_t key)
+    {
+        auto &bucket = buckets[key % size];
+        for (int i = 0; i < 4; ++i)
+        {
+            if (bucket.items[i] == 0)
+            {
+                bucket.items[i] = key;
+                return;
+            }
+        }
+
+        assert(false);
+    }
+
+    void unset(uint64_t key)
+    {
+        auto &bucket = buckets[key % size];
+        for (int i = 0; i < 4; ++i)
+        {
+            if (bucket.items[i] == key)
+            {
+                bucket.items[i] = 0;
+                return;
+            }
+        }
+
+        assert(false);
+    }
+
+    int lookup(uint64_t key) const
+    {
+        auto &bucket = buckets[key % size];
+        for (int i = 0; i < 4; ++i)
+        {
+            if (bucket.items[i] == key)
+                return 1;
+        }
+
+        return 0;
+    }
+
+    void clear()
+    {
+        for (size_t i = 0; i < size; ++i)
+        {
+            buckets[i].clear();
+        }
+    }
+};
+
 class rep_filter
 {
     cuckoo_table<REP_FILTER_SIZE> history{};
-    cuckoo_table<REP_FILTER_SIZE> current{};
+    bucket_map current{};
 
   public:
     void prefetch(uint64_t key) const
     {
-        __builtin_prefetch(current.filter + h1(key));
+        // __builtin_prefetch(current.filter + h1(key));
         __builtin_prefetch(history.filter + h1(key));
     }
 
@@ -196,6 +273,5 @@ class rep_filter
     {
         current.clear();
         history.clear();
-
     }
 };

@@ -120,8 +120,6 @@ struct finny_table
     }
 };
 
-// nnztable[i] = {first lsb position, second lsb position}
-
 struct net
 {
     network m_network{};
@@ -132,6 +130,7 @@ struct net
 
     net()
     {
+        // init_nnz();
         clear();
     }
 
@@ -265,6 +264,40 @@ struct net
     {
         m_head--;
     }
+    //
+    // uint16_t nnz_table[256][8]{};
+    //
+    // void init_nnz()
+    // {
+    //     std::memset(nnz_table, 0, sizeof(nnz_table));
+    //     for (int i = 0; i < 256; ++i)
+    //     {
+    //         unsigned int bits = i;
+    //         int j = 0;
+    //         while (bits)
+    //         {
+    //             int idx = __builtin_ctz(bits);
+    //             bits ^= (1 << idx);
+    //             nnz_table[i][j++] = idx;
+    //         }
+    //     }
+    // }
+    //
+    // uint8_t get_nnz_mask_s16(int16x8_t v)
+    // {
+    //     // Compare > 0: results in 0xFFFF for true, 0x0000 for false
+    //     uint16x8_t mask = vcgtq_s16(v, vdupq_n_s16(0));
+    //
+    //     // Narrow 16-bit lanes to 8-bit lanes (taking the top bit of each lane)
+    //     uint8x8_t narrowed = vshrn_n_u16(mask, 4);
+    //
+    //     // Apply bit weights: {1, 2, 4, 8, 16, 32, 64, 128}
+    //     const uint8x8_t weights = {1, 2, 4, 8, 16, 32, 64, 128};
+    //     uint8x8_t weighted = vand_u8(narrowed, weights);
+    //
+    //     // Horizontal add to get the final 8-bit mask
+    //     return vaddv_u8(weighted);
+    // }
 
     int32_t evaluate(const chess::Board &ref)
     {
@@ -276,13 +309,10 @@ struct net
         // int bucket = (ref.occ().count() - 2) / divisor;
         int bucket = 0;
 
-        const int16x8_t *__restrict us =
-            (int16x8_t *)(m_side[m_head].vals[ref.sideToMove()]);
-        const int16x8_t *__restrict them =
-            (int16x8_t *)(m_side[m_head].vals[ref.sideToMove() ^ 1]);
+        const int16x8_t *__restrict us = (int16x8_t *)(m_side[m_head].vals[ref.sideToMove()]);
+        const int16x8_t *__restrict them = (int16x8_t *)(m_side[m_head].vals[ref.sideToMove() ^ 1]);
 
-        const int16x8_t *__restrict us_weights =
-            (int16x8_t *)(m_network.output_weights[bucket]);
+        const int16x8_t *__restrict us_weights = (int16x8_t *)(m_network.output_weights[bucket]);
         const int16x8_t *__restrict them_weights =
             (int16x8_t *)(m_network.output_weights[bucket] + HL);
 
@@ -309,6 +339,9 @@ struct net
 
         for (int i = 0; i < HL / 8; i += 2)
         {
+            __builtin_prefetch(&acc[i + 2]);
+            __builtin_prefetch(&weight[i + 2]);
+
             int16x8_t c0 = vminq_s16(vmaxq_s16(acc[i + 0], v_zero), v_qa);
             int16x8_t c1 = vminq_s16(vmaxq_s16(acc[i + 1], v_zero), v_qa);
 

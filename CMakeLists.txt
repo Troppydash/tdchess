@@ -82,6 +82,7 @@ add_executable(tdchess_test src/main.cpp)
 target_link_libraries(tdchess_test PRIVATE fathom)
 target_link_options(tdchess_test PRIVATE
         -fsanitize=undefined
+        -fsanitize=address
         "-flto"
 )
 target_compile_options(tdchess_test PRIVATE
@@ -96,6 +97,7 @@ target_compile_options(tdchess_test PRIVATE
 #                -mcpu=native
 #                -fno-exceptions
         -fsanitize=undefined
+        -fsanitize=address
         -g
         -fwrapv
         #                        "-ftrapv"
