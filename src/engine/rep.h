@@ -124,6 +124,9 @@ template <int L> struct cuckoo_table
     }
 };
 
+constexpr int CURRENT_BUCKET_SIZE = 1 << 15;
+constexpr int CURRENT_BUCKET_MASK = CURRENT_BUCKET_SIZE - 1;
+
 struct bucket_map
 {
     struct alignas(32) bucket
@@ -141,7 +144,7 @@ struct bucket_map
 
     bucket_map()
     {
-        size = 1 << 15;
+        size = CURRENT_BUCKET_SIZE;
         buckets = (bucket *)std::aligned_alloc(1 << 14, size * sizeof(bucket));
     }
 
@@ -152,7 +155,7 @@ struct bucket_map
 
     void set(uint64_t key)
     {
-        auto &bucket = buckets[key % size];
+        auto &bucket = buckets[key & CURRENT_BUCKET_MASK];
         for (int i = 0; i < 4; ++i)
         {
             if (bucket.items[i] == 0)
@@ -167,7 +170,7 @@ struct bucket_map
 
     void unset(uint64_t key)
     {
-        auto &bucket = buckets[key % size];
+        auto &bucket = buckets[key & CURRENT_BUCKET_MASK];
         for (int i = 0; i < 4; ++i)
         {
             if (bucket.items[i] == key)
@@ -182,7 +185,7 @@ struct bucket_map
 
     int lookup(uint64_t key) const
     {
-        auto &bucket = buckets[key % size];
+        auto &bucket = buckets[key & CURRENT_BUCKET_MASK];
         for (int i = 0; i < 4; ++i)
         {
             if (bucket.items[i] == key)
@@ -199,6 +202,11 @@ struct bucket_map
             buckets[i].clear();
         }
     }
+
+    void prefetch(uint64_t key) const
+    {
+        return __builtin_prefetch(&buckets[key & CURRENT_BUCKET_MASK]);
+    }
 };
 
 class rep_filter
@@ -209,7 +217,7 @@ class rep_filter
   public:
     void prefetch(uint64_t key) const
     {
-        // __builtin_prefetch(current.filter + h1(key));
+        current.prefetch(key);
         __builtin_prefetch(history.filter + h1(key));
     }
 
