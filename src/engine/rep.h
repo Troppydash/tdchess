@@ -171,6 +171,9 @@ class rep_filter
     bucket_map2 history{};
     bucket_map current{};
 
+    uint64_t bloom_filter[param::MAX_DEPTH]{};
+    int ply = 0;
+
   public:
     void prefetch(uint64_t key) const
     {
@@ -213,12 +216,11 @@ class rep_filter
         //     return false;
         // }
 
-        int c = current.lookup(board.hash());
-        if (c)
+        auto key = board.hash();
+        if (current.lookup(key))
             return true;
 
-        c = history.lookup(board.hash());
-        if (c)
+        if ((bloom_filter[0] & key) == key && history.lookup(key))
             return true;
 
         return false;
@@ -226,11 +228,14 @@ class rep_filter
 
     void load(const chess::Board &position)
     {
+        bloom_filter[0] = position.hash();
+
         const auto &states = position.get_prev_state();
         const int maxDist = std::min((int)position.halfMoveClock(), (int)states.size());
         for (int i = 1; i <= maxDist; ++i)
         {
             history.set(states[states.size() - i].hash);
+            bloom_filter[0] |= states[states.size() - i].hash;
         }
     }
 

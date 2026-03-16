@@ -508,6 +508,12 @@ class movegen
     static void sort_moves(chess::Movelist &moves, int start, int end,
                            int limit = std::numeric_limits<int16_t>::min())
     {
+        // if ((end - start) < 6)
+        // {
+        //     static_sort<6>(end - start, moves.begin() + start);
+        //     return;
+        // }
+
         for (int i = start + 1; i < end; ++i)
         {
             if (moves[i].score() >= limit)
