@@ -59,6 +59,8 @@ class movegen
     chess::movegen::precompute m_precompute{};
     uint64_t m_pawn_key{};
 
+    chess::Bitboard threats{};
+
   public:
     explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
                      chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth,
@@ -128,6 +130,19 @@ class movegen
             case movegen_stage::CAPTURE_INIT:
             case movegen_stage::QCAPTURE_INIT:
             case movegen_stage::PROB_CAPTURE_INIT: {
+                if (m_prev_move != chess::Move::NO_MOVE)
+                {
+                    auto piece = m_position.at(m_prev_move.to()).type();
+                    if (piece == chess::PieceType::BISHOP)
+                        threats = chess::attacks::bishop(m_prev_move.to(), m_position.occ());
+                    else if (piece == chess::PieceType::KNIGHT)
+                        threats = chess::attacks::knight(m_prev_move.to());
+                    else if (piece == chess::PieceType::PAWN)
+                        threats =
+                            chess::attacks::pawn(m_position.sideToMove() ^ 1, m_prev_move.to()) &
+                            m_position.occ();
+                }
+
                 // direct capture generation
                 m_precompute = chess::movegen::legalmoves_precompute(m_position);
                 m_moves.clear();
@@ -247,6 +262,10 @@ class movegen
                         if (m_heuristics.killers[m_ply][0].first == move)
                         {
                             score += 10000;
+                        }
+                        else if (m_heuristics.killers[m_ply][1].first == move)
+                        {
+                            score += 8000;
                         }
                         //
                         // score += m_heuristics
@@ -381,6 +400,10 @@ class movegen
                                                                   .get_value() /
                                          2;
                         }
+
+                        if ((chess::Bitboard::fromSquare(move.from()) & threats) &&
+                            !(chess::Bitboard::fromSquare(move.to()) & threats))
+                            score += 100;
 
                         // score +=
                         //     m_heuristics.king

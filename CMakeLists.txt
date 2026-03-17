@@ -83,24 +83,13 @@ target_link_libraries(tdchess_test PRIVATE fathom)
 target_link_options(tdchess_test PRIVATE
         -fsanitize=undefined
         -fsanitize=address
-        "-flto"
 )
 target_compile_options(tdchess_test PRIVATE
-#                "-Ofast"
-#                "-march=native"
-#                "-mtune=native"
-#                "-flto"
-#                "-fomit-frame-pointer"
-#                "-Wall"
-#                "-Wextra"
-#                -DNDEBUG
-#                -mcpu=native
-#                -fno-exceptions
         -fsanitize=undefined
         -fsanitize=address
         -g
         -fwrapv
-        #                        "-ftrapv"
+        -D_GLIBCXX_DEBUG
 )
 
 add_executable(tdchess_elo src/main.cpp
