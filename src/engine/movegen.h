@@ -60,6 +60,7 @@ class movegen
     uint64_t m_pawn_key{};
 
     chess::Bitboard threats{};
+    chess::PieceType threat_piece{};
 
   public:
     explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
@@ -130,19 +131,6 @@ class movegen
             case movegen_stage::CAPTURE_INIT:
             case movegen_stage::QCAPTURE_INIT:
             case movegen_stage::PROB_CAPTURE_INIT: {
-                if (m_prev_move != chess::Move::NO_MOVE)
-                {
-                    auto piece = m_position.at(m_prev_move.to()).type();
-                    if (piece == chess::PieceType::BISHOP)
-                        threats = chess::attacks::bishop(m_prev_move.to(), m_position.occ());
-                    else if (piece == chess::PieceType::KNIGHT)
-                        threats = chess::attacks::knight(m_prev_move.to());
-                    else if (piece == chess::PieceType::PAWN)
-                        threats =
-                            chess::attacks::pawn(m_position.sideToMove() ^ 1, m_prev_move.to()) &
-                            m_position.occ();
-                }
-
                 // direct capture generation
                 m_precompute = chess::movegen::legalmoves_precompute(m_position);
                 m_moves.clear();
@@ -329,6 +317,28 @@ class movegen
             case movegen_stage::QUIET_INIT: {
                 if (!m_skip_quiet)
                 {
+                    if (m_prev_move != chess::Move::NO_MOVE &&
+                        m_prev_move.typeOf() != chess::Move::CASTLING)
+                    {
+                        threat_piece = m_position.at(m_prev_move.to()).type();
+                        if (threat_piece == chess::PieceType::QUEEN)
+                            threats = chess::attacks::queen(m_prev_move.to(), m_position.occ());
+                        else if (threat_piece == chess::PieceType::ROOK)
+                            threats = chess::attacks::rook(m_prev_move.to(), m_position.occ());
+                        else if (threat_piece == chess::PieceType::BISHOP)
+                            threats = chess::attacks::bishop(m_prev_move.to(), m_position.occ());
+                        else if (threat_piece == chess::PieceType::KNIGHT)
+                            threats = chess::attacks::knight(m_prev_move.to());
+                        else if (threat_piece == chess::PieceType::PAWN)
+                            threats = chess::attacks::pawn(m_position.sideToMove() ^ 1,
+                                                           m_prev_move.to()) &
+                                      m_position.occ();
+                    }
+                    else
+                    {
+                        threat_piece = chess::PieceType::NONE;
+                    }
+
                     chess::movegen::legalmoves_quiet(m_moves, m_position, m_precompute);
 
                     for (int i = m_capture_end;; ++i)
@@ -401,9 +411,14 @@ class movegen
                                          2;
                         }
 
-                        if ((chess::Bitboard::fromSquare(move.from()) & threats) &&
+                        if (threat_piece != chess::PieceType::NONE &&
+                            m_position.at(move.from()).type() > threat_piece &&
+                            (chess::Bitboard::fromSquare(move.from()) & threats) &&
                             !(chess::Bitboard::fromSquare(move.to()) & threats))
-                            score += 100;
+                            score += (see::PIECE_VALUES[m_position.at(move.from()).type()] -
+                                      see::PIECE_VALUES[threat_piece]) /
+                                         8 +
+                                     100;
 
                         // score +=
                         //     m_heuristics.king

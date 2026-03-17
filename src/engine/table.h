@@ -182,20 +182,20 @@ struct alignas(32) bucket
         {
             if (key == m_entries[i].m_hash)
             {
-                bucket_hit = m_entries[i].m_depth + param::DEPTH_OFFSET != param::UNINIT_DEPTH;
+                bucket_hit = (m_entries[i].m_depth + param::DEPTH_OFFSET) != param::UNINIT_DEPTH;
                 return m_entries[i];
             }
         }
 
         int best_slot = 0;
         int worst_score = m_entries[0].m_depth + param::DEPTH_OFFSET -
-                          ((MAX_AGE + age - GET_AGE(m_entries[0].m_mask)) & AGE_MASK) * 2;
+                          ((MAX_AGE + age - GET_AGE(m_entries[0].m_mask)) & AGE_MASK);
 
         for (int i = 1; i < NUM_BUCKETS; ++i)
         {
             const auto &entry = m_entries[i];
             int age_diff = (MAX_AGE + age - GET_AGE(entry.m_mask)) & AGE_MASK;
-            int replacement_score = (entry.m_depth + param::DEPTH_OFFSET) - age_diff * 2;
+            int replacement_score = (entry.m_depth + param::DEPTH_OFFSET) - age_diff;
 
             if (replacement_score < worst_score)
             {
@@ -281,6 +281,8 @@ class table
 
     void prefetch(const uint64_t key) const
     {
-        __builtin_prefetch(&probe(key));
+        using uint128 = unsigned __int128;
+        uint64_t index = (uint128(key) * uint128(m_size)) >> 64;
+        __builtin_prefetch(m_buckets + index);
     }
 };
