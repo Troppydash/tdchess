@@ -15,6 +15,11 @@ struct see
         // pawn, knight, bishop, rook, queen, king, none
         PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, 0, 0};
 
+    // for when the king is treated as a valuable piece
+    constexpr static std::array<int16_t, 7> ATTACKED_PIECE_VALUES = {
+        // pawn, knight, bishop, rook, queen, king, none
+        PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, QUEEN_VALUE, 0};
+
     constexpr static std::array<int16_t, 7> PROMOTION_PIECE_VALUES = {
         // pawn, knight, bishop, rook, queen, king, none
         QUEEN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, 0, 0};

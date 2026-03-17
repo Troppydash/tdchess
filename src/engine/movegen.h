@@ -60,6 +60,7 @@ class movegen
     uint64_t m_pawn_key{};
 
     chess::Bitboard threats{};
+    chess::Bitboard pawn_threats{};
     chess::PieceType threat_piece{};
 
   public:
@@ -255,6 +256,7 @@ class movegen
                         {
                             score += 8000;
                         }
+
                         //
                         // score += m_heuristics
                         //     .king[m_position.sideToMove()][m_heuristics.get_king_bucket(m_position)][move.from().index()]
@@ -317,28 +319,7 @@ class movegen
             case movegen_stage::QUIET_INIT: {
                 if (!m_skip_quiet)
                 {
-                    if (m_prev_move != chess::Move::NO_MOVE &&
-                        m_prev_move.typeOf() != chess::Move::CASTLING)
-                    {
-                        threat_piece = m_position.at(m_prev_move.to()).type();
-                        if (threat_piece == chess::PieceType::QUEEN)
-                            threats = chess::attacks::queen(m_prev_move.to(), m_position.occ());
-                        else if (threat_piece == chess::PieceType::ROOK)
-                            threats = chess::attacks::rook(m_prev_move.to(), m_position.occ());
-                        else if (threat_piece == chess::PieceType::BISHOP)
-                            threats = chess::attacks::bishop(m_prev_move.to(), m_position.occ());
-                        else if (threat_piece == chess::PieceType::KNIGHT)
-                            threats = chess::attacks::knight(m_prev_move.to());
-                        else if (threat_piece == chess::PieceType::PAWN)
-                            threats = chess::attacks::pawn(m_position.sideToMove() ^ 1,
-                                                           m_prev_move.to()) &
-                                      m_position.occ();
-                    }
-                    else
-                    {
-                        threat_piece = chess::PieceType::NONE;
-                    }
-
+                    generate_threat();
                     chess::movegen::legalmoves_quiet(m_moves, m_position, m_precompute);
 
                     for (int i = m_capture_end;; ++i)
@@ -415,10 +396,18 @@ class movegen
                             m_position.at(move.from()).type() > threat_piece &&
                             (chess::Bitboard::fromSquare(move.from()) & threats) &&
                             !(chess::Bitboard::fromSquare(move.to()) & threats))
-                            score += (see::PIECE_VALUES[m_position.at(move.from()).type()] -
-                                      see::PIECE_VALUES[threat_piece]) /
-                                         8 +
-                                     100;
+                            score +=
+                                (see::ATTACKED_PIECE_VALUES[m_position.at(move.from()).type()] -
+                                 see::ATTACKED_PIECE_VALUES[threat_piece]) /
+                                    8 +
+                                200;
+                        // else if ((int)m_position.at(move.from()).type() >
+                        //              (int)chess::PieceType::PAWN &&
+                        //          (chess::Bitboard::fromSquare(move.from()) & pawn_threats) &&
+                        //          !(chess::Bitboard::fromSquare(move.to()) & pawn_threats))
+                        // {
+                        //     score += 100;
+                        // }
 
                         // score +=
                         //     m_heuristics.king
@@ -528,6 +517,43 @@ class movegen
         }
     }
 
+    void generate_threat()
+    {
+        threat_piece = chess::PieceType::NONE;
+        threats = 0;
+
+        if (m_prev_move != chess::Move::NO_MOVE && m_prev_move.typeOf() != chess::Move::CASTLING)
+        {
+            threat_piece = m_position.at(m_prev_move.to()).type();
+            if (threat_piece == chess::PieceType::QUEEN)
+                threats = chess::attacks::queen(m_prev_move.to(), m_position.occ());
+            else if (threat_piece == chess::PieceType::ROOK)
+                threats = chess::attacks::rook(m_prev_move.to(), m_position.occ());
+            else if (threat_piece == chess::PieceType::BISHOP)
+                threats = chess::attacks::bishop(m_prev_move.to(), m_position.occ());
+            else if (threat_piece == chess::PieceType::KNIGHT)
+                threats = chess::attacks::knight(m_prev_move.to());
+            else if (threat_piece == chess::PieceType::PAWN)
+                threats = chess::attacks::pawn(m_position.sideToMove() ^ 1, m_prev_move.to()) &
+                          m_position.occ();
+        }
+        //
+        // pawn_threats = 0;
+        // auto pawns = m_position.pieces(chess::PieceType::PAWN, m_position.sideToMove() ^ 1);
+        // while (pawns)
+        // {
+        //     auto sq = pawns.pop();
+        //     pawn_threats |= chess::attacks::pawn(m_position.sideToMove() ^ 1, sq);
+        // }
+    }
+
+    bool is_draw() const
+    {
+        assert(m_moves.empty());
+        chess::movegen::legalmoves_quiet(m_moves, m_position, m_precompute);
+        return m_moves.empty();
+    }
+
     template <typename Pred>
     int pick_move(chess::Movelist &moves, const int start, const int end, Pred filter)
     {
@@ -546,12 +572,6 @@ class movegen
     static void sort_moves(chess::Movelist &moves, int start, int end,
                            int limit = std::numeric_limits<int16_t>::min())
     {
-        // if ((end - start) < 6)
-        // {
-        //     static_sort<6>(end - start, moves.begin() + start);
-        //     return;
-        // }
-
         for (int i = start + 1; i < end; ++i)
         {
             if (moves[i].score() >= limit)
