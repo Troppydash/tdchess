@@ -109,16 +109,17 @@ class uci_handler
             }
             std::cout << "loaded " << positions.size() << " positions\n";
 
-            for (size_t i = 0; i < positions.size(); i += 10)
+            for (size_t i = 0; i < positions.size(); i += 50)
             {
                 search_param param{};
-                param.movetime = 400;
+                param.movetime = 1000;
                 chess::Board position{positions[i]};
 
-                m_tt->clear();
                 m_engine = std::make_unique<engine>(m_endgame_table, m_nnue, m_tt);
                 m_engine->search(position, param, true);
                 m_engine->post_search();
+                m_tt->clear();
+                m_nnue->clear();
             }
 
             return;
