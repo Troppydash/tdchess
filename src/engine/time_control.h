@@ -65,15 +65,18 @@ struct search_param
         }
 
         int64_t inc, time;
+        bool bonus = false;
         if (side2move == chess::Color::WHITE)
         {
             inc = winc;
             time = wtime;
+            bonus = time > btime;
         }
         else
         {
             inc = binc;
             time = btime;
+            bonus = time > wtime;
         }
 
         // ignore if time and inc are invalid
@@ -88,7 +91,7 @@ struct search_param
         int64_t time_left =
             std::max(int64_t(1), time + inc * (mtg - 1) - move_overhead * (2 + mtg));
 
-        double opt_scale = std::min(0.025, 0.214 * time / double(time_left));
+        double opt_scale = std::min(0.025, 0.21 * time / double(time_left));
         int64_t optimum_time = opt_scale * time_left;
         int64_t max_time = time * 0.7 - move_overhead;
 
