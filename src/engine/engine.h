@@ -1429,6 +1429,11 @@ struct engine
                 reduction -= history_score /
                              (is_quiet ? features::QUIET_LMR_DIV : features::CAPTURE_LMR_DIV);
 
+                // extend if checking
+                reduction -= m_position.inCheck();
+
+                // TODO: killer move extension
+
                 int32_t reduced_depth = std::clamp(new_depth - reduction, 1, new_depth + 1);
                 score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
                 if (score > alpha && reduced_depth < new_depth)
@@ -1596,10 +1601,10 @@ struct engine
                                  ? m_position.at(m_position.kingSq(~m_position.sideToMove()))
                                  : m_position.at(prev_move.to());
 
-                // if ((ss - 2)->move != chess::Move::NO_MOVE)
-                (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].add_bonus(bonus);
+                if ((ss - 2)->move != chess::Move::NO_MOVE)
+                    (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].add_bonus(bonus);
                 // if ((ss - 3)->move != chess::Move::NO_MOVE)
-                (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].add_bonus(bonus);
+                // (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].add_bonus(bonus);
             }
         }
 
@@ -1638,16 +1643,14 @@ struct engine
                              ? m_position.at(m_position.kingSq(~m_position.sideToMove()))
                              : m_position.at(prev_move.to());
             value += 24 * (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
-            value += 24 * (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
+            // value += 24 * (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].get_value() /
+            // 512;
         }
 
         value = std::clamp(value, -1000, 1000);
         int scaled_value = (value * (200 - (int32_t)m_position.halfMoveClock())) / 200;
         static_eval += scaled_value;
-        return {
-            std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX),
-            scaled_value
-        };
+        return {std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX), scaled_value};
     }
 
     void update_continuation_history(search_stack *ss, chess::Piece piece, chess::Square to,
