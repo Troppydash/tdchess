@@ -125,6 +125,8 @@ class table_entry
     void set(uint64_t hash, uint8_t flag, int16_t score, int32_t ply, int32_t depth,
              const chess::Move &best_move, int16_t static_eval, bool is_pv, uint8_t age)
     {
+        // TODO: lockless TT
+
         if (best_move != chess::Move::NO_MOVE || !MATCHES(hash, m_hash))
         {
             // will fuck up if hash collision

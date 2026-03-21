@@ -2,6 +2,7 @@
 
 #include "../helper.h"
 #include "../version.h"
+#include "lazysmp.h"
 #include <thread>
 
 inline void pin_thread_to_processor(int logical_processor)
@@ -51,8 +52,10 @@ class uci_handler
     int m_thread_aff = -1;
     int64_t m_move_overhead = 10;
     search_param m_param{};
+    int m_num_threads = 1;
 
-    std::unique_ptr<engine> m_engine;
+    // std::unique_ptr<engine> m_engine;
+    std::unique_ptr<lazysmp> m_engine;
     table *m_tt;
     std::thread m_engine_thread;
 
@@ -62,7 +65,7 @@ class uci_handler
         m_tt = new table{128};
         m_nnue = new nnue2::net{};
         m_nnue->incbin_load();
-        m_engine = std::make_unique<engine>(m_endgame_table, m_nnue, m_tt);
+        reload_engine();
     }
 
     ~uci_handler()
@@ -70,6 +73,11 @@ class uci_handler
         delete m_endgame_table;
         delete m_nnue;
         delete m_tt;
+    }
+
+    void reload_engine()
+    {
+        m_engine = std::make_unique<lazysmp>(m_num_threads, m_nnue, m_tt, m_endgame_table);
     }
 
     void loop(const std::string &variant)
@@ -86,10 +94,8 @@ class uci_handler
             search_param temp_param = param;
             m_engine->search(position, temp_param, false);
 
-            std::cout << m_engine->m_stats.nodes_searched << " nodes "
-                      << m_engine->m_stats.get_nps() << " nps" << std::endl;
-
-            m_engine->post_search();
+            std::cout << m_engine->get_stats().nodes_searched << " nodes "
+                      << m_engine->get_stats().get_nps() << " nps" << std::endl;
             return;
         }
 
@@ -115,11 +121,9 @@ class uci_handler
                 param.movetime = 1000;
                 chess::Board position{positions[i]};
 
-                m_engine = std::make_unique<engine>(m_endgame_table, m_nnue, m_tt);
+                m_engine = std::make_unique<lazysmp>(1, m_nnue, m_tt, m_endgame_table);
                 m_engine->search(position, param, true);
-                m_engine->post_search();
                 m_tt->clear();
-                m_nnue->clear();
             }
 
             return;
@@ -155,7 +159,7 @@ class uci_handler
                 std::cout << "option name SyzygyPath type string default <empty>\n";
                 std::cout << "option name EVALFILE type string default <empty>\n";
                 std::cout << "option name Hash type spin default 128 min 8 max 4096\n";
-                std::cout << "option name Threads type spin default 1 min 1 max 1\n";
+                std::cout << "option name Threads type spin default 1 min 1 max " << total_threads << "\n";
                 std::cout << "option name CoreAff type spin default -1 min -1 max "
                           << total_threads - 1 << "\n";
                 std::cout << "option name MoveOverhead type spin default 10 min 0 max 2000\n";
@@ -188,7 +192,7 @@ class uci_handler
                     }
                     else
                     {
-                        m_engine->m_endgame = m_endgame_table;
+                        reload_engine();
                     }
                 }
                 else if (parts[2] == "EVALFILE")
@@ -202,7 +206,7 @@ class uci_handler
                     }
                     else
                     {
-                        m_engine->m_nnue = m_nnue;
+                        reload_engine();
                     }
                 }
                 else if (parts[2] == "Hash")
@@ -210,7 +214,7 @@ class uci_handler
                     size_t tt_size = parse_i32(parts[4]);
                     delete m_tt;
                     m_tt = new table{tt_size};
-                    m_engine = std::make_unique<engine>(m_endgame_table, m_nnue, m_tt);
+                    reload_engine();
                 }
                 else if (parts[2] == "CoreAff")
                 {
@@ -222,7 +226,8 @@ class uci_handler
                 }
                 else if (parts[2] == "Threads")
                 {
-                    std::cout << "to be impl\n";
+                    m_num_threads = parse_i64(parts[4]);
+                    reload_engine();
                 }
                 else
                 {
@@ -289,11 +294,6 @@ class uci_handler
 
                 // to reset tt to empty
                 m_tt->clear();
-
-                m_nnue->clear();
-
-                // reset engine
-                m_engine = std::make_unique<engine>(m_endgame_table, m_nnue, m_tt);
             }
             else if (lead == "isready")
             {
@@ -356,45 +356,50 @@ class uci_handler
             }
             else if (lead == "ponderhit")
             {
-                m_param.ponder = false;
-                m_engine->ponderhit(m_position, m_param, true);
+                exit(0);
+                // m_param.ponder = false;
+                // m_engine->ponderhit(m_position, m_param, true);
             }
             else if (lead == "perft")
             {
+                exit(0);
+
                 // depth x
-                int32_t max_depth = 4;
-
-                for (size_t i = 1; i < parts.size(); i++)
-                {
-                    if (i >= parts.size())
-                        break;
-
-                    if (parts[i] == "depth")
-                    {
-                        max_depth = parse_i32(parts[i + 1]);
-                        i += 1;
-                    }
-                }
-
-                start_perft(max_depth);
+                // int32_t max_depth = 4;
+                //
+                // for (size_t i = 1; i < parts.size(); i++)
+                // {
+                //     if (i >= parts.size())
+                //         break;
+                //
+                //     if (parts[i] == "depth")
+                //     {
+                //         max_depth = parse_i32(parts[i + 1]);
+                //         i += 1;
+                //     }
+                // }
+                //
+                // start_perft(max_depth);
             }
             else if (lead == "bench")
             {
+                exit(0);
+
                 // depth x
-                search_param param{};
-                for (size_t i = 1; i < parts.size(); i++)
-                {
-                    if (i >= parts.size())
-                        break;
-
-                    if (parts[i] == "depth")
-                    {
-                        param.depth = parse_i32(parts[i + 1]);
-                        i += 1;
-                    }
-                }
-
-                start_bench(param);
+                // search_param param{};
+                // for (size_t i = 1; i < parts.size(); i++)
+                // {
+                //     if (i >= parts.size())
+                //         break;
+                //
+                //     if (parts[i] == "depth")
+                //     {
+                //         param.depth = parse_i32(parts[i + 1]);
+                //         i += 1;
+                //     }
+                // }
+                //
+                // start_bench(param);
             }
             else
             {
@@ -421,9 +426,7 @@ class uci_handler
 
     void stop_task()
     {
-        // end current thread
-        if (m_engine != nullptr)
-            m_engine->m_timer.stop();
+        m_engine->stop();
 
         if (m_engine_thread.joinable())
             m_engine_thread.join();
@@ -452,28 +455,26 @@ class uci_handler
             }
             std::cout << std::endl;
             std::cout << std::flush;
-
-            m_engine->post_search();
         });
     }
 
-    void start_perft(const int32_t depth)
-    {
-        chess::Board position = m_position;
-        start_task([&, depth, position]() { m_engine->perft(position, depth); });
-    }
-
-    void start_bench(search_param param)
-    {
-        chess::Board position = m_position;
-        start_task([&, param, position]() {
-            search_param temp_param = param;
-            m_engine->search(position, temp_param, true);
-
-            std::cout << m_engine->m_stats.nodes_searched << " nodes "
-                      << m_engine->m_stats.get_nps() << " nps" << std::endl;
-
-            m_engine->post_search();
-        });
-    }
+    // void start_perft(const int32_t depth)
+    // {
+    //     chess::Board position = m_position;
+    //     start_task([&, depth, position]() { m_engine->perft(position, depth); });
+    // }
+    //
+    // void start_bench(search_param param)
+    // {
+    //     chess::Board position = m_position;
+    //     start_task([&, param, position]() {
+    //         search_param temp_param = param;
+    //         m_engine->search(position, temp_param, true);
+    //
+    //         std::cout << m_engine->m_stats.nodes_searched << " nodes "
+    //                   << m_engine->m_stats.get_nps() << " nps" << std::endl;
+    //
+    //         m_engine->post_search();
+    //     });
+    // }
 };

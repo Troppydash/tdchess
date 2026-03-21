@@ -18,8 +18,8 @@ struct search_thread
     // multithreading
     std::condition_variable cv{};
     std::mutex mutex{};
-    volatile bool is_searching = false;
-    volatile bool should_quit = false;
+    std::atomic<bool> is_searching = false;
+    std::atomic<bool> should_quit = false;
 
     // search info
     chess::Board s_board{};
@@ -30,7 +30,7 @@ struct search_thread
     search_result s_result{};
 
     search_thread(int index, table *tt, endgame_table *endgame, nnue2::net *net)
-        : index(index), nnue{net->clone()}, end{endgame->clone()}, eng{&end, &nnue, tt}
+        : eng{&end, &nnue, tt}, nnue{net->clone()}, end{endgame->clone()}, index(index)
     {
     }
 
@@ -43,6 +43,8 @@ struct search_thread
     {
         while (true)
         {
+            eng.post_search_smp();
+
             std::unique_lock<std::mutex> lock{mutex};
             cv.wait(lock, [&] { return is_searching || should_quit; });
             if (should_quit)
@@ -51,7 +53,6 @@ struct search_thread
             // do work
             s_param.is_main_thread = is_main_thread();
             s_result = eng.search(s_board, s_param, s_verbose && is_main_thread());
-            eng.post_search_smp();
 
             is_searching = false;
             cv.notify_all();
@@ -76,15 +77,18 @@ struct search_thread
         cv.wait(lock, [&] { return !is_searching; });
     }
 
+    void stop()
+    {
+        if (is_searching)
+        {
+            eng.m_timer.stop();
+        }
+    }
+
     void quit()
     {
         should_quit = true;
-        if (is_searching)
-        {
-            // force stop
-            eng.m_timer.stop();
-        }
-
+        stop();
         cv.notify_all();
     }
 
@@ -102,14 +106,18 @@ struct lazysmp
     endgame_table *endgame = nullptr;
 
     // thread stuff
+    int num_threads = 1;
     std::vector<std::unique_ptr<search_thread>> search_threads;
-    // std::vector<std::thread> threads;
+    std::vector<pthread_t> threads;
 
     lazysmp(int num, nnue2::net *net, table *tt, endgame_table *endgame)
-        : net(net), tt(tt), endgame(endgame)
+        : net(net), tt(tt), endgame(endgame), num_threads{num}
     {
+        if (num_threads == 0)
+            exit(0);
+
         // make threads
-        for (int i = 0; i < num; ++i)
+        for (int i = 0; i < num_threads; ++i)
         {
             search_threads.push_back(std::make_unique<search_thread>(i, tt, endgame, net));
 
@@ -122,23 +130,22 @@ struct lazysmp
                 &thread, &attr,
                 [](void *t) {
                     static_cast<search_thread *>(t)->loop();
-                    return (void *)0;
+                    return static_cast<void *>(nullptr);
                 },
                 search_threads[i].get());
 
-            pthread_detach(thread);
             pthread_attr_destroy(&attr);
+            threads.push_back(thread);
         }
     }
 
     ~lazysmp()
     {
-        int n = search_threads.size();
-        for (int i = 0; i < n; ++i)
+        quit();
+
+        for (int i = 0; i < num_threads; ++i)
         {
-            search_threads[i]->quit();
-            // if (threads[i].joinable())
-            //     threads[i].join();
+            pthread_join(threads[i], nullptr);
         }
     }
 
@@ -147,17 +154,51 @@ struct lazysmp
         tt->inc_generation();
 
         // 0 is main, rest is helper
-        int n = search_threads.size();
-        for (int i = 0; i < n; ++i)
+        if (verbose)
+            std::cout << "info lazysmp with " << num_threads << " threads\n";
+
+        for (int i = 0; i < num_threads; ++i)
         {
             search_threads[i]->start_search(reference, param, verbose);
         }
 
-        for (int i = 0; i < n; ++i)
+        for (int i = 0; i < num_threads; ++i)
         {
             search_threads[i]->wait_search();
         }
 
-        return search_threads[0]->s_result;
+        auto result = search_threads[0]->s_result;
+        if (verbose)
+        {
+            engine_stats stats = get_stats(0);
+            for (int i = 1; i < num_threads; ++i)
+                stats = stats.append(get_stats(i));
+
+            std::cout << "info lazysmp ";
+            stats.display_uci(result);
+        }
+
+        return result;
+    }
+
+    void quit()
+    {
+        for (int i = 0; i < num_threads; ++i)
+        {
+            search_threads[i]->quit();
+        }
+    }
+
+    void stop()
+    {
+        for (int i = 0; i < num_threads; ++i)
+        {
+            search_threads[i]->stop();
+        }
+    }
+
+    engine_stats get_stats(int index = 0) const
+    {
+        return search_threads[index]->eng.m_stats;
     }
 };

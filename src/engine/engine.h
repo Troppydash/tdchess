@@ -110,6 +110,14 @@ struct engine_stats
         }
         std::cout << std::endl;
     }
+
+    engine_stats append(const engine_stats &other) const
+    {
+        return engine_stats{.nodes_searched = nodes_searched + other.nodes_searched,
+                            .tt_occupancy = std::max(tt_occupancy, other.tt_occupancy),
+                            .sel_depth = std::max(sel_depth, other.sel_depth),
+                            .total_time = std::max(total_time, other.total_time)};
+    }
 };
 
 struct engine_param
@@ -396,44 +404,12 @@ struct engine
         cuckoo::init();
 
         m_stack = new search_stack[param::MAX_DEPTH + SEARCH_STACK_PREFIX];
-        post_search();
+        post_search_smp();
     }
 
     ~engine()
     {
         delete[] m_stack;
-    }
-
-
-
-    void post_search()
-    {
-        // update age
-        assert(m_table != nullptr);
-        m_table->inc_generation();
-
-        // reset pvline
-        m_line.reset();
-
-        // reset stack
-        for (int i = SEARCH_STACK_PREFIX; i >= 0; --i)
-        {
-            m_stack[i].reset(*m_heuristics);
-            m_stack[i].ply = 0;
-        }
-
-        for (int i = 0; i < param::MAX_DEPTH; ++i)
-        {
-            m_stack[i + SEARCH_STACK_PREFIX].reset(*m_heuristics);
-            m_stack[i + SEARCH_STACK_PREFIX].ply = i;
-        }
-
-        // reset move ordering variables
-        m_heuristics->begin();
-
-        m_filter.clear();
-
-        m_nnue->clear();
     }
 
     void post_search_smp()
