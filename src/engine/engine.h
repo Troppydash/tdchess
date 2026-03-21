@@ -1432,8 +1432,6 @@ struct engine
                 // extend if checking
                 reduction -= m_position.inCheck();
 
-                // TODO: killer move extension
-
                 int32_t reduced_depth = std::clamp(new_depth - reduction, 1, new_depth + 1);
                 score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
                 if (score > alpha && reduced_depth < new_depth)
@@ -1588,7 +1586,7 @@ struct engine
             !(best_move != chess::Move::NO_MOVE && m_position.isCapture(best_move)) &&
             (best_score > ss->static_eval) == (best_move != chess::Move::NO_MOVE))
         {
-            int bonus = std::clamp((best_score - ss->static_eval) * depth / 8,
+            int bonus = std::clamp((best_score - ss->static_eval) * depth / 16,
                                    -CORRECTION_LIMIT / 4, CORRECTION_LIMIT / 4);
             m_heuristics->update_corr_hist_score(m_position, m_keys.get_pawn_key(),
                                                  m_keys.get_white_key(), m_keys.get_black_key(),
@@ -1603,8 +1601,8 @@ struct engine
 
                 if ((ss - 2)->move != chess::Move::NO_MOVE)
                     (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].add_bonus(bonus);
-                // if ((ss - 3)->move != chess::Move::NO_MOVE)
-                // (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].add_bonus(bonus);
+                if ((ss - 3)->move != chess::Move::NO_MOVE)
+                    (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].add_bonus(bonus);
             }
         }
 
@@ -1643,8 +1641,7 @@ struct engine
                              ? m_position.at(m_position.kingSq(~m_position.sideToMove()))
                              : m_position.at(prev_move.to());
             value += 24 * (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
-            // value += 24 * (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].get_value() /
-            // 512;
+            value += 24 * (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
         }
 
         value = std::clamp(value, -1000, 1000);
