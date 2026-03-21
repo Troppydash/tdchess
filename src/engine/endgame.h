@@ -16,16 +16,25 @@ constexpr int TB_MASK_BITS = 14;
 constexpr uint64_t TB_ENTRIES = 1 << TB_MASK_BITS;
 constexpr uint64_t TB_MASK = TB_ENTRIES - 1;
 
+inline std::mutex table_mutex{};
+
 struct endgame_table
 {
     std::vector<tb_cache_entry> m_entries;
+    bool m_original;
 
-    explicit endgame_table() : m_entries(TB_ENTRIES)
+    explicit endgame_table(bool original = true) : m_entries(TB_ENTRIES), m_original(original)
     {
     }
 
     bool load_file(const std::string &path)
     {
+        if (!m_original)
+        {
+            std::cout << "can't load file on unoriginal value\n";
+            return false;
+        }
+
         bool success = tb_init(path.c_str());
         if (!success)
         {
@@ -33,6 +42,11 @@ struct endgame_table
         }
 
         return success;
+    }
+
+    [[nodiscard]] endgame_table clone() const
+    {
+        return endgame_table{false};
     }
 
     bool is_stored(const chess::Board &position) const
@@ -192,6 +206,7 @@ struct endgame_table
 
         unsigned ep =
             position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
+        table_mutex.lock();
         unsigned result = tb_probe_wdl(position.us(chess::Color::WHITE).getBits(),
                                        position.us(chess::Color::BLACK).getBits(),
                                        position.pieces(chess::PieceType::KING).getBits(),
@@ -201,6 +216,7 @@ struct endgame_table
                                        position.pieces(chess::PieceType::KNIGHT).getBits(),
                                        position.pieces(chess::PieceType::PAWN).getBits(), 0, 0, ep,
                                        position.sideToMove() == chess::Color::WHITE);
+        table_mutex.unlock();
 
         if (result == TB_RESULT_FAILED)
         {
@@ -242,6 +258,7 @@ struct endgame_table
 
     virtual ~endgame_table()
     {
-        tb_free();
+        if (m_original)
+            tb_free();
     }
 };

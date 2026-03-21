@@ -12,9 +12,25 @@ find_package(Boost REQUIRED)
 
 # static link with fathom
 set(FATHOM_SRC lib/Fathom/src/tbprobe.c)
+set_source_files_properties(${FATHOM_SRC} PROPERTIES LANGUAGE CXX)
 add_library(fathom STATIC ${FATHOM_SRC})
 target_include_directories(fathom PUBLIC lib/Fathom/src)
-set_target_properties(fathom PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(fathom PROPERTIES
+        POSITION_INDEPENDENT_CODE ON
+        CXX_STANDARD 23
+        CXX_STANDARD_REQUIRED ON
+)
+target_compile_options(fathom PRIVATE
+        "-Ofast"
+        "-march=native"
+        "-mtune=native"
+        "-fomit-frame-pointer"
+        "-Wall"
+        "-Wextra"
+        -DNDEBUG
+        -mcpu=native
+        -fno-exceptions
+)
 
 add_executable(tdchess_uci src/main.cpp)
 target_link_libraries(tdchess_uci PRIVATE fathom)
@@ -55,26 +71,30 @@ target_compile_options(tdchess_uci_tune PRIVATE
         -mcpu=native
         -fno-exceptions
 )
+
 #
-#if (PGOGEN)
-#    message("generating profile")
-#    target_link_options(tdchess_uci PRIVATE
-#            "-fprofile-generate"
-#    )
-#    target_compile_options(tdchess_uci PRIVATE
-#            "-fprofile-generate"
-#    )
-#else ()
-#    if (EXISTS "${CMAKE_BINARY_DIR}/tdchess_uci.profdata")
-#        message("using profdata")
+#if (CARE_PGO)
+#    message("PGO STUFF")
+#    if (PGOGEN)
+#        message("generating profile")
 #        target_link_options(tdchess_uci PRIVATE
-#                "-fprofile-use=${CMAKE_BINARY_DIR}/tdchess_uci.profdata"
+#                "-fprofile-generate"
 #        )
 #        target_compile_options(tdchess_uci PRIVATE
-#                "-fprofile-use=${CMAKE_BINARY_DIR}/tdchess_uci.profdata"
+#                "-fprofile-generate"
 #        )
-#    else()
-#        message("warning, no profdata")
+#    else ()
+#        if (EXISTS "${CMAKE_BINARY_DIR}/tdchess_uci.profdata")
+#            message("using profdata")
+#            target_link_options(tdchess_uci PRIVATE
+#                    "-fprofile-use=${CMAKE_BINARY_DIR}/tdchess_uci.profdata"
+#            )
+#            target_compile_options(tdchess_uci PRIVATE
+#                    "-fprofile-use=${CMAKE_BINARY_DIR}/tdchess_uci.profdata"
+#            )
+#        else ()
+#            message("warning, no profdata")
+#        endif ()
 #    endif ()
 #endif ()
 

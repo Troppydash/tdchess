@@ -108,6 +108,7 @@ int main()
 #else
 #include "elo/agent.h"
 #include "engine/nnue.h"
+#include "engine/lazysmp.h"
 
 int evaluate_bucket(const chess::Board &position)
 {
@@ -158,8 +159,8 @@ void position_test()
     // exit(0);
 
     std::vector<std::pair<std::string, std::string>> positions{
-        {"8/8/8/8/2k5/8/2K5/8 w - - 0 61", ""},
-        {"2r2nk1/4qb1p/p2p2pP/Pp1Pp3/1Q4P1/2rBB3/P1P5/1K1R3R w - - 0 27", "0 draw, or h1e1"},
+        // {"8/8/8/8/2k5/8/2K5/8 w - - 0 61", ""},
+        // {"2r2nk1/4qb1p/p2p2pP/Pp1Pp3/1Q4P1/2rBB3/P1P5/1K1R3R w - - 0 27", "0 draw, or h1e1"},
         {"8/p1R4p/6pk/8/6KP/8/3r1P2/1B6 b - - 0 48", "0 draw"},
         {"1k1br3/pp1R4/3nB3/1Pp2P2/2P5/1K2QP1p/P3N2q/8 b - - 1 36", "d8f8"},
         {"r3q1k1/1R1b2rp/2p2Bn1/p1np3Q/5P2/b2B2N1/2P3PP/5R1K w - - 2 24", "no zero"}
@@ -168,29 +169,40 @@ void position_test()
     endgame_table m_table{};
     m_table.load_file("/Users/troppydash/Downloads/syzygy");
 
+    auto *nnue = new nnue2::net{};
+    nnue->incbin_load();
+    table tt{32};
+
+    // for (auto &[pos, target] : positions)
+    // {
+    //     tt.clear();
+    //     engine engine{&m_table, nnue, &tt};
+    //
+    //     chess::Board start{pos};
+    //     search_param param;
+    //     param.movetime = 10000;
+    //     engine.search(start, param, true);
+    //     engine.post_search();
+    //
+    //     std::cout << "oracle " << target << std::endl;
+    // }
+
     for (auto &[pos, target] : positions)
     {
-        // mcts_engine engine{};
-        //
-        // search_param param;
-        // param.movetime = 5000;
-        // auto result = engine.search(chess::Board{pos}, param, true);
+        tt.clear();
 
-        // chess::Board start{"3k4/8/5p1B/2R4p/q2p4/6P1/5P1K/8 w - - 0 44"};
-        // chess::Board start{"8/6p1/8/6k1/1p6/pPr2KP1/P4R1P/8 w - - 7 38"};
-        auto *nnue = new nnue2::net{};
-        nnue->incbin_load();
-        table tt{32};
-        engine engine{&m_table, nnue, &tt};
+        lazysmp engine{4, nnue, &tt, &m_table};
 
         chess::Board start{pos};
         search_param param;
-        param.movetime = 10000;
+        param.movetime = 5000;
         engine.search(start, param, true);
 
         std::cout << "oracle " << target << std::endl;
-        delete nnue;
     }
+
+
+    delete nnue;
 }
 
 int main()

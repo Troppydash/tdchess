@@ -109,7 +109,7 @@ class uci_handler
             }
             std::cout << "loaded " << positions.size() << " positions\n";
 
-            for (size_t i = 0; i < positions.size(); i += 10)
+            for (size_t i = 0; i < positions.size(); i += 5)
             {
                 search_param param{};
                 param.movetime = 1000;

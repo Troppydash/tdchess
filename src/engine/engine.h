@@ -404,12 +404,40 @@ struct engine
         delete[] m_stack;
     }
 
+
+
     void post_search()
     {
         // update age
         assert(m_table != nullptr);
         m_table->inc_generation();
 
+        // reset pvline
+        m_line.reset();
+
+        // reset stack
+        for (int i = SEARCH_STACK_PREFIX; i >= 0; --i)
+        {
+            m_stack[i].reset(*m_heuristics);
+            m_stack[i].ply = 0;
+        }
+
+        for (int i = 0; i < param::MAX_DEPTH; ++i)
+        {
+            m_stack[i + SEARCH_STACK_PREFIX].reset(*m_heuristics);
+            m_stack[i + SEARCH_STACK_PREFIX].ply = i;
+        }
+
+        // reset move ordering variables
+        m_heuristics->begin();
+
+        m_filter.clear();
+
+        m_nnue->clear();
+    }
+
+    void post_search_smp()
+    {
         // reset pvline
         m_line.reset();
 
@@ -1725,7 +1753,7 @@ struct engine
 
         search_result result{};
 
-        if (m_endgame != nullptr && m_endgame->is_stored(m_position))
+        if (m_endgame != nullptr && m_endgame->is_stored(m_position) && param.is_main_thread)
         {
             // root search
             auto probe = m_endgame->probe_dtm(m_position, m_timer);

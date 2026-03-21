@@ -130,7 +130,6 @@ struct net
 
     net()
     {
-        // init_nnz();
         clear();
     }
 
@@ -174,6 +173,14 @@ struct net
         }
 
         return false;
+    }
+
+    [[nodiscard]] net clone() const
+    {
+        net n{};
+        n.m_network = m_network;
+        n.clear();
+        return n;
     }
 
     void make_move(const chess::Board &board, const chess::Move &move)

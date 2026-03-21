@@ -15,7 +15,8 @@ struct search_param
     int32_t depth{};
     int64_t movetime{};
     int64_t move_overhead{};
-    bool ponder;
+    bool ponder = false;
+    bool is_main_thread = true;
 
     struct result
     {
@@ -50,6 +51,7 @@ struct search_param
         movetime = param::TIME_MAX;
         move_overhead = 0;
         ponder = false;
+        is_main_thread = true;
     }
 
     void reset()
