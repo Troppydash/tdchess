@@ -587,7 +587,7 @@ struct engine
             if (m_position.inCheck())
                 return get_contempt();
 
-            return to_corrected_static_eval(evaluate(ss), ss);
+            return to_corrected_static_eval(evaluate(ss), ss).first;
         }
 
         // draw check
@@ -617,7 +617,8 @@ struct engine
         }
 
         // [tt lookup]
-        uint64_t key = m_position.hash();
+        uint64_t raw_key = m_position.hash();
+        uint64_t key = raw_key ^ util::ZOBRIST_50MR[m_position.halfMoveClock()];
         auto &bucket = m_table->probe(key);
         bool bucket_hit = false;
         auto &entry = bucket.probe(key, bucket_hit, m_table->m_generation);
@@ -646,7 +647,8 @@ struct engine
                 if (!param::IS_VALID(unadjusted_static_eval))
                     unadjusted_static_eval = evaluate(ss, tt_result.move);
 
-                ss->static_eval = best_score = to_corrected_static_eval(unadjusted_static_eval, ss);
+                ss->static_eval = best_score =
+                    to_corrected_static_eval(unadjusted_static_eval, ss).first;
 
                 // use tt score to adjust static eval
                 bool bound_hit =
@@ -662,7 +664,8 @@ struct engine
             else
             {
                 unadjusted_static_eval = evaluate(ss, tt_result.move);
-                ss->static_eval = best_score = to_corrected_static_eval(unadjusted_static_eval, ss);
+                ss->static_eval = best_score =
+                    to_corrected_static_eval(unadjusted_static_eval, ss).first;
 
                 bucket.store(key, param::NO_FLAG, best_score, ply, param::UNSEARCHED_DEPTH,
                              chess::Move::NO_MOVE, unadjusted_static_eval, false,
@@ -720,8 +723,9 @@ struct engine
                     continue;
             }
 
-            m_table->prefetch(key_after(move));
-            m_filter.prefetch(key_after(move));
+            m_table->prefetch(m_position.zobristAfter<false>(move) ^
+                              util::ZOBRIST_50MR[m_position.halfMoveClock() + 1]);
+            m_filter.prefetch(m_position.zobristAfter<false>(move));
 
             make_move(move, ss);
             score = -qsearch<is_pv_node>(-beta, -alpha, depth - 1, ss + 1);
@@ -798,11 +802,6 @@ struct engine
         return static_cast<int16_t>((MAX_CONTEMPT * (piece_count - cutoff)) / (32 - cutoff));
     }
 
-    uint64_t key_after(const chess::Move &move) const
-    {
-        return m_position.zobristAfter<false>(move);
-    }
-
     int history_malus(int depth) const
     {
         return std::min(features::HISTORY_MALUS_BASE + features::HISTORY_MALUS_MULT * depth,
@@ -834,7 +833,7 @@ struct engine
             if (m_position.inCheck())
                 return get_contempt();
 
-            return to_corrected_static_eval(evaluate(ss), ss);
+            return to_corrected_static_eval(evaluate(ss), ss).first;
         }
 
         const bool is_root = ply == 0 && is_pv_node;
@@ -883,7 +882,8 @@ struct engine
         // [tt lookup]
         chess::Move &excluded_move = ss->excluded_move;
         bool has_excluded = excluded_move != chess::Move::NO_MOVE;
-        uint64_t key = m_position.hash();
+        uint64_t raw_key = m_position.hash();
+        uint64_t key = raw_key ^ util::ZOBRIST_50MR[m_position.halfMoveClock()];
         auto &bucket = m_table->probe(key);
         bool bucket_hit = false;
         auto &entry = bucket.probe(key, bucket_hit, m_table->m_generation);
@@ -941,9 +941,9 @@ struct engine
             else if (is_pv_node)
                 m_nnue->catchup(m_position);
 
-            ss->static_eval = adjusted_static_eval =
-                to_corrected_static_eval(unadjusted_static_eval, ss);
-            complexity = std::abs(adjusted_static_eval - unadjusted_static_eval);
+            auto [corrected, c] = to_corrected_static_eval(unadjusted_static_eval, ss);
+            ss->static_eval = adjusted_static_eval = corrected;
+            complexity = std::abs(c);
 
             // use tt score to adjust static eval
             bool bound_hit =
@@ -959,9 +959,9 @@ struct engine
         else
         {
             unadjusted_static_eval = evaluate(ss, tt_result.move);
-            ss->static_eval = adjusted_static_eval =
-                to_corrected_static_eval(unadjusted_static_eval, ss);
-            complexity = std::abs(adjusted_static_eval - unadjusted_static_eval);
+            auto [corrected, c] = to_corrected_static_eval(unadjusted_static_eval, ss);
+            ss->static_eval = adjusted_static_eval = corrected;
+            complexity = std::abs(c);
 
             bucket.store(key, param::NO_FLAG, param::VALUE_NONE, ply, param::UNSEARCHED_DEPTH,
                          chess::Move::NO_MOVE, unadjusted_static_eval, ss->tt_pv,
@@ -1070,8 +1070,9 @@ struct engine
                 ss->static_eval >= beta - 30 * depth + 200 - 50 * improving &&
                 !param::IS_LOSS(beta) && !has_excluded)
             {
-                m_table->prefetch(key ^ chess::Zobrist::sideToMove());
-                m_filter.prefetch(key ^ chess::Zobrist::sideToMove());
+                m_table->prefetch(raw_key ^ chess::Zobrist::sideToMove() ^
+                                  util::ZOBRIST_50MR[m_position.halfMoveClock()]);
+                m_filter.prefetch(raw_key ^ chess::Zobrist::sideToMove());
 
                 int32_t reduction = std::min((adjusted_static_eval - beta) / 300, 3) +
                                     features::NMP_REDUCTION_BASE +
@@ -1157,8 +1158,9 @@ struct engine
 
                     move_count += 1;
 
-                    m_table->prefetch(key_after(move));
-                    m_filter.prefetch(key_after(move));
+                    m_table->prefetch(m_position.zobristAfter<false>(move) ^
+                                      util::ZOBRIST_50MR[m_position.halfMoveClock() + 1]);
+                    m_filter.prefetch(m_position.zobristAfter<false>(move));
 
                     make_move(move, ss);
 
@@ -1347,8 +1349,10 @@ struct engine
             }
 
             new_depth = depth - 1;
-            m_table->prefetch(key_after(move));
-            m_filter.prefetch(key_after(move));
+
+            m_table->prefetch(m_position.zobristAfter<false>(move) ^
+                              util::ZOBRIST_50MR[m_position.halfMoveClock() + 1]);
+            m_filter.prefetch(m_position.zobristAfter<false>(move));
 
             // [singular extension]
             if (!has_excluded && tt_result.move == move && !is_root && tt_result.hit &&
@@ -1598,7 +1602,8 @@ struct engine
         return best_score;
     }
 
-    int16_t to_corrected_static_eval(int32_t static_eval, search_stack *ss) const
+    std::pair<int16_t, int32_t> to_corrected_static_eval(int32_t static_eval,
+                                                         search_stack *ss) const
     {
         static_eval = (static_eval * (200 - (int32_t)m_position.halfMoveClock())) / 200;
 
@@ -1632,9 +1637,9 @@ struct engine
             value += 24 * (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
         }
 
-        value = (value * (200 - (int32_t)m_position.halfMoveClock())) / 200;
-        static_eval += value;
-        return std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX);
+        int scaled_value = (value * (200 - (int32_t)m_position.halfMoveClock())) / 200;
+        static_eval += scaled_value;
+        return {std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX), scaled_value};
     }
 
     void update_continuation_history(search_stack *ss, chess::Piece piece, chess::Square to,

@@ -54,7 +54,7 @@ struct endgame_table
         while (true)
         {
             auto [reason, status] = position.isGameOver();
-            if (status != chess::GameResult::NONE)
+            if (ply > 0 && status != chess::GameResult::NONE)
                 break;
 
             auto [move, _] = probe_dtz(position);

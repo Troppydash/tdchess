@@ -158,10 +158,15 @@ void position_test()
     // exit(0);
 
     std::vector<std::pair<std::string, std::string>> positions{
+        {"8/8/8/8/2k5/8/2K5/8 w - - 0 61", ""},
+        {"2r2nk1/4qb1p/p2p2pP/Pp1Pp3/1Q4P1/2rBB3/P1P5/1K1R3R w - - 0 27", "0 draw, or h1e1"},
+        {"8/p1R4p/6pk/8/6KP/8/3r1P2/1B6 b - - 0 48", "0 draw"},
         {"1k1br3/pp1R4/3nB3/1Pp2P2/2P5/1K2QP1p/P3N2q/8 b - - 1 36", "d8f8"},
         {"r3q1k1/1R1b2rp/2p2Bn1/p1np3Q/5P2/b2B2N1/2P3PP/5R1K w - - 2 24", "no zero"}
 
     };
+    endgame_table m_table{};
+    m_table.load_file("/Users/troppydash/Downloads/syzygy");
 
     for (auto &[pos, target] : positions)
     {
@@ -176,7 +181,7 @@ void position_test()
         auto *nnue = new nnue2::net{};
         nnue->incbin_load();
         table tt{32};
-        engine engine{nullptr, nnue, &tt};
+        engine engine{&m_table, nnue, &tt};
 
         chess::Board start{pos};
         search_param param;
