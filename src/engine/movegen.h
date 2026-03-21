@@ -306,8 +306,8 @@ class movegen
                         auto killer = m_heuristics.killers[m_ply][m_move_index].first;
                         m_killer[m_move_index++] = killer;
                         if (killer != chess::Move::NO_MOVE && killer != m_pv_move &&
-                            !m_heuristics.is_capture(m_position, killer) &&
-                            legal::is_legal_full(m_position, killer))
+                            legal::is_legal_full(m_position, killer) &&
+                            !m_heuristics.is_capture(m_position, killer))
                             return killer;
                     }
                 }
@@ -355,8 +355,6 @@ class movegen
                             continue;
                         }
 
-                        assert(!m_heuristics.is_capture(m_position, move));
-
                         int32_t score = 0;
 
                         // normal
@@ -392,7 +390,7 @@ class movegen
                                          2;
                         }
 
-                        if (threat_piece != chess::PieceType::NONE &&
+                        if (std::abs(score) < 500 && threat_piece != chess::PieceType::NONE &&
                             m_position.at(move.from()).type() > threat_piece &&
                             (chess::Bitboard::fromSquare(move.from()) & threats))
                         {

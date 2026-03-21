@@ -759,27 +759,32 @@ struct engine
         }
 
         int depth_stored = param::QDEPTH + ss->in_check;
+        uint8_t flag = param::EXACT_FLAG;
 
         // [mate check]
         if (ss->in_check && move_count == 0)
         {
             best_score = param::MATED_IN(ply);
             depth_stored += 1;
+            flag = best_score >= beta ? param::BETA_FLAG : param::ALPHA_FLAG;
         }
-        else if (!ss->in_check && move_count == 0 && std::abs(ss->static_eval) > 200)
+        else if (!ss->in_check && move_count == 0)
         {
             if (gen.is_draw())
             {
-                depth_stored += 1;
+                depth_stored += 2;
                 best_score = get_contempt();
             }
         }
         // average out the best score
         else if (!param::IS_DECISIVE(best_score) && best_score > beta)
+        {
+            flag = best_score >= beta ? param::BETA_FLAG : param::ALPHA_FLAG;
             best_score = (beta + best_score) / 2;
+        }
 
         assert(!m_timer.is_stopped());
-        bucket.store(key, best_score >= beta ? param::BETA_FLAG : param::ALPHA_FLAG, best_score,
+        bucket.store(key, flag, best_score,
                      ply, depth_stored, best_move, unadjusted_static_eval, ss->tt_hit && ss->tt_pv,
                      m_table->m_generation, entry);
 
@@ -1208,7 +1213,7 @@ struct engine
         //
         //     chess::Movelist test;
         //     movegen gen{test,           m_position, *m_heuristics, tt_result.move,
-        //                 (ss - 1)->move, ply,        depth};
+        //                 (ss - 1)->move, ply,        depth,         m_keys.get_pawn_key()};
         //     chess::Movelist found_moves;
         //     chess::Move move;
         //     while ((move = gen.next_move()) != chess::Move::NO_MOVE)
@@ -1639,7 +1644,8 @@ struct engine
 
         int scaled_value = (value * (200 - (int32_t)m_position.halfMoveClock())) / 200;
         static_eval += scaled_value;
-        return {std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX), scaled_value};
+        return {std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX),
+                std::min(2000, scaled_value)};
     }
 
     void update_continuation_history(search_stack *ss, chess::Piece piece, chess::Square to,
