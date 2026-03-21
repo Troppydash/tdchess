@@ -784,9 +784,8 @@ struct engine
         }
 
         assert(!m_timer.is_stopped());
-        bucket.store(key, flag, best_score,
-                     ply, depth_stored, best_move, unadjusted_static_eval, ss->tt_hit && ss->tt_pv,
-                     m_table->m_generation, entry);
+        bucket.store(key, flag, best_score, ply, depth_stored, best_move, unadjusted_static_eval,
+                     ss->tt_hit && ss->tt_pv, m_table->m_generation, entry);
 
         return best_score;
     }
@@ -1597,10 +1596,10 @@ struct engine
                                  ? m_position.at(m_position.kingSq(~m_position.sideToMove()))
                                  : m_position.at(prev_move.to());
 
+                // if ((ss - 2)->move != chess::Move::NO_MOVE)
                 (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].add_bonus(bonus);
+                // if ((ss - 3)->move != chess::Move::NO_MOVE)
                 (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].add_bonus(bonus);
-                // (*(ss - 5)->cont_corr)[piece][prev_move.to().index()].add_bonus(bonus * 300 /
-                // 1024);
             }
         }
 
@@ -1642,10 +1641,13 @@ struct engine
             value += 24 * (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
         }
 
+        value = std::clamp(value, -1000, 1000);
         int scaled_value = (value * (200 - (int32_t)m_position.halfMoveClock())) / 200;
         static_eval += scaled_value;
-        return {std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX),
-                std::min(2000, scaled_value)};
+        return {
+            std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX),
+            scaled_value
+        };
     }
 
     void update_continuation_history(search_stack *ss, chess::Piece piece, chess::Square to,
