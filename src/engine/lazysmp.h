@@ -10,9 +10,9 @@
 struct search_thread
 {
     // underlying
-    engine eng;
-    nnue2::net nnue;
-    endgame_table end;
+    engine *eng;
+    nnue2::net *nnue;
+    endgame_table *end;
     int index;
 
     // multithreading
@@ -30,11 +30,13 @@ struct search_thread
     search_result s_result{};
 
     search_thread(int index, table *tt, endgame_table *endgame, nnue2::net *net)
-        : eng{&end, &nnue, tt}, nnue{net->clone()}, end{endgame->clone()}, index(index)
+        : nnue{new nnue2::net{net->clone()}}, end{endgame != nullptr ? new endgame_table{endgame->clone()} : nullptr},
+          index(index)
     {
+        eng = new engine{end, nnue, tt};
     }
 
-    bool is_main_thread()
+    bool is_main_thread() const
     {
         return index == 0;
     }
@@ -43,7 +45,7 @@ struct search_thread
     {
         while (true)
         {
-            eng.post_search_smp();
+            eng->post_search_smp();
 
             std::unique_lock<std::mutex> lock{mutex};
             cv.wait(lock, [&] { return is_searching || should_quit; });
@@ -52,7 +54,7 @@ struct search_thread
 
             // do work
             s_param.is_main_thread = is_main_thread();
-            s_result = eng.search(s_board, s_param, s_verbose && is_main_thread());
+            s_result = eng->search(s_board, s_param, s_verbose && is_main_thread());
 
             is_searching = false;
             cv.notify_all();
@@ -71,6 +73,13 @@ struct search_thread
         cv.notify_all();
     }
 
+    void ponderhit(const chess::Board &reference, search_param param, bool verbose = false)
+    {
+        // ignore setting s_* since we never exit search
+        param.is_main_thread = is_main_thread();
+        eng->ponderhit(reference, param, verbose && is_main_thread());
+    }
+
     void wait_search()
     {
         std::unique_lock<std::mutex> lock{mutex};
@@ -81,7 +90,7 @@ struct search_thread
     {
         if (is_searching)
         {
-            eng.m_timer.stop();
+            eng->m_timer.stop();
         }
     }
 
@@ -96,6 +105,10 @@ struct search_thread
     {
         if (!should_quit)
             quit();
+
+        delete eng;
+        delete end;
+        delete nnue;
     }
 };
 
@@ -181,6 +194,14 @@ struct lazysmp
         return result;
     }
 
+    void ponderhit(const chess::Board &reference, search_param param, bool verbose = false)
+    {
+        for (int i = 0; i < num_threads; ++i)
+        {
+            search_threads[i]->ponderhit(reference, param, verbose);
+        }
+    }
+
     void quit()
     {
         for (int i = 0; i < num_threads; ++i)
@@ -199,6 +220,6 @@ struct lazysmp
 
     engine_stats get_stats(int index = 0) const
     {
-        return search_threads[index]->eng.m_stats;
+        return search_threads[index]->eng->m_stats;
     }
 };

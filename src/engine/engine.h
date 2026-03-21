@@ -1729,17 +1729,21 @@ struct engine
 
         search_result result{};
 
-        if (m_endgame != nullptr && m_endgame->is_stored(m_position) && param.is_main_thread)
+        if (m_endgame != nullptr && m_endgame->is_stored(m_position))
         {
-            // root search
-            auto probe = m_endgame->probe_dtm(m_position, m_timer);
-            result.pv_line = probe.first;
-            result.depth = result.pv_line.size();
-            result.score = probe.second;
-
-            if (verbose)
+            // only dtm when on main
+            if (param.is_main_thread)
             {
-                m_stats.display_uci(result);
+                // root search
+                auto probe = m_endgame->probe_dtm(m_position, m_timer);
+                result.pv_line = probe.first;
+                result.depth = result.pv_line.size();
+                result.score = probe.second;
+
+                if (verbose)
+                {
+                    m_stats.display_uci(result);
+                }
             }
 
             return result;
@@ -1859,7 +1863,7 @@ struct engine
     {
         const auto control = param.time_control(reference.fullMoveNumber(), reference.sideToMove());
         if (verbose)
-            std::cout << "info searchtime " << control.time << std::endl;
+            std::cout << "info ponderhit new searchtime " << control.time << std::endl;
 
         m_timer.start(control.time, control.opt_time);
     }

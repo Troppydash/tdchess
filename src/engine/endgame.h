@@ -115,6 +115,7 @@ struct endgame_table
     {
         unsigned ep =
             position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
+
         unsigned result = tb_probe_root(
             position.us(chess::Color::WHITE).getBits(), position.us(chess::Color::BLACK).getBits(),
             position.pieces(chess::PieceType::KING).getBits(),

@@ -356,9 +356,8 @@ class uci_handler
             }
             else if (lead == "ponderhit")
             {
-                exit(0);
-                // m_param.ponder = false;
-                // m_engine->ponderhit(m_position, m_param, true);
+                m_param.ponder = false;
+                m_engine->ponderhit(m_position, m_param, true);
             }
             else if (lead == "perft")
             {
