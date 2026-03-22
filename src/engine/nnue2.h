@@ -316,11 +316,12 @@ struct net
         // int bucket = (ref.occ().count() - 2) / divisor;
         int bucket = 0;
 
-        const int16x8_t *__restrict us = (int16x8_t *)(m_side[m_head].vals[ref.sideToMove()]);
-        const int16x8_t *__restrict them = (int16x8_t *)(m_side[m_head].vals[ref.sideToMove() ^ 1]);
+        const int16x8_t *__restrict__ us = (int16x8_t *)(m_side[m_head].vals[ref.sideToMove()]);
+        const int16x8_t *__restrict__ them =
+            (int16x8_t *)(m_side[m_head].vals[ref.sideToMove() ^ 1]);
 
-        const int16x8_t *__restrict us_weights = (int16x8_t *)(m_network.output_weights[bucket]);
-        const int16x8_t *__restrict them_weights =
+        const int16x8_t *__restrict__ us_weights = (int16x8_t *)(m_network.output_weights[bucket]);
+        const int16x8_t *__restrict__ them_weights =
             (int16x8_t *)(m_network.output_weights[bucket] + HL);
 
         int32_t output = flatten(us, us_weights) + flatten(them, them_weights);
@@ -334,7 +335,7 @@ struct net
         return std::clamp((int)output, -param::NNUE_MAX, (int)param::NNUE_MAX);
     }
 
-    int32_t flatten(const int16x8_t __restrict *acc, const int16x8_t __restrict *weight)
+    int32_t flatten(const int16x8_t *__restrict__ acc, const int16x8_t *__restrict__ weight)
     {
         const int16x8_t v_zero = vdupq_n_s16(0);
         const int16x8_t v_qa = vdupq_n_s16(QA);
@@ -403,7 +404,8 @@ struct net
         assert(m_side[m_head].is_clean[0] && m_side[m_head].is_clean[1]);
     }
 
-    void update(simd::Vec *base, simd::Vec *next, const update &update, chess::Color side)
+    void update(simd::Vec *__restrict__ base, simd::Vec *__restrict__ next, const update &update,
+                chess::Color side)
     {
         switch (update.type)
         {
@@ -563,7 +565,8 @@ struct net
 
     /// fused updates ///
 
-    template <int Size> static void fused_copy(simd::Vec *out, const simd::Vec *in)
+    template <int Size>
+    static void fused_copy(simd::Vec *__restrict__ out, const simd::Vec *__restrict__ in)
     {
         for (int i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = in[i];

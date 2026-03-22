@@ -1301,15 +1301,66 @@ struct engine
             bool is_quiet = !is_capture;
 
             history_score = move.score();
+            // if (is_capture)
+            // {
+            //     auto captured = m_heuristics->get_capture(m_position, move);
+            //     int mvv = see::PIECE_VALUES[captured] * features::CAPTURE_MVV_SCALE;
+            //
+            //     // capture history
+            //     int capture_score =
+            //         m_heuristics
+            //             ->capture_history[m_position.at(move.from())][move.to().index()][captured]
+            //             .get_value();
+            //
+            //     int32_t score = mvv + capture_score;
+            //     history_score = std::clamp(score, -32000, 32000);
+            // }
+            // else
+            // {
+            //     int32_t score = 0;
+            //
+            //     // normal
+            //     score += m_heuristics
+            //                  ->main_history[m_position.sideToMove()][move.from().index()]
+            //                                [move.to().index()]
+            //                  .get_value();
+            //
+            //     // low ply
+            //     if (ply < LOW_PLY)
+            //     {
+            //         score += features::QUIET_LOW_PLY_SCALE *
+            //                  m_heuristics
+            //                      ->low_ply[m_position.sideToMove()][ply][move.from().index()]
+            //                               [move.to().index()]
+            //                      .get_value() /
+            //                  (1 + ply);
+            //     }
+            //
+            //     // pawn history
+            //     score += m_heuristics
+            //                  ->pawn[m_keys.get_pawn_key() & PAWN_STRUCTURE_SIZE_M1]
+            //                        [m_position.at(move.from())][move.to().index()]
+            //                  .get_value();
+            //
+            //     // continuation
+            //     for (int i = 0; i < NUM_CONTINUATION; ++i)
+            //     {
+            //         score += ((*(ss - i + 1))
+            //                       .continuation[i])[m_position.at(move.from())][move.to().index()]
+            //                      .get_value() /
+            //                  2;
+            //     }
+            //
+            //     history_score = std::clamp(score, -32000, 32000);
+            // }
 
             // [low depth pruning]
             if (!is_root && has_non_pawn && !param::IS_LOSS(best_score))
             {
                 // adjust the relevant depth
-                // this usage is really inconsistent, TODO: adjust this
                 int32_t lmr_depth =
                     std::max(0, depth - m_param.lookup(is_quiet, depth, move_count) - !improving +
-                                    history_score / 5000);
+                                    history_score / 6000);
 
                 // [see pruning]
                 int see_margin =
