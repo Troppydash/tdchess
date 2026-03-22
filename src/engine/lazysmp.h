@@ -143,7 +143,7 @@ struct lazysmp
             pthread_t thread;
             pthread_attr_t attr;
             pthread_attr_init(&attr);
-            size_t stack_size = 8 * 1024 * 1024;
+            size_t stack_size = 4 * 1024 * 1024;
             pthread_attr_setstacksize(&attr, stack_size);
             pthread_create(
                 &thread, &attr,

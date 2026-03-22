@@ -122,19 +122,24 @@ struct engine_stats
 
 struct engine_param
 {
-    // default to zero reduction
-    int32_t lmr[param::MAX_DEPTH][param::MAX_DEPTH]{};
-    int32_t lmr_capture[param::MAX_DEPTH][param::MAX_DEPTH]{};
+    int16_t lmr[64][64]{};
 
     explicit engine_param()
     {
         // set lmr
-        for (int depth = 1; depth < param::MAX_DEPTH; ++depth)
-            for (int move = 1; move < param::MAX_DEPTH; ++move)
-            {
-                lmr[depth][move] = std::floor(0.99 + std::log(depth) * std::log(move) / 3.14);
-                lmr_capture[depth][move] = lmr[depth][move];
-            }
+        for (int depth = 1; depth < 64; ++depth)
+            for (int move = 1; move < 64; ++move)
+                lmr[depth][move] = lmr_quiet(depth, move);
+    }
+
+    static constexpr int lmr_quiet(int depth, int move)
+    {
+        return std::floor(0.99 + std::log(depth) * std::log(move) / 3.14);
+    }
+
+    [[nodiscard]] int lookup(bool is_quiet, int depth, int move) const
+    {
+        return lmr[std::min(63, depth)][std::min(63, move)];
     }
 };
 
@@ -1305,10 +1310,8 @@ struct engine
             {
 
                 int32_t lmr_depth =
-                    std::max(0, depth -
-                                    (is_quiet ? m_param.lmr[depth][move_count]
-                                              : m_param.lmr_capture[depth][move_count]) -
-                                    !improving + history_score / 5000);
+                    std::max(0, depth - m_param.lookup(is_quiet, depth, move_count) - !improving +
+                                    history_score / 5000);
 
                 // see pruning
                 int see_margin =
@@ -1407,8 +1410,7 @@ struct engine
             // [late move reduction]
             if (depth >= 2 && move_count > 1 + 2 * is_root)
             {
-                int32_t reduction = is_capture ? m_param.lmr_capture[depth][move_count]
-                                               : m_param.lmr[depth][move_count];
+                int32_t reduction = m_param.lookup(is_quiet, depth, move_count);
 
                 // check extension
                 reduction -= ss->in_check;

@@ -207,7 +207,6 @@ struct endgame_table
 
         unsigned ep =
             position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
-        table_mutex.lock();
         unsigned result = tb_probe_wdl(position.us(chess::Color::WHITE).getBits(),
                                        position.us(chess::Color::BLACK).getBits(),
                                        position.pieces(chess::PieceType::KING).getBits(),
@@ -217,7 +216,6 @@ struct endgame_table
                                        position.pieces(chess::PieceType::KNIGHT).getBits(),
                                        position.pieces(chess::PieceType::PAWN).getBits(), 0, 0, ep,
                                        position.sideToMove() == chess::Color::WHITE);
-        table_mutex.unlock();
 
         if (result == TB_RESULT_FAILED)
         {
