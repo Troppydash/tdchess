@@ -56,7 +56,7 @@ struct lazysmp
 
                 // do work
                 s_param.is_main_thread = is_main_thread();
-                s_result = eng->search(s_board, s_param, s_verbose && is_main_thread());
+                s_result = eng->search(s_board, s_param, s_verbose);
 
                 // stop other threads if main thread exits
                 if (is_main_thread())
@@ -191,7 +191,7 @@ struct lazysmp
         int best_thread = 0;
         if (num_threads > 1)
         {
-            std::unordered_map<uint16_t, int> votes{};
+            std::unordered_map<uint16_t, long long> votes{};
 
             int min_score = param::INF;
             for (int i = 0; i < num_threads; ++i)
@@ -202,24 +202,24 @@ struct lazysmp
 
             for (int i = 0; i < num_threads; ++i)
             {
-                auto &result = search_threads[i]->s_result;
+                const auto &result = search_threads[i]->s_result;
                 if (result.depth > 0)
                 {
                     votes[result.pv_line[0].move()] +=
-                        (result.score - min_score + 10) * (result.depth);
+                        (result.score - min_score + 5) * (result.depth);
                 }
             }
 
             for (int i = 1; i < num_threads; ++i)
             {
-                auto &result = search_threads[i]->s_result;
+                const auto &result = search_threads[i]->s_result;
                 if (result.depth > 0)
                 {
                     int current_score = result.score;
                     int best_score = search_threads[best_thread]->s_result.score;
 
-                    int current_vote = votes[result.pv_line[0].move()];
-                    int best_vote = votes[search_threads[best_thread]->s_result.pv_line[0].move()];
+                    long long current_vote = votes[result.pv_line[0].move()];
+                    long long best_vote = votes[search_threads[best_thread]->s_result.pv_line[0].move()];
 
                     if (std::abs(best_score) >= param::CHECKMATE)
                     {

@@ -20,6 +20,9 @@ set_target_properties(fathom PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
 )
+target_link_options(fathom PRIVATE
+        "-flto"
+)
 target_compile_options(fathom PRIVATE
         "-Ofast"
         "-march=native"
@@ -27,6 +30,7 @@ target_compile_options(fathom PRIVATE
         "-fomit-frame-pointer"
         "-Wall"
         "-Wextra"
+        "-flto"
         -DNDEBUG
         -mcpu=native
         -fno-exceptions
@@ -71,7 +75,7 @@ target_compile_options(tdchess_uci_tune PRIVATE
         -mcpu=native
         -fno-exceptions
 )
-
+#
 #
 #if (CARE_PGO)
 #    message("PGO STUFF")

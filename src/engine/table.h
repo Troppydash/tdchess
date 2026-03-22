@@ -60,9 +60,9 @@ constexpr bool MATCHES(uint64_t hash, BUCKET_HASH partial)
     return BUCKET_HASH(hash) == partial;
 }
 
-class table_entry
+// we need this copy to prevent data races within [get]
+struct table_entry_copy
 {
-  public:
     BUCKET_HASH m_hash;
     int16_t m_score;
     int16_t m_static_eval;
@@ -73,7 +73,6 @@ class table_entry
     [[nodiscard]] table_entry_result get(uint64_t, int32_t ply, int32_t depth, int16_t alpha,
                                          int16_t beta, bool bucket_hit) const
     {
-
         if (bucket_hit)
         {
             int16_t adj_score = param::VALUE_NONE;
@@ -121,12 +120,26 @@ class table_entry
                 .is_pv = false,
                 .flag = param::NO_FLAG};
     }
+};
+
+class table_entry
+{
+  public:
+    BUCKET_HASH m_hash;
+    int16_t m_score;
+    int16_t m_static_eval;
+    uint16_t m_best_move;
+    int8_t m_depth;
+    uint8_t m_mask;
+
+    [[nodiscard]] table_entry_copy make_copy() const
+    {
+        return {m_hash, m_score, m_static_eval, m_best_move, m_depth, m_mask};
+    }
 
     void set(uint64_t hash, uint8_t flag, int16_t score, int32_t ply, int32_t depth,
              const chess::Move &best_move, int16_t static_eval, bool is_pv, uint8_t age)
     {
-        // TODO: lockless TT
-
         if (best_move != chess::Move::NO_MOVE || !MATCHES(hash, m_hash))
         {
             // will fuck up if hash collision
@@ -177,7 +190,7 @@ struct alignas(32) bucket
         }
     }
 
-    table_entry &probe(const uint64_t hash, bool &bucket_hit, uint8_t age)
+    std::pair<table_entry &, table_entry_copy> probe(const uint64_t hash, bool &bucket_hit, uint8_t age)
     {
         const BUCKET_HASH key = hash;
         for (int i = 0; i < NUM_BUCKETS; ++i)
@@ -185,7 +198,7 @@ struct alignas(32) bucket
             if (key == m_entries[i].m_hash)
             {
                 bucket_hit = (m_entries[i].m_depth + param::DEPTH_OFFSET) != param::UNINIT_DEPTH;
-                return m_entries[i];
+                return {m_entries[i], m_entries[i].make_copy()};
             }
         }
 
@@ -207,7 +220,7 @@ struct alignas(32) bucket
         }
 
         bucket_hit = false;
-        return m_entries[best_slot];
+        return {m_entries[best_slot], {}};
     }
 
     void store(uint64_t hash, uint8_t flag, int16_t score, int32_t ply, int32_t depth,

@@ -625,8 +625,8 @@ struct engine
         uint64_t key = raw_key ^ util::ZOBRIST_50MR[m_position.halfMoveClock()];
         auto &bucket = m_table->probe(key);
         bool bucket_hit = false;
-        auto &entry = bucket.probe(key, bucket_hit, m_table->m_generation);
-        auto tt_result = entry.get(key, ply, param::QDEPTH, alpha, beta, bucket_hit);
+        auto [entry, entry_copy] = bucket.probe(key, bucket_hit, m_table->m_generation);
+        auto tt_result = entry_copy.get(key, ply, param::QDEPTH, alpha, beta, bucket_hit);
         ss->tt_hit = tt_result.hit;
         tt_result.move = ss->tt_hit ? tt_result.move : chess::Move::NO_MOVE;
         if (!is_pv_node && tt_result.can_use)
@@ -894,8 +894,8 @@ struct engine
         uint64_t key = raw_key ^ util::ZOBRIST_50MR[m_position.halfMoveClock()];
         auto &bucket = m_table->probe(key);
         bool bucket_hit = false;
-        auto &entry = bucket.probe(key, bucket_hit, m_table->m_generation);
-        auto tt_result = entry.get(key, ply, depth, alpha, beta, bucket_hit);
+        auto [entry, entry_copy] = bucket.probe(key, bucket_hit, m_table->m_generation);
+        auto tt_result = entry_copy.get(key, ply, depth, alpha, beta, bucket_hit);
         ss->tt_hit = tt_result.hit;
         bool tt_pv = has_excluded ? ss->tt_pv : is_pv_node || (ss->tt_hit && tt_result.is_pv);
         ss->tt_pv = tt_pv;
@@ -1717,8 +1717,9 @@ struct engine
     {
         // timer info first
         const auto control = param.time_control(reference.fullMoveNumber(), reference.sideToMove());
-        if (verbose)
-            std::cout << "info searchtime " << control.time << std::endl;
+        if (param.is_main_thread && verbose)
+            std::cout << "info maxtime " << control.time << " opttime " << control.opt_time
+                      << std::endl;
 
         m_timer.start(control.time, control.opt_time);
 
@@ -1797,6 +1798,7 @@ struct engine
                 {
                     // only update score on exact scores
                     result.score = score;
+                    result.depth = depth;
                     break;
                 }
 
@@ -1809,8 +1811,6 @@ struct engine
                 result.pv_line.clear();
                 result.pv_line = m_line.get_moves();
             }
-            // depth is whatever
-            result.depth = depth;
 
             // exit if max time exceeded
             if (m_timer.is_stopped())
@@ -1835,13 +1835,13 @@ struct engine
             // last_score = result.score;
 
             // optimum time check, after asp window re-search
-            if (m_timer.is_opt_time_stop())
+            if (param.is_main_thread && m_timer.is_opt_time_stop())
                 break;
 
             // display info
             m_stats.total_time = timer::now() - reference_time;
             m_stats.tt_occupancy = m_table->occupied();
-            if (verbose)
+            if (param.is_main_thread && verbose)
             {
                 m_stats.display_uci(result);
             }
@@ -1856,7 +1856,7 @@ struct engine
         // final log
         m_stats.total_time = timer::now() - reference_time;
         m_stats.tt_occupancy = m_table->occupied();
-        if (verbose)
+        if (param.is_main_thread && verbose)
         {
             m_stats.display_uci(result);
         }
