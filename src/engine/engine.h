@@ -919,10 +919,7 @@ struct engine
                 int main_history_bonus = history_malus(depth);
 
                 // [continuation history]
-                auto piece = (ss - 1)->move.typeOf() == chess::Move::CASTLING
-                                 ? m_position.at(m_position.kingSq(~m_position.sideToMove()))
-                                 : m_position.at((ss - 1)->move.to());
-
+                auto piece = heuristics::get_prev_piece(m_position, (ss - 1)->move);
                 update_continuation_history(ss - 1, piece, (ss - 1)->move.to(),
                                             -main_history_bonus);
             }
@@ -1557,6 +1554,14 @@ struct engine
 
                 // [killer moves update]
                 m_heuristics->store_killer(best_move, ply, param::IS_WIN(best_score));
+
+                // [countermove]
+                auto prev_move = (ss - 1)->move;
+                if (prev_move != chess::Move::NO_MOVE)
+                {
+                    m_heuristics->counter[heuristics::get_prev_piece(m_position, prev_move)]
+                                         [prev_move.to().index()] = best_move;
+                }
             }
             else
             {
@@ -1580,7 +1585,7 @@ struct engine
                              : is_pv_node && best_move != chess::Move::NO_MOVE ? param::EXACT_FLAG
                                                                                : param::ALPHA_FLAG;
 
-        assert(!m_timer.is_stopped());
+        // assert(!m_timer.is_stopped());
         if (!has_excluded)
         {
             bucket.store(key, flag, best_score, ply, depth, best_move, unadjusted_static_eval,
@@ -1601,10 +1606,7 @@ struct engine
             auto prev_move = (ss - 1)->move;
             if (prev_move != chess::Move::NO_MOVE)
             {
-                auto piece = prev_move.typeOf() == chess::Move::CASTLING
-                                 ? m_position.at(m_position.kingSq(~m_position.sideToMove()))
-                                 : m_position.at(prev_move.to());
-
+                auto piece = heuristics::get_prev_piece(m_position, prev_move);
                 if ((ss - 2)->move != chess::Move::NO_MOVE)
                     (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].add_bonus(bonus);
                 if ((ss - 3)->move != chess::Move::NO_MOVE)
@@ -1643,9 +1645,7 @@ struct engine
         auto prev_move = (ss - 1)->move;
         if (prev_move != chess::Move::NO_MOVE)
         {
-            auto piece = prev_move.typeOf() == chess::Move::CASTLING
-                             ? m_position.at(m_position.kingSq(~m_position.sideToMove()))
-                             : m_position.at(prev_move.to());
+            auto piece = heuristics::get_prev_piece(m_position, prev_move);
             value += 24 * (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
             value += 24 * (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
         }

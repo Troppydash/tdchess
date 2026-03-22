@@ -109,6 +109,18 @@ class movegen
         m_skip_quiet = true;
     }
 
+    chess::Move get_counter() const
+    {
+        if (m_prev_move != chess::Move::NO_MOVE)
+        {
+            auto counter =
+                m_heuristics.counter[heuristics::get_prev_piece(m_position, m_prev_move)][m_prev_move.to().index()];
+            return counter;
+        }
+
+        return chess::Move::NO_MOVE;
+    }
+
     chess::Move next_move()
     {
         while (true)
@@ -315,12 +327,14 @@ class movegen
                 m_stage++;
                 break;
             }
+
                 // generating all quiet moves and scoring them
             case movegen_stage::QUIET_INIT: {
                 if (!m_skip_quiet)
                 {
                     generate_threat();
                     chess::movegen::legalmoves_quiet(m_moves, m_position, m_precompute);
+                    auto counter = get_counter();
 
                     for (int i = m_capture_end;; ++i)
                     {
@@ -390,6 +404,10 @@ class movegen
                                          2;
                         }
 
+                        if (move == counter)
+                            score += 10000;
+
+                        // threat
                         if (std::abs(score) < 500 && threat_piece != chess::PieceType::NONE &&
                             m_position.at(move.from()).type() > threat_piece &&
                             (chess::Bitboard::fromSquare(move.from()) & threats))
@@ -400,7 +418,7 @@ class movegen
                                     (see::ATTACKED_PIECE_VALUES[m_position.at(move.from()).type()] -
                                      see::ATTACKED_PIECE_VALUES[threat_piece]) /
                                         8 +
-                                    200;
+                                    100;
                             }
                         }
 
@@ -525,9 +543,9 @@ class movegen
         threat_piece = chess::PieceType::NONE;
         threats = 0;
 
-        if (m_prev_move != chess::Move::NO_MOVE && m_prev_move.typeOf() != chess::Move::CASTLING)
+        if (m_prev_move != chess::Move::NO_MOVE)
         {
-            threat_piece = m_position.at(m_prev_move.to()).type();
+            threat_piece = heuristics::get_prev_piece_threat(m_position, m_prev_move).type();
             if (threat_piece == chess::PieceType::QUEEN)
                 threats = chess::attacks::queen(m_prev_move.to(), m_position.occ());
             else if (threat_piece == chess::PieceType::ROOK)

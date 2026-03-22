@@ -50,6 +50,8 @@ using continuation_correction_history = history_entry<int16_t, CORRECTION_LIMIT>
 using continuation_correction_history_full =
     history_entry<int16_t, CORRECTION_LIMIT>[13][64][12][64];
 
+using countermove_history = chess::Move[12][64];
+
 struct heuristics
 {
     history_heuristic main_history;
@@ -58,6 +60,10 @@ struct heuristics
     low_ply_history low_ply;
     continuation_history_full continuation;
     pawn_history pawn;
+
+    countermove_history counter;
+
+    // correction history
     pawn_correction_history correction_history;
     non_pawn_correction_history white_corrhist;
     non_pawn_correction_history black_corrhist;
@@ -67,7 +73,7 @@ struct heuristics
 
     heuristics()
         : main_history{}, capture_history{}, killers{}, low_ply{}, continuation{}, pawn{},
-          correction_history{}, white_corrhist{}, black_corrhist{}, cont_corr{}
+          counter{}, correction_history{}, white_corrhist{}, black_corrhist{}, cont_corr{}
     // king{}
     {
     }
@@ -115,6 +121,37 @@ struct heuristics
         // king[get_king_bucket(position, chess::Color::WHITE)][get_king_bucket(
         //     position, chess::Color::BLACK)][position.at(move.from())][move.to().index()]
         //     .add_bonus(bonus);
+    }
+
+    static constexpr chess::Piece get_prev_piece(const chess::Board &position, chess::Move move)
+    {
+        if (move.typeOf() == chess::Move::NORMAL || move.typeOf() == chess::Move::ENPASSANT)
+            return position.at(move.to());
+
+        if (move.typeOf() == chess::Move::CASTLING)
+            return chess::Piece{~position.sideToMove(), chess::PieceType::KING};
+
+        if (move.typeOf() == chess::Move::PROMOTION)
+            return chess::Piece{~position.sideToMove(), chess::PieceType::PAWN};
+
+        std::cout << "invalid move\n";
+        exit(0);
+    }
+
+    static constexpr chess::Piece get_prev_piece_threat(const chess::Board &position,
+                                                        chess::Move move)
+    {
+        if (move.typeOf() == chess::Move::NORMAL || move.typeOf() == chess::Move::ENPASSANT)
+            return position.at(move.to());
+
+        if (move.typeOf() == chess::Move::CASTLING)
+            return chess::Piece{~position.sideToMove(), chess::PieceType::ROOK};
+
+        if (move.typeOf() == chess::Move::PROMOTION)
+            return position.at(move.to());
+
+        std::cout << "invalid move\n";
+        exit(0);
     }
 
     // clang-format off
