@@ -1745,6 +1745,11 @@ struct engine
                     m_stats.display_uci(result);
                 }
             }
+            else
+            {
+                result.depth = 0;
+                result.score = 0;
+            }
 
             return result;
         }
@@ -1864,7 +1869,12 @@ struct engine
         const auto control = param.time_control(reference.fullMoveNumber(), reference.sideToMove());
         if (verbose)
             std::cout << "info ponderhit new searchtime " << control.time << std::endl;
+        //
+        // auto already_spent = m_stats.total_time;
+        long long max_time = control.time;
+        // if (already_spent.count() > control.opt_time)
+        //     max_time = std::min(max_time, already_spent.count() * 3 / 2);
 
-        m_timer.start(control.time, control.opt_time);
+        m_timer.start(max_time, control.opt_time);
     }
 };

@@ -3,117 +3,123 @@
 #include "engine.h"
 #include <thread>
 
-// interface is
-// search()
-// ponderhit() (ignore for now)
-
-struct search_thread
-{
-    // underlying
-    engine *eng;
-    nnue2::net *nnue;
-    endgame_table *end;
-    int index;
-
-    // multithreading
-    std::condition_variable cv{};
-    std::mutex mutex{};
-    std::atomic<bool> is_searching = false;
-    std::atomic<bool> should_quit = false;
-
-    // search info
-    chess::Board s_board{};
-    search_param s_param{};
-    bool s_verbose{};
-
-    // search result
-    search_result s_result{};
-
-    search_thread(int index, table *tt, endgame_table *endgame, nnue2::net *net)
-        : nnue{new nnue2::net{net->clone()}}, end{endgame != nullptr ? new endgame_table{endgame->clone()} : nullptr},
-          index(index)
-    {
-        eng = new engine{end, nnue, tt};
-    }
-
-    bool is_main_thread() const
-    {
-        return index == 0;
-    }
-
-    void loop()
-    {
-        while (true)
-        {
-            eng->post_search_smp();
-
-            std::unique_lock<std::mutex> lock{mutex};
-            cv.wait(lock, [&] { return is_searching || should_quit; });
-            if (should_quit)
-                break;
-
-            // do work
-            s_param.is_main_thread = is_main_thread();
-            s_result = eng->search(s_board, s_param, s_verbose && is_main_thread());
-
-            is_searching = false;
-            cv.notify_all();
-        }
-    }
-
-    void start_search(const chess::Board &reference, search_param param, bool verbose = false)
-    {
-        assert(!is_searching);
-
-        s_board = reference;
-        s_param = param;
-        s_verbose = verbose;
-
-        is_searching = true;
-        cv.notify_all();
-    }
-
-    void ponderhit(const chess::Board &reference, search_param param, bool verbose = false)
-    {
-        // ignore setting s_* since we never exit search
-        param.is_main_thread = is_main_thread();
-        eng->ponderhit(reference, param, verbose && is_main_thread());
-    }
-
-    void wait_search()
-    {
-        std::unique_lock<std::mutex> lock{mutex};
-        cv.wait(lock, [&] { return !is_searching; });
-    }
-
-    void stop()
-    {
-        if (is_searching)
-        {
-            eng->m_timer.stop();
-        }
-    }
-
-    void quit()
-    {
-        should_quit = true;
-        stop();
-        cv.notify_all();
-    }
-
-    ~search_thread()
-    {
-        if (!should_quit)
-            quit();
-
-        delete eng;
-        delete end;
-        delete nnue;
-    }
-};
-
 struct lazysmp
 {
+    struct search_thread
+    {
+        // underlying
+        engine *eng;
+        nnue2::net *nnue;
+        endgame_table *end;
+        int index;
+
+        // multithreading
+        std::condition_variable cv{};
+        std::mutex mutex{};
+        std::atomic<bool> is_searching = false;
+        std::atomic<bool> should_quit = false;
+
+        // search info
+        chess::Board s_board{};
+        search_param s_param{};
+        bool s_verbose{};
+
+        // search result
+        search_result s_result{};
+
+        lazysmp *parent = nullptr;
+
+        search_thread(int index, lazysmp *parent, table *tt, endgame_table *endgame,
+                      nnue2::net *net)
+            : nnue{new nnue2::net{net->clone()}},
+              end{endgame != nullptr ? new endgame_table{endgame->clone()} : nullptr}, index(index),
+              parent{parent}
+        {
+            eng = new engine{end, nnue, tt};
+        }
+
+        bool is_main_thread() const
+        {
+            return index == 0;
+        }
+
+        void loop()
+        {
+            while (true)
+            {
+                eng->post_search_smp();
+
+                std::unique_lock<std::mutex> lock{mutex};
+                cv.wait(lock, [&] { return is_searching || should_quit; });
+                if (should_quit)
+                    break;
+
+                // do work
+                s_param.is_main_thread = is_main_thread();
+                s_result = eng->search(s_board, s_param, s_verbose && is_main_thread());
+
+                // stop other threads if main thread exits
+                if (is_main_thread())
+                {
+                    parent->stop();
+                }
+
+                is_searching = false;
+                cv.notify_all();
+            }
+        }
+
+        void start_search(const chess::Board &reference, search_param param, bool verbose = false)
+        {
+            assert(!is_searching);
+
+            s_board = reference;
+            s_param = param;
+            s_verbose = verbose;
+
+            is_searching = true;
+            cv.notify_all();
+        }
+
+        void ponderhit(const chess::Board &reference, search_param param, bool verbose = false)
+        {
+            // ignore setting s_* since we never exit search
+            param.is_main_thread = is_main_thread();
+            eng->ponderhit(reference, param, verbose && is_main_thread());
+        }
+
+        void wait_search()
+        {
+            std::unique_lock<std::mutex> lock{mutex};
+            cv.wait(lock, [&] { return !is_searching; });
+        }
+
+        void stop()
+        {
+            if (is_searching)
+            {
+                eng->m_timer.stop();
+            }
+        }
+
+        void quit()
+        {
+            should_quit = true;
+            stop();
+            cv.notify_all();
+        }
+
+        ~search_thread()
+        {
+            if (!should_quit)
+                quit();
+
+            delete eng;
+            delete end;
+            delete nnue;
+        }
+    };
+
     nnue2::net *net = nullptr;
     table *tt = nullptr;
     endgame_table *endgame = nullptr;
@@ -132,7 +138,7 @@ struct lazysmp
         // make threads
         for (int i = 0; i < num_threads; ++i)
         {
-            search_threads.push_back(std::make_unique<search_thread>(i, tt, endgame, net));
+            search_threads.push_back(std::make_unique<search_thread>(i, this, tt, endgame, net));
 
             pthread_t thread;
             pthread_attr_t attr;
@@ -167,7 +173,7 @@ struct lazysmp
         tt->inc_generation();
 
         // 0 is main, rest is helper
-        if (verbose)
+        if (verbose && num_threads > 1)
             std::cout << "info lazysmp with " << num_threads << " threads\n";
 
         for (int i = 0; i < num_threads; ++i)
@@ -180,14 +186,68 @@ struct lazysmp
             search_threads[i]->wait_search();
         }
 
-        auto result = search_threads[0]->s_result;
-        if (verbose)
+        // thread voting
+        // note threads with zero depth are always ignored since no pv
+        int best_thread = 0;
+        if (num_threads > 1)
+        {
+            std::unordered_map<uint16_t, int> votes{};
+
+            int min_score = param::INF;
+            for (int i = 0; i < num_threads; ++i)
+            {
+                if (search_threads[i]->s_result.depth > 0)
+                    min_score = std::min(min_score, (int)search_threads[i]->s_result.score);
+            }
+
+            for (int i = 0; i < num_threads; ++i)
+            {
+                auto &result = search_threads[i]->s_result;
+                if (result.depth > 0)
+                {
+                    votes[result.pv_line[0].move()] +=
+                        (result.score - min_score + 10) * (result.depth);
+                }
+            }
+
+            for (int i = 1; i < num_threads; ++i)
+            {
+                auto &result = search_threads[i]->s_result;
+                if (result.depth > 0)
+                {
+                    int current_score = result.score;
+                    int best_score = search_threads[best_thread]->s_result.score;
+
+                    int current_vote = votes[result.pv_line[0].move()];
+                    int best_vote = votes[search_threads[best_thread]->s_result.pv_line[0].move()];
+
+                    if (std::abs(best_score) >= param::CHECKMATE)
+                    {
+                        if (current_score > best_score)
+                            best_thread = i;
+                    }
+                    else if (current_score >= param::CHECKMATE)
+                    {
+                        best_thread = i;
+                    }
+                    else if (current_score > -param::CHECKMATE && current_vote > best_vote)
+                    {
+                        best_thread = i;
+                    }
+                    // else will be [best_score] not decisive, but current score is neg checkmate
+                    // idk why we also don't update but whatever
+                }
+            }
+        }
+
+        auto result = search_threads[best_thread]->s_result;
+        if (verbose && num_threads > 1)
         {
             engine_stats stats = get_stats(0);
             for (int i = 1; i < num_threads; ++i)
                 stats = stats.append(get_stats(i));
 
-            std::cout << "info lazysmp ";
+            std::cout << "info lazysmp " << best_thread << " ";
             stats.display_uci(result);
         }
 
