@@ -1305,12 +1305,13 @@ struct engine
             // [low depth pruning]
             if (!is_root && has_non_pawn && !param::IS_LOSS(best_score))
             {
-
+                // adjust the relevant depth
+                // this usage is really inconsistent, TODO: adjust this
                 int32_t lmr_depth =
                     std::max(0, depth - m_param.lookup(is_quiet, depth, move_count) - !improving +
                                     history_score / 5000);
 
-                // see pruning
+                // [see pruning]
                 int see_margin =
                     is_quiet ? features::SEE_QUIET_BASE +
                                    features::SEE_QUIET_DEPTH_MULT * lmr_depth * lmr_depth
@@ -1334,7 +1335,7 @@ struct engine
                         continue;
                 }
 
-                // history pruning
+                // [history pruning]
                 if (is_quiet && history_score < -6000 * depth)
                 {
                     gen.skip_quiet();
@@ -1344,14 +1345,25 @@ struct engine
                 // [late move pruning], higher threshold if improving
                 if (move_count >= (3 + depth * depth) / (2 - improving))
                 {
+                    // only skip quiets
                     gen.skip_quiet();
                 }
 
-                // futility pruning
+                // [futility pruning]
+                // prune quiet moves that doesn't raise alpha
                 if (is_quiet && quiet_count >= 1 && lmr_depth <= 12 && !ss->in_check &&
                     ss->static_eval + 150 + 150 * lmr_depth <= alpha)
                 {
                     gen.skip_quiet();
+                    continue;
+                }
+
+                // [capture futility pruning]
+                // prune capture moves that doesn't raise alpha
+                auto captured = m_heuristics->get_capture(m_position, move);
+                if (is_capture && lmr_depth <= 12 && !ss->in_check &&
+                    ss->static_eval + 200 + 200 * lmr_depth + see::PIECE_VALUES[captured] <= alpha)
+                {
                     continue;
                 }
             }
