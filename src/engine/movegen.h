@@ -113,8 +113,8 @@ class movegen
     {
         if (m_prev_move != chess::Move::NO_MOVE)
         {
-            auto counter =
-                m_heuristics.counter[heuristics::get_prev_piece(m_position, m_prev_move)][m_prev_move.to().index()];
+            auto counter = m_heuristics.counter[heuristics::get_prev_piece(m_position, m_prev_move)]
+                                               [m_prev_move.to().index()];
             return counter;
         }
 
@@ -408,27 +408,29 @@ class movegen
                             score += 10000;
 
                         // threat
-                        if (std::abs(score) < 500 && threat_piece != chess::PieceType::NONE &&
-                            m_position.at(move.from()).type() > threat_piece &&
-                            (chess::Bitboard::fromSquare(move.from()) & threats))
+                        if (std::abs(score) < 500)
                         {
-                            if (!(chess::Bitboard::fromSquare(move.to()) & threats))
+                            if (threat_piece != chess::PieceType::NONE &&
+                                m_position.at(move.from()).type() > threat_piece &&
+                                (chess::Bitboard::fromSquare(move.from()) & threats))
                             {
-                                score +=
-                                    (see::ATTACKED_PIECE_VALUES[m_position.at(move.from()).type()] -
-                                     see::ATTACKED_PIECE_VALUES[threat_piece]) /
-                                        8 +
-                                    100;
+                                if (!(chess::Bitboard::fromSquare(move.to()) & threats))
+                                {
+                                    score += (see::ATTACKED_PIECE_VALUES[m_position.at(move.from())
+                                                                             .type()] -
+                                              see::ATTACKED_PIECE_VALUES[threat_piece]) /
+                                                 8 +
+                                             100;
+                                }
+                            }
+                            else if ((int)m_position.at(move.from()).type() >
+                                         (int)chess::PieceType::PAWN &&
+                                     (chess::Bitboard::fromSquare(move.from()) & pawn_threats) &&
+                                     !(chess::Bitboard::fromSquare(move.to()) & pawn_threats))
+                            {
+                                score += 100;
                             }
                         }
-
-                        // else if ((int)m_position.at(move.from()).type() >
-                        //              (int)chess::PieceType::PAWN &&
-                        //          (chess::Bitboard::fromSquare(move.from()) & pawn_threats) &&
-                        //          !(chess::Bitboard::fromSquare(move.to()) & pawn_threats))
-                        // {
-                        //     score += 100;
-                        // }
 
                         // score +=
                         //     m_heuristics.king
