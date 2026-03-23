@@ -1300,6 +1300,7 @@ struct engine
             bool is_capture = m_heuristics->is_capture(m_position, move);
             bool is_quiet = !is_capture;
 
+            // [history calculation]
             history_score = move.score();
             // if (is_capture)
             // {
@@ -1345,11 +1346,15 @@ struct engine
             //     // continuation
             //     for (int i = 0; i < NUM_CONTINUATION; ++i)
             //     {
-            //         score += ((*(ss - i + 1))
-            //                       .continuation[i])[m_position.at(move.from())][move.to().index()]
+            //         score += (*(ss - i - 1)
+            //                       ->continuation)[m_position.at(move.from())][move.to().index()]
             //                      .get_value() /
             //                  2;
             //     }
+            //
+            //     if (move == m_heuristics->killers[ply][0].first
+            //         || move == m_heuristics->killers[ply][1].first)
+            //         score += 10000;
             //
             //     history_score = std::clamp(score, -32000, 32000);
             // }

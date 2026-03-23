@@ -135,7 +135,10 @@ class movegen
                 m_stage++;
                 if (m_pv_move != chess::Move::NO_MOVE &&
                     legal::is_legal_full(m_position, m_pv_move))
+                {
+                    m_pv_move.setScore(0);
                     return m_pv_move;
+                }
 
                 break;
             }
@@ -320,7 +323,10 @@ class movegen
                         if (killer != chess::Move::NO_MOVE && killer != m_pv_move &&
                             legal::is_legal_full(m_position, killer) &&
                             !m_heuristics.is_capture(m_position, killer))
+                        {
+                            killer.setScore(0);
                             return killer;
+                        }
                     }
                 }
 
@@ -408,27 +414,20 @@ class movegen
                             score += 10000;
 
                         // threat
-                        if (std::abs(score) < 500)
+                        if (std::abs(score) < 700)
                         {
-                            if (threat_piece != chess::PieceType::NONE &&
-                                m_position.at(move.from()).type() > threat_piece &&
-                                (chess::Bitboard::fromSquare(move.from()) & threats))
+                            auto piece = m_position.at(move.from()).type();
+                            if (threat_piece != chess::PieceType::NONE && piece > threat_piece &&
+                                (chess::Bitboard::fromSquare(move.from()) & threats) &&
+                                !(chess::Bitboard::fromSquare(move.to()) & threats))
                             {
-                                if (!(chess::Bitboard::fromSquare(move.to()) & threats))
-                                {
-                                    score += (see::ATTACKED_PIECE_VALUES[m_position.at(move.from())
-                                                                             .type()] -
-                                              see::ATTACKED_PIECE_VALUES[threat_piece]) /
-                                                 8 +
-                                             100;
-                                }
-                            }
-                            else if ((int)m_position.at(move.from()).type() >
-                                         (int)chess::PieceType::PAWN &&
-                                     (chess::Bitboard::fromSquare(move.from()) & pawn_threats) &&
-                                     !(chess::Bitboard::fromSquare(move.to()) & pawn_threats))
-                            {
-                                score += 100;
+                                int additional = (see::ATTACKED_PIECE_VALUES[piece] -
+                                                  see::ATTACKED_PIECE_VALUES[threat_piece]) /
+                                                     16 +
+                                                 100;
+
+                                assert(additional > 0);
+                                score += additional;
                             }
                         }
 
@@ -560,7 +559,7 @@ class movegen
                 threats = chess::attacks::pawn(m_position.sideToMove() ^ 1, m_prev_move.to()) &
                           m_position.occ();
         }
-        //
+
         // pawn_threats = 0;
         // auto pawns = m_position.pieces(chess::PieceType::PAWN, m_position.sideToMove() ^ 1);
         // while (pawns)
