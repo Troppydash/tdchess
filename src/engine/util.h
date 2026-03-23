@@ -5,7 +5,7 @@
 namespace util
 {
 inline uint64_t ZOBRIST_50MR[150];
-inline bool ZOB_INIT = false;
+inline std::atomic<bool> ZOB_INIT = false;
 
 inline void init() {
     if (ZOB_INIT)

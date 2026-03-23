@@ -89,7 +89,7 @@ constexpr std::array<const int32_t *, 6> eg_pesto_table = {eg_pawn_table, eg_kni
 constexpr int32_t gamephaseInc[12] = {0, 0, 1, 1, 1, 1, 2, 2, 4, 4, 0, 0};
 inline int32_t mg_table[12][64];
 inline int32_t eg_table[12][64];
-inline bool initialized = false;
+inline std::atomic<bool> initialized = false;
 
 constexpr uint32_t flip(uint32_t x)
 {

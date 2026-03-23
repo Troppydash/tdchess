@@ -17,7 +17,7 @@ inline int h2(uint64_t key)
 
 inline uint64_t keys[8192];
 inline chess::Move moves[8192];
-inline bool IS_INIT = false;
+inline std::atomic<bool> IS_INIT = false;
 
 inline void init()
 {
