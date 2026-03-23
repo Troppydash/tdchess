@@ -181,16 +181,16 @@ class rep_filter
         history.prefetch(key);
     }
 
-    void add(const chess::Board &x)
+    void add(uint64_t key)
     {
-        assert(current.lookup(x.hash()) == 0);
-        current.set(x.hash());
+        assert(current.lookup(key) == 0);
+        current.set(key);
     }
 
-    void remove(const chess::Board &x)
+    void remove(uint64_t key)
     {
-        current.unset(x.hash());
-        assert(current.lookup(x.hash()) == 0);
+        current.unset(key);
+        assert(current.lookup(key) == 0);
     }
 
     bool check(const chess::Board &board, int ply) const

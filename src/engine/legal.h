@@ -6,8 +6,9 @@ namespace legal
 {
 
 template <chess::Color::underlying c, bool is_capture>
-static inline bool is_legal_pawn(const chess::Board &board, const chess::Move move, chess::Bitboard pin_hv,
-                          chess::Bitboard pin_d, chess::Bitboard checkmask, chess::Bitboard occ_opp)
+static inline bool is_legal_pawn(const chess::Board &board, const chess::Move move,
+                                 chess::Bitboard pin_hv, chess::Bitboard pin_d,
+                                 chess::Bitboard checkmask, chess::Bitboard occ_opp)
 {
     using namespace chess;
 

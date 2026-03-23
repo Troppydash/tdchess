@@ -321,8 +321,10 @@ struct search_stack
     int32_t ply = 0;
     int16_t static_eval = param::VALUE_NONE;
     chess::Move move = chess::Move::NO_MOVE;
+    uint64_t key = 0;
     chess::Move excluded_move = chess::Move::NO_MOVE;
     bool in_check = false;
+    bool computed_check = false;
     bool tt_pv = false;
     bool tt_hit = false;
     bool is_cap = false;
@@ -350,6 +352,8 @@ struct search_stack
         cont_corr = &(heuristics.cont_corr[static_cast<uint8_t>(chess::Piece::NONE)][0]);
 
         complex = 0;
+        key = 0;
+        computed_check = false;
     }
 };
 
@@ -533,7 +537,14 @@ struct engine
     void make_move(const chess::Move &move, search_stack *ss)
     {
         ss->move = move;
-        m_filter.add(m_position);
+
+        // TODO: maybe skip null moves?
+        // if (ss->ply > 0 && (ss - 1)->move == chess::Move::NO_MOVE)
+        //     ss->key = m_position.hash() ^ (ss - 1)->key;
+        // else
+        ss->key = m_position.hash();
+        m_filter.add(ss->key);
+
         if (move == chess::Move::NO_MOVE)
         {
             ss->is_cap = false;
@@ -561,8 +572,9 @@ struct engine
         }
     }
 
-    void unmake_move(const chess::Move &move)
+    void unmake_move(const chess::Move &move, search_stack *ss)
     {
+        (ss + 1)->computed_check = false;
         if (move == chess::Move::NO_MOVE)
         {
             m_position.unmakeNullMove();
@@ -574,7 +586,7 @@ struct engine
             m_keys.unmake_move();
         }
 
-        m_filter.remove(m_position);
+        m_filter.remove(ss->key);
     }
 
     template <bool is_pv_node>
@@ -643,7 +655,7 @@ struct engine
         int16_t best_score = -param::VALUE_INF;
         int16_t futility_base = -param::VALUE_INF;
         int16_t unadjusted_static_eval = param::VALUE_NONE;
-        ss->in_check = m_position.inCheck();
+        ss->in_check = ss->computed_check ? ss->in_check : m_position.inCheck();
         if (ss->in_check)
         {
             best_score = futility_base = -param::VALUE_INF;
@@ -738,7 +750,7 @@ struct engine
 
             make_move(move, ss);
             score = -qsearch<is_pv_node>(-beta, -alpha, depth - 1, ss + 1);
-            unmake_move(move);
+            unmake_move(move, ss);
 
             if (m_timer.is_stopped())
                 return 0;
@@ -933,7 +945,7 @@ struct engine
         int16_t unadjusted_static_eval = param::VALUE_NONE;
         int16_t adjusted_static_eval = param::VALUE_NONE;
         int complexity = 0;
-        ss->in_check = m_position.inCheck();
+        ss->in_check = ss->computed_check ? ss->in_check : m_position.inCheck();
         if (ss->in_check)
         {
             ss->static_eval = adjusted_static_eval = param::VALUE_NONE;
@@ -1092,7 +1104,7 @@ struct engine
                 make_move(chess::Move::NO_MOVE, ss);
                 int16_t null_score =
                     -negamax<false>(-beta, -beta + 1, depth - reduction, ss + 1, false);
-                unmake_move(chess::Move::NO_MOVE);
+                unmake_move(chess::Move::NO_MOVE, ss);
 
                 if (m_timer.is_stopped())
                     return 0;
@@ -1183,7 +1195,7 @@ struct engine
                                                 ss + 1, !cut_node);
                     }
 
-                    unmake_move(move);
+                    unmake_move(move, ss);
 
                     if (m_timer.is_stopped())
                         return 0;
@@ -1501,7 +1513,9 @@ struct engine
                              (is_quiet ? features::QUIET_LMR_DIV : features::CAPTURE_LMR_DIV);
 
                 // extend if checking
-                reduction -= m_position.inCheck();
+                (ss + 1)->in_check = m_position.inCheck();
+                (ss + 1)->computed_check = true;
+                reduction -= (ss + 1)->in_check;
 
                 int32_t reduced_depth = std::clamp(new_depth - reduction, 1, new_depth + 1);
                 score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
@@ -1527,7 +1541,7 @@ struct engine
             if (is_pv_node && (move_count == 1 || score > alpha))
                 score = -negamax<true>(-beta, -alpha, new_depth, ss + 1, false);
 
-            unmake_move(move);
+            unmake_move(move, ss);
 
             if (m_timer.is_stopped())
                 return 0;
@@ -1850,6 +1864,7 @@ struct engine
             int32_t score = 0;
             while (true)
             {
+                // TODO: root move list to prevent tt root overriding
                 score = negamax<true>(alpha, beta, depth, &m_stack[SEARCH_STACK_PREFIX], false);
                 if (m_timer.is_stopped())
                     break;
