@@ -73,11 +73,13 @@ struct lazysmp
         {
             assert(!is_searching);
 
+            mutex.lock();
             s_board = reference;
             s_param = param;
             s_verbose = verbose;
 
             is_searching = true;
+            mutex.unlock();
             cv.notify_all();
         }
 
@@ -104,8 +106,10 @@ struct lazysmp
 
         void quit()
         {
+            mutex.lock();
             should_quit = true;
             stop();
+            mutex.unlock();
             cv.notify_all();
         }
 
@@ -205,8 +209,9 @@ struct lazysmp
                 const auto &result = search_threads[i]->s_result;
                 if (result.depth > 0)
                 {
+                    assert(!result.pv_line.empty());
                     votes[result.pv_line[0].move()] +=
-                        (result.score - min_score + 5) * (result.depth);
+                        (result.score - min_score + 100) * (result.depth);
                 }
             }
 
@@ -215,11 +220,14 @@ struct lazysmp
                 const auto &result = search_threads[i]->s_result;
                 if (result.depth > 0)
                 {
+                    assert(!result.pv_line.empty());
+
                     int current_score = result.score;
                     int best_score = search_threads[best_thread]->s_result.score;
 
                     long long current_vote = votes[result.pv_line[0].move()];
-                    long long best_vote = votes[search_threads[best_thread]->s_result.pv_line[0].move()];
+                    long long best_vote =
+                        votes[search_threads[best_thread]->s_result.pv_line[0].move()];
 
                     if (std::abs(best_score) >= param::CHECKMATE)
                     {

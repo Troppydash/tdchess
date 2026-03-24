@@ -357,6 +357,11 @@ struct search_stack
     }
 };
 
+struct root_move_list
+{
+    // TODO:
+};
+
 enum search_node_type
 {
     NonPV,
@@ -919,6 +924,12 @@ struct engine
         tt_result.move = ss->tt_hit && !has_excluded ? tt_result.move : chess::Move::NO_MOVE;
         bool is_tt_capture = tt_result.move != chess::Move::NO_MOVE &&
                              m_heuristics->is_capture(m_position, tt_result.move);
+
+        // check
+        // if (is_root && !m_line.get_moves().empty() && tt_result.move != m_line.get_moves()[0])
+        // {
+        //     exit(0);
+        // }
 
         // [tt early return]
         if (!is_pv_node && tt_result.can_use && (cut_node == (tt_result.score >= beta)) &&
