@@ -359,7 +359,67 @@ struct search_stack
 
 struct root_move_list
 {
-    // TODO:
+    struct root_move
+    {
+        chess::Move move;
+        int average_score;
+        int score;
+    };
+
+    std::array<root_move, chess::constants::MAX_MOVES> moves{};
+    int size;
+
+    void load(const chess::Board &position)
+    {
+        chess::Movelist tmp;
+        chess::movegen::legalmoves(tmp, position);
+
+        size = 0;
+        for (auto m : tmp)
+        {
+            moves[size++] = {
+                .move = m,
+                .average_score = param::VALUE_NONE,
+                .score = param::VALUE_NONE,
+            };
+        }
+    }
+
+    bool is_singular() const
+    {
+        return size == 1;
+    }
+
+    root_move &get_by_move(chess::Move src)
+    {
+        for (auto &m : moves)
+            if (m.move == src)
+                return m;
+
+        std::cout << "invalid move " << chess::uci::moveToUci(src) << std::endl;
+        exit(0);
+    }
+
+    const root_move &get_pv() const
+    {
+        return moves[0];
+    }
+
+    void sort()
+    {
+        // insertion sort
+        for (int i = 1; i < size; ++i)
+        {
+            auto key = moves[i];
+            int j = i - 1;
+            while (j >= 0 && moves[j].score < key.score)
+            {
+                moves[j + 1] = moves[j];
+                --j;
+            }
+            moves[j + 1] = key;
+        }
+    }
 };
 
 enum search_node_type
@@ -398,6 +458,9 @@ struct engine
 
     // pawn keys
     position_pawn_keys m_keys{};
+
+    // root move list
+    root_move_list m_root_moves{};
 
     // must be set via methods
     explicit engine(table *table) : engine(nullptr, nullptr, table)
@@ -467,54 +530,9 @@ struct engine
         m_filter.load(m_position);
 
         m_keys.initialize(m_position);
-    }
 
-    [[nodiscard]] int evaluate_bucket() const
-    {
-        constexpr int n = 8;
-        constexpr int divisor = 32 / n;
-        return (m_position.occ().count() - 2) / divisor;
+        m_root_moves.load(m_position);
     }
-
-    // int32_t subevaluate(search_stack *ss, chess::Move pv_move)
-    // {
-    //     int32_t best = m_nnue->evaluate(m_position);
-    //     if (std::abs(best) < 500)
-    //     {
-    //         movegen gen{ss->moves[0],
-    //                     m_position,
-    //                     *m_heuristics,
-    //                     chess::Move::NO_MOVE,
-    //                     chess::Move::NO_MOVE,
-    //                     ss->ply,
-    //                     0,
-    //                     1000,
-    //                     m_keys.get_pawn_key(),
-    //                     movegen_stage::PROBPV};
-    //
-    //         chess::Move m;
-    //         while ((m = gen.next_move()) != chess::Move::NO_MOVE)
-    //         {
-    //             m_nnue->make_move(m_position, m);
-    //             m_position.makeMove(m);
-    //
-    //             if (m_position.inCheck())
-    //             {
-    //                 m_position.unmakeMove(m);
-    //                 m_nnue->unmake_move();
-    //                 break;
-    //             }
-    //
-    //             best = (2 * best - m_nnue->evaluate(m_position)) / 3;
-    //             m_position.unmakeMove(m);
-    //             m_nnue->unmake_move();
-    //
-    //             break;
-    //         }
-    //     }
-    //
-    //     return best;
-    // }
 
     [[nodiscard]] int16_t evaluate(search_stack *ss,
                                    chess::Move pv_move = chess::Move::NO_MOVE) const
@@ -542,11 +560,6 @@ struct engine
     void make_move(const chess::Move &move, search_stack *ss)
     {
         ss->move = move;
-
-        // TODO: maybe skip null moves?
-        // if (ss->ply > 0 && (ss - 1)->move == chess::Move::NO_MOVE)
-        //     ss->key = m_position.hash() ^ (ss - 1)->key;
-        // else
         ss->key = m_position.hash();
         m_filter.add(ss->key);
 
@@ -922,14 +935,14 @@ struct engine
         bool tt_pv = has_excluded ? ss->tt_pv : is_pv_node || (ss->tt_hit && tt_result.is_pv);
         ss->tt_pv = tt_pv;
         tt_result.move = ss->tt_hit && !has_excluded ? tt_result.move : chess::Move::NO_MOVE;
+
+        if (is_root)
+        {
+            tt_result.move = m_root_moves.get_pv().move;
+        }
+
         bool is_tt_capture = tt_result.move != chess::Move::NO_MOVE &&
                              m_heuristics->is_capture(m_position, tt_result.move);
-
-        // check
-        // if (is_root && !m_line.get_moves().empty() && tt_result.move != m_line.get_moves()[0])
-        // {
-        //     exit(0);
-        // }
 
         // [tt early return]
         if (!is_pv_node && tt_result.can_use && (cut_node == (tt_result.score >= beta)) &&
@@ -1560,6 +1573,26 @@ struct engine
             if (bonus != 0)
                 update_continuation_history(ss, m_position.at(move.from()), move.to(), bonus);
 
+            if (is_root)
+            {
+                root_move_list::root_move &root = m_root_moves.get_by_move(move);
+                root.average_score = root.average_score == param::VALUE_NONE
+                                         ? score
+                                         : (score + root.average_score) / 2;
+
+                if (move_count == 1 || score > alpha)
+                {
+                    root.score = score;
+                    root.move = move;
+                    // TODO: migrate pv line to this
+                }
+                else
+                {
+                    // uh
+                    root.score = -param::INF;
+                }
+            }
+
             if (score > best_score)
             {
                 best_score = score;
@@ -1850,33 +1883,41 @@ struct engine
             return result;
         }
 
-        chess::Movelist root_moves;
-        chess::movegen::legalmoves(root_moves, m_position);
-        bool is_singular = root_moves.size() == 1;
-
         chess::Move last_move = chess::Move::NO_MOVE;
         int last_score = 0;
         int complexity = 0;
         int error = 0;
         for (int32_t depth = 0; depth <= std::min(param::MAX_DEPTH - 4, control.depth); depth += 1)
         {
+            auto &pv = m_root_moves.get_pv();
+
+            // check if just one move
+            if (m_root_moves.is_singular())
+            {
+                result.pv_line = {pv.move};
+                result.depth = 1;
+                result.score = 0;
+                break;
+            }
+
             // scale window by score, larger scores warrants higher window
-            int window = 10 + result.score * result.score / 13000;
+            int window = 10 + pv.average_score * pv.average_score / 10000;
 
             int alpha = -param::INF;
             int beta = param::INF;
 
             if (depth >= 3)
             {
-                alpha = std::max(-param::INF, result.score - window);
-                beta = std::min((int)param::INF, result.score + window);
+                alpha = std::max(-param::INF, pv.score - window);
+                beta = std::min((int)param::INF, pv.score + window);
             }
 
             int32_t score = 0;
             while (true)
             {
-                // TODO: root move list to prevent tt root overriding
                 score = negamax<true>(alpha, beta, depth, &m_stack[SEARCH_STACK_PREFIX], false);
+                m_root_moves.sort();
+
                 if (m_timer.is_stopped())
                     break;
 
@@ -1906,6 +1947,13 @@ struct engine
             {
                 result.pv_line.clear();
                 result.pv_line = m_line.get_moves();
+
+                if (result.pv_line[0] != m_root_moves.get_pv().move)
+                {
+                    std::cout << "warn root move differ\n";
+                    result.score = m_root_moves.get_pv().score;
+                    result.pv_line = {m_root_moves.get_pv().move};
+                }
             }
 
             // exit if max time exceeded
@@ -1931,7 +1979,7 @@ struct engine
             // last_score = result.score;
 
             // optimum time check, after asp window re-search
-            if (param.is_main_thread && m_timer.is_opt_time_stop())
+            if (param.is_main_thread && !result.pv_line.empty() && m_timer.is_opt_time_stop())
                 break;
 
             // display info
@@ -1940,12 +1988,6 @@ struct engine
             if (param.is_main_thread && verbose)
             {
                 m_stats.display_uci(result);
-            }
-
-            // check if just one move
-            if (!result.pv_line.empty() && is_singular)
-            {
-                break;
             }
         }
 

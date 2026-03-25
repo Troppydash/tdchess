@@ -294,6 +294,10 @@ class uci_handler
 
                 // to reset tt to empty
                 m_tt->clear();
+
+                // reload lazysmp just in case
+                // TODO: find a faster way
+                reload_engine();
             }
             else if (lead == "isready")
             {

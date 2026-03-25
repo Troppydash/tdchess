@@ -216,7 +216,8 @@ struct heuristics
         //                 entry.decay();
 
         for (auto &killer : killers)
-            killer[0].first = chess::Move::NO_MOVE;
+            for (auto &k : killer)
+                k.first = chess::Move::NO_MOVE;
 
         for (auto &a : low_ply)
             for (auto &b : a)
