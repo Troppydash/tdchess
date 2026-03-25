@@ -151,6 +151,8 @@ struct pv_line
     // pv_length[ply] is the number of moves at ply
     int pv_length[param::MAX_DEPTH]{};
 
+    bool is_active = true;
+
     explicit pv_line() = default;
 
     void ply_init(int32_t ply)
@@ -161,7 +163,7 @@ struct pv_line
     void update(int32_t ply, const chess::Move &move)
     {
         pv_table[ply][ply] = move;
-        if (ply >= 8)
+        if (!is_active && ply >= 1)
         {
             pv_length[ply] = ply + 1;
             return;
@@ -1583,12 +1585,11 @@ struct engine
                 if (move_count == 1 || score > alpha)
                 {
                     root.score = score;
-                    root.move = move;
                     // TODO: migrate pv line to this
                 }
                 else
                 {
-                    // uh
+                    // faillow cannot order
                     root.score = -param::INF;
                 }
             }
@@ -1603,7 +1604,7 @@ struct engine
                         ss->complex += 1;
 
                     best_move = move;
-                    if (is_pv_node && !m_timer.is_stopped())
+                    if (is_pv_node)
                         m_line.update(ply, best_move);
 
                     if (score >= beta)
@@ -1855,6 +1856,7 @@ struct engine
         m_position = reference;
 
         begin();
+        m_line.is_active = param.is_main_thread;
 
         search_result result{};
 
@@ -1943,17 +1945,23 @@ struct engine
             }
 
             // update lines always, since root moves are updated only when timer ok
-            if (!m_line.get_moves().empty())
+            result.score = m_root_moves.get_pv().score;
+            result.pv_line = {m_root_moves.get_pv().move};
+            auto pv_line = m_line.get_moves();
+            if (!pv_line.empty())
             {
-                result.pv_line.clear();
-                result.pv_line = m_line.get_moves();
-
-                if (result.pv_line[0] != m_root_moves.get_pv().move)
+                // this check is needed since sometimes they differ
+                // but we always want to use the m_root_moves version
+                if (param.is_main_thread && pv_line[0] == m_root_moves.get_pv().move)
                 {
-                    std::cout << "warn root move differ\n";
-                    result.score = m_root_moves.get_pv().score;
-                    result.pv_line = {m_root_moves.get_pv().move};
+                    result.pv_line = pv_line;
                 }
+
+                // std::cout << "warn root move differ "
+                //           << chess::uci::moveToUci(result.pv_line[0]) << " against "
+                //           << chess::uci::moveToUci(m_root_moves.get_pv().move) << "\n";
+                // std::cout << m_root_moves.get_by_move(result.pv_line[0]).score << " , "
+                //           << m_root_moves.get_pv().score << "\n";
             }
 
             // exit if max time exceeded

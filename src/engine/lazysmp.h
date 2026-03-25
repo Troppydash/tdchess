@@ -40,7 +40,7 @@ struct lazysmp
 
         bool is_main_thread() const
         {
-            return index == 0;
+            return index == parent->main_thread_index;
         }
 
         void loop()
@@ -132,6 +132,7 @@ struct lazysmp
     int num_threads = 1;
     std::vector<std::unique_ptr<search_thread>> search_threads;
     std::vector<pthread_t> threads;
+    int main_thread_index = 0;
 
     lazysmp(int num, nnue2::net *net, table *tt, endgame_table *endgame)
         : net(net), tt(tt), endgame(endgame), num_threads{num}
@@ -192,7 +193,7 @@ struct lazysmp
 
         // thread voting
         // note threads with zero depth are always ignored since no pv
-        int best_thread = 0;
+        int best_thread = main_thread_index;
         if (num_threads > 1)
         {
             std::unordered_map<uint16_t, long long> votes{};
@@ -211,12 +212,15 @@ struct lazysmp
                 {
                     assert(!result.pv_line.empty());
                     votes[result.pv_line[0].move()] +=
-                        (result.score - min_score + 100) * (result.depth);
+                        (result.score - min_score + 200) * (result.depth);
                 }
             }
 
-            for (int i = 1; i < num_threads; ++i)
+            for (int i = 0; i < num_threads; ++i)
             {
+                if (best_thread == i)
+                    continue;
+
                 const auto &result = search_threads[i]->s_result;
                 if (result.depth > 0)
                 {
@@ -247,15 +251,16 @@ struct lazysmp
                 }
             }
         }
+        main_thread_index = best_thread;
 
-        auto result = search_threads[best_thread]->s_result;
+        auto result = search_threads[main_thread_index]->s_result;
         if (verbose && num_threads > 1)
         {
             engine_stats stats = get_stats(0);
             for (int i = 1; i < num_threads; ++i)
                 stats = stats.append(get_stats(i));
 
-            std::cout << "info lazysmp " << best_thread << " ";
+            std::cout << "info lazysmp " << main_thread_index << " ";
             stats.display_uci(result);
         }
 
