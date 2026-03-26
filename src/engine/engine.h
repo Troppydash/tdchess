@@ -1240,7 +1240,7 @@ struct engine
                 }
 
                 // iir idea
-                if (best_score < alpha - 600 - 200 * improving && move_count >= 3 &&
+                if (best_score < alpha - 400 - 200 * improving && move_count >= 3 &&
                     !param::IS_LOSS(alpha))
                 {
                     depth -= 1;
@@ -1889,9 +1889,9 @@ struct engine
         int last_score = 0;
         int complexity = 0;
         int error = 0;
-        for (int32_t depth = 0; depth <= std::min(param::MAX_DEPTH - 4, control.depth); depth += 1)
+        for (int32_t depth = 1; depth <= std::min(param::MAX_DEPTH - 4, control.depth); depth += 1)
         {
-            auto &pv = m_root_moves.get_pv();
+            const auto &pv = m_root_moves.get_pv();
 
             // check if just one move
             if (m_root_moves.is_singular())
@@ -1915,9 +1915,12 @@ struct engine
             }
 
             int32_t score = 0;
+            int fail_highs = 0;
             while (true)
             {
-                score = negamax<true>(alpha, beta, depth, &m_stack[SEARCH_STACK_PREFIX], false);
+                // int adjusted_depth = std::max(1, depth - fail_highs);
+                score = negamax<true>(alpha, beta, depth, &m_stack[SEARCH_STACK_PREFIX],
+                                      false);
                 m_root_moves.sort();
 
                 if (m_timer.is_stopped())
@@ -1927,11 +1930,15 @@ struct engine
                 {
                     beta = (alpha + beta) / 2;
                     alpha = std::max(-param::INF, score - window);
+
+                    fail_highs = 0;
                 }
                 else if (score >= beta)
                 {
-                    alpha = (alpha + beta) / 2;
                     beta = std::min((int)param::INF, score + window);
+
+                    if (score < 2000)
+                        fail_highs += 1;
                 }
                 else
                 {
