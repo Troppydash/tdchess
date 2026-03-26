@@ -56,6 +56,7 @@ struct lazysmp
 
                 // do work
                 s_param.is_main_thread = is_main_thread();
+                s_param.thread_index = index;
                 s_result = eng->search(s_board, s_param, s_verbose);
 
                 // stop other threads if main thread exits

@@ -17,6 +17,7 @@ struct search_param
     int64_t move_overhead{};
     bool ponder = false;
     bool is_main_thread = true;
+    int thread_index = 0;
 
     struct result
     {
@@ -52,6 +53,7 @@ struct search_param
         move_overhead = 0;
         ponder = false;
         is_main_thread = true;
+        thread_index = 0;
     }
 
     void reset()

@@ -1903,7 +1903,7 @@ struct engine
             }
 
             // scale window by score, larger scores warrants higher window
-            int window = 10 + pv.average_score * pv.average_score / 10000;
+            int window = 10 + param.thread_index % 8 + pv.average_score * pv.average_score / 12000;
 
             int alpha = -param::INF;
             int beta = param::INF;
@@ -1956,6 +1956,9 @@ struct engine
                 {
                     result.pv_line = pv_line;
                 }
+
+                // failing will miss pondering which is bad
+                // TODO: migrate it completely
 
                 // std::cout << "warn root move differ "
                 //           << chess::uci::moveToUci(result.pv_line[0]) << " against "
