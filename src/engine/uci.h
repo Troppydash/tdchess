@@ -115,13 +115,13 @@ class uci_handler
             }
             std::cout << "loaded " << positions.size() << " positions\n";
 
-            for (size_t i = 0; i < positions.size(); i += 5)
+            for (size_t i = 0; i < positions.size(); i += 10)
             {
                 search_param param{};
                 param.movetime = 1000;
                 chess::Board position{positions[i]};
 
-                m_engine = std::make_unique<lazysmp>(1, m_nnue, m_tt, m_endgame_table);
+                m_engine = std::make_unique<lazysmp>(4, m_nnue, m_tt, m_endgame_table);
                 m_engine->search(position, param, true);
                 m_tt->clear();
             }

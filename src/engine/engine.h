@@ -1889,7 +1889,7 @@ struct engine
         int last_score = 0;
         int complexity = 0;
         int error = 0;
-        for (int32_t depth = 1; depth <= std::min(param::MAX_DEPTH - 4, control.depth); depth += 1)
+        for (int32_t depth = 0; depth <= std::min(param::MAX_DEPTH - 4, control.depth); depth += 1)
         {
             const auto &pv = m_root_moves.get_pv();
 
@@ -1928,13 +1928,14 @@ struct engine
 
                 if (score <= alpha)
                 {
-                    beta = (alpha + beta) / 2;
+                    beta = alpha;
                     alpha = std::max(-param::INF, score - window);
 
                     fail_highs = 0;
                 }
                 else if (score >= beta)
                 {
+                    alpha = beta;
                     beta = std::min((int)param::INF, score + window);
 
                     if (score < 2000)

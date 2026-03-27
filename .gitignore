@@ -9,3 +9,9 @@ lib/**/*.o
 builds/
 book/
 syzygy/
+
+config.json
+compile_commands.json
+
+.cache
+pgo/

@@ -1,6 +1,10 @@
 # EXE=name
 
-build:
+gen:
+	cmake -DCMAKE_BUILD_TYPE=Release -G Ninja -S . -B ./cmake-build-release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+	ln -s cmake-build-release/compile_commands.json .
+
+build_pgo:
 	mkdir -p cmake-build-release
 	cmake -DCMAKE_BUILD_TYPE=Release -G Ninja -S . -B ./cmake-build-release -DCARE_PGO=on -DPGOGEN=on
 	cmake --build ./cmake-build-release --target tdchess_uci
