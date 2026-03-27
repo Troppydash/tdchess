@@ -30,5 +30,10 @@ UCI pgo build (Also need to uncomment the CAREPGO lines in `CMakeLists.txt` and 
 make EXE=./pgo/<exe>
 ```
 
+Fastchess uci
+1. Compile fastchess and place binary into `./sprt`
+2. Download `UHO_Lichess_4852_v1.epd` book and place into `./sprt`
+3. Edit versions and run `./start.sh`
+
 ## License
 This project is licensed under the GNU General Public License v3.0 - see the [COPYING](COPYING) file for details
