@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../hpplib/chess.h"
 #include <array>
+#include "chess.h"
 
 struct see
 {

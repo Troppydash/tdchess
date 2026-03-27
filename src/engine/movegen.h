@@ -3,7 +3,7 @@
 #include "features.h"
 #include "heuristic.h"
 #include "see.h"
-#include "sorting.h"
+#include "legal.h"
 
 enum class movegen_stage
 {

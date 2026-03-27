@@ -1,5 +1,10 @@
 #pragma once
 
+#include "../helper.h"
+#include "chess.h"
+#include "param.h"
+#include <cinttypes>
+
 template <typename I, I LIMIT> struct history_entry
 {
     I value = 0;

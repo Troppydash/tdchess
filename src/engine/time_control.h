@@ -1,5 +1,6 @@
 #pragma once
 
+#include "chess.h"
 #include "param.h"
 
 #include <algorithm>

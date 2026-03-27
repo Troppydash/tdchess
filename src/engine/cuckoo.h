@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cinttypes>
 #include <cstring>
+#include "chess.h"
 
 namespace cuckoo
 {

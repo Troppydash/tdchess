@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../hpplib/chess.h"
 #include "param.h"
+#include "chess.h"
 
 #include <cmath>
 #include <cstring>

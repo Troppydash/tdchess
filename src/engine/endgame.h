@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../../lib/Fathom/src/tbprobe.h"
-#include "../hpplib/chess.h"
+#include "chess.h"
 #include "param.h"
 #include "timer.h"
 
@@ -15,8 +15,6 @@ struct tb_cache_entry
 constexpr int TB_MASK_BITS = 14;
 constexpr uint64_t TB_ENTRIES = 1 << TB_MASK_BITS;
 constexpr uint64_t TB_MASK = TB_ENTRIES - 1;
-
-inline std::mutex table_mutex{};
 
 struct endgame_table
 {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../hpplib/chess.h"
+#include "chess.h"
 #include "param.h"
 #include <cinttypes>
 #include <fstream>
@@ -57,6 +57,7 @@ constexpr int GET_KING_BUCKET(int sq)
     return KING_BUCKET[sq];
 }
 
+#define INCBIN_SILENCE_BITCODE_WARNING
 #include "../hpplib/incbin.h"
 INCBIN(Embed2, "../nets/motor.bin");
 

@@ -1,5 +1,6 @@
 #pragma once
-#include "../hpplib/chess.h"
+
+#include "chess.h"
 #include <cassert>
 
 namespace legal
