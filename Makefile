@@ -11,7 +11,7 @@ uci_build:
 	
 config_gen:
 	cmake -DCMAKE_BUILD_TYPE=Release -G Ninja -S . -B ./cmake-build-release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-	ln -s cmake-build-release/compile_commands.json .
+	[ -e compile_commands.json ] || ln -s cmake-build-release/compile_commands.json .
 
 pgo_build:
 	mkdir -p cmake-build-release

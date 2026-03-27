@@ -29,9 +29,9 @@ UCI sprt build. This generates `./builds/<ver>/tdchess` as an uci executable.
 ./build.sh <ver>
 ```
 
-UCI pgo build (Also need to uncomment the CAREPGO lines in `CMakeLists.txt` and re-config-gen). This generates `./pgo/<exe>` as an pgo optimized uci executable.
+UCI pgo build (Also need to uncomment the CAREPGO lines in `CMakeLists.txt` and re-config-gen). This generates `./builds/<ver>/tdchess_pgo` as an pgo optimized uci executable.
 ```bash
-make EXE=./pgo/<exe>
+./build_pgo.sh <ver>
 ```
 
 Fastchess uci

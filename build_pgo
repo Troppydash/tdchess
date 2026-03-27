@@ -1,0 +1,6 @@
+set -ex
+
+version="$1"
+
+mkdir -p ./builds/${version}
+make build_pgo EXE=./builds/${version}/tdchess_pgo
