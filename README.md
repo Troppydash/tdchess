@@ -1,37 +1,34 @@
 # TDChess
 
-
 ## Dependencies
-External libraries
+Build libraries
 - Fathom for endgame tables
 - chess-library for chess board
-- boost for elo tests
-- chess-polyglot-reader
 
 Data sources
-- Opening book: https://komodochess.com/pub/Komodo3-book.zip
 - Syzygy database: http://tablebase.sesse.net/syzygy/3-4-5/
-- NNUE training: https://huggingface.co/datasets/linrock/test80-2024/blob/main/test80-2024-06-jun-2tb7p.min-v2.v6.binpack.zst
 
-Opening books
-- For running: https://sites.google.com/site/computerschess/perfect-2023-books
-- For testing: https://www.chessprogramming.net/new-version-of-the-baron-v3-43-plus-the-barons-polyglot-opening-book/
+## How to build
 
-Code references
-- Fishtest GSPRT: https://github.com/official-stockfish/fishtest/blob/master/server/fishtest/stats/sprt.py
+CMake config
+```bash
+make config_gen
+```
 
-## Elo test
+Test build and run on a list of sample positions.
+```bash
+make test
+```
 
-Notations
-- LOS shows probability of improvement.
-- Expected elo is the expected logistic elo gain
-- Default settings are: elo0 = 0, elo1 = 5, alpha = 5%, beta = 5%
-- Uses the SPRT test, code copied from stockfish fishtest
+UCI sprt build. This generates `./builds/<ver>/tdchess` as an uci executable.
+```bash
+./build.sh <ver>
+```
 
-Process
-1. Run elo using short time control
-2. Aim for around 100 games
-3. Accept if LLR > b, Reject if LLR < a
+UCI pgo build (Also need to uncomment the CAREPGO lines in `CMakeLists.txt` and re-config-gen). This generates `./pgo/<exe>` as an pgo optimized uci executable.
+```bash
+make EXE=./pgo/<exe>
+```
 
 ## License
 This project is licensed under the GNU General Public License v3.0 - see the [COPYING](COPYING) file for details

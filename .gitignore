@@ -15,3 +15,5 @@ compile_commands.json
 
 .cache
 pgo/
+
+.DS_Store

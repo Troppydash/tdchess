@@ -2,16 +2,13 @@
 #include <chrono>
 #include <utility>
 
-#include "../../lib/Fathom/src/tbprobe.h"
 #include "../helper.h"
 #include "../hpplib/chess.h"
 #include "cuckoo.h"
 #include "endgame.h"
-#include "evaluation.h"
 #include "features.h"
 #include "legal.h"
 #include "movegen.h"
-#include "nnue.h"
 #include "nnue2.h"
 #include "param.h"
 #include "rep.h"

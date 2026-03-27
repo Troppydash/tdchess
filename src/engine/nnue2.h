@@ -3,6 +3,7 @@
 #include "../hpplib/chess.h"
 #include "param.h"
 #include <cinttypes>
+#include <fstream>
 
 #include <arm_neon.h>
 
