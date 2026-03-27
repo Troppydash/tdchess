@@ -1,9 +1,13 @@
 # TDChess
 
+Pretty good chess engine written in C++. Estimated CCRL blitz elo is 3700.
+
 ## Dependencies
 Build libraries
 - Fathom for endgame tables
 - chess-library for chess board
+- incbin for nnue
+- motor nnue net: https://github.com/martinnovaak/motor (thanks!)
 
 Data sources
 - Syzygy database: http://tablebase.sesse.net/syzygy/3-4-5/
