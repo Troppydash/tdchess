@@ -17,6 +17,7 @@
 #include "timer.h"
 #include "util.h"
 #include <iomanip>
+#include <vector>
 
 struct search_result
 {
@@ -116,11 +117,11 @@ struct engine_stats
     }
 };
 
-struct engine_param
+struct lmr_table
 {
     int16_t lmr[64][64]{};
 
-    explicit engine_param()
+    explicit lmr_table()
     {
         // set lmr
         for (int depth = 1; depth < 64; ++depth)
@@ -136,54 +137,6 @@ struct engine_param
     [[nodiscard]] int lookup(bool is_quiet, int depth, int move) const
     {
         return lmr[std::min(63, depth)][std::min(63, move)];
-    }
-};
-
-struct pv_line
-{
-    // pv_table[ply][i] is the ith pv move at ply
-    chess::Move pv_table[param::MAX_DEPTH][param::MAX_DEPTH]{};
-
-    // pv_length[ply] is the number of moves at ply
-    int pv_length[param::MAX_DEPTH]{};
-
-    bool is_active = true;
-
-    explicit pv_line() = default;
-
-    void ply_init(int32_t ply)
-    {
-        pv_length[ply] = ply;
-    }
-
-    void update(int32_t ply, const chess::Move &move)
-    {
-        pv_table[ply][ply] = move;
-        if (!is_active && ply >= 1)
-        {
-            pv_length[ply] = ply + 1;
-            return;
-        }
-
-        for (int i = ply + 1; i < pv_length[ply + 1]; i++)
-            pv_table[ply][i] = pv_table[ply + 1][i];
-
-        pv_length[ply] = pv_length[ply + 1];
-    }
-
-    std::vector<chess::Move> get_moves() const
-    {
-        std::vector<chess::Move> result(pv_length[0]);
-        for (int i = 0; i < pv_length[0]; ++i)
-        {
-            result[i] = pv_table[0][i];
-        }
-        return result;
-    }
-
-    void reset()
-    {
-        pv_table[0][0] = chess::Move::NO_MOVE;
     }
 };
 
@@ -334,6 +287,10 @@ struct search_stack
     std::array<chess::Movelist, 2> moves{};
     int complex = 0;
 
+    // records the pv line
+    std::array<chess::Move, chess::constants::MAX_MOVES> pv;
+    int pv_length;
+
     void reset(heuristics &heuristics)
     {
         ply = 0;
@@ -352,6 +309,33 @@ struct search_stack
         complex = 0;
         key = 0;
         computed_check = false;
+
+        pv.fill(chess::Move::NO_MOVE);
+        pv_length = 0;
+    }
+
+    void pv_init()
+    {
+        pv_length = 0;
+    }
+
+    void pv_update(chess::Move move, search_stack *ss_next)
+    {
+        pv[0] = move;
+        for (int i = 0; i < ss_next->pv_length; ++i)
+        {
+            pv[1 + i] = ss_next->pv[i];
+        }
+        pv_length = ss_next->pv_length + 1;
+    }
+
+    std::vector<chess::Move> get_pv() const
+    {
+        std::vector<chess::Move> moves(pv_length);
+        for (int i = 0; i < pv_length; ++i)
+            moves[i] = pv[i];
+
+        return moves;
     }
 };
 
@@ -436,13 +420,11 @@ struct engine
     // debug stats
     engine_stats m_stats;
     // constants
-    const engine_param m_param;
+    const lmr_table m_param;
     // tt
     table *m_table;
     // move ordering
     std::unique_ptr<heuristics> m_heuristics = std::make_unique<heuristics>();
-    // pv-line
-    pv_line m_line;
     // search stack
     constexpr static int SEARCH_STACK_PREFIX = 10;
     search_stack *m_stack = nullptr;
@@ -466,7 +448,7 @@ struct engine
     }
 
     explicit engine(endgame_table *endgame, nnue2::net *nnue, table *table)
-        : m_stats(), m_table(table), m_endgame(endgame), m_nnue(nnue)
+        : m_stats(), m_param{}, m_table(table), m_endgame(endgame), m_nnue(nnue)
     {
         // init tables
         if (m_nnue == nullptr)
@@ -489,9 +471,6 @@ struct engine
 
     void post_search_smp()
     {
-        // reset pvline
-        m_line.reset();
-
         // reset stack
         for (int i = SEARCH_STACK_PREFIX; i >= 0; --i)
         {
@@ -609,7 +588,7 @@ struct engine
     int16_t qsearch(int16_t alpha, int16_t beta, int depth, search_stack *ss)
     {
         const int32_t ply = ss->ply;
-        m_line.ply_init(ply);
+        ss->pv_init();
         m_stats.sel_depth = std::max(m_stats.sel_depth, ply + 1);
 
         m_stats.nodes_searched += 1;
@@ -860,7 +839,7 @@ struct engine
     {
         // constants
         const int32_t ply = ss->ply;
-        m_line.ply_init(ply);
+        ss->pv_init();
 
         m_stats.nodes_searched += 1;
         if ((m_stats.nodes_searched & 4095) == 0)
@@ -1581,7 +1560,6 @@ struct engine
                 if (move_count == 1 || score > alpha)
                 {
                     root.score = score;
-                    // TODO: migrate pv line to this
                 }
                 else
                 {
@@ -1601,7 +1579,7 @@ struct engine
 
                     best_move = move;
                     if (is_pv_node)
-                        m_line.update(ply, best_move);
+                        ss->pv_update(best_move, (ss + 1));
 
                     if (score >= beta)
                     {
@@ -1852,7 +1830,6 @@ struct engine
         m_position = reference;
 
         begin();
-        m_line.is_active = param.is_main_thread;
 
         search_result result{};
 
@@ -1881,6 +1858,7 @@ struct engine
             return result;
         }
 
+        search_stack *root_ss = &m_stack[SEARCH_STACK_PREFIX];
         chess::Move last_move = chess::Move::NO_MOVE;
         int last_score = 0;
         int complexity = 0;
@@ -1915,8 +1893,7 @@ struct engine
             while (true)
             {
                 // int adjusted_depth = std::max(1, depth - fail_highs);
-                score = negamax<true>(alpha, beta, depth, &m_stack[SEARCH_STACK_PREFIX],
-                                      false);
+                score = negamax<true>(alpha, beta, depth, root_ss, false);
                 m_root_moves.sort();
 
                 if (m_timer.is_stopped())
@@ -1950,26 +1927,8 @@ struct engine
 
             // update lines always, since root moves are updated only when timer ok
             result.score = m_root_moves.get_pv().score;
-            result.pv_line = {m_root_moves.get_pv().move};
-            auto pv_line = m_line.get_moves();
-            if (!pv_line.empty())
-            {
-                // this check is needed since sometimes they differ
-                // but we always want to use the m_root_moves version
-                if (param.is_main_thread && pv_line[0] == m_root_moves.get_pv().move)
-                {
-                    result.pv_line = pv_line;
-                }
-
-                // failing will miss pondering which is bad
-                // TODO: migrate it completely
-
-                // std::cout << "warn root move differ "
-                //           << chess::uci::moveToUci(result.pv_line[0]) << " against "
-                //           << chess::uci::moveToUci(m_root_moves.get_pv().move) << "\n";
-                // std::cout << m_root_moves.get_by_move(result.pv_line[0]).score << " , "
-                //           << m_root_moves.get_pv().score << "\n";
-            }
+            if (!root_ss->get_pv().empty())
+                result.pv_line = root_ss->get_pv();
 
             // exit if max time exceeded
             if (m_timer.is_stopped())
