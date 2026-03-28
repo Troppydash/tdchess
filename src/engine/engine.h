@@ -522,17 +522,6 @@ struct engine
         return std::clamp(score, -param::NNUE_MAX, (int)param::NNUE_MAX);
     }
 
-    int16_t evaluate_after_move(chess::Move move)
-    {
-        m_nnue->make_move(m_position, move);
-        m_position.makeMove(move); 
-        int32_t score = m_nnue->evaluate(m_position);
-        m_position.unmakeMove(move);
-        m_nnue->unmake_move();
-        
-        return -score;
-    }
-
     void make_move(const chess::Move &move, search_stack *ss)
     {
         ss->move = move;
@@ -1287,7 +1276,8 @@ struct engine
                     ply,
                     depth,
                     m_keys.get_pawn_key(),
-                    conthist};
+                    conthist,
+                    m_nnue};
 
         chess::Move best_move = chess::Move::NO_MOVE;
         // track quiet/capture moves for malus
@@ -1504,7 +1494,7 @@ struct engine
                                          ? score
                                          : (score + root.average_score) / 2;
 
-                if (move_count == 1 || score > alpha)
+                if (score >= alpha)
                 {
                     root.score = score;
                 }

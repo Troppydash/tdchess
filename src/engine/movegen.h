@@ -2,8 +2,9 @@
 
 #include "features.h"
 #include "heuristic.h"
-#include "see.h"
 #include "legal.h"
+#include "nnue2.h"
+#include "see.h"
 
 enum class movegen_stage
 {
@@ -63,45 +64,52 @@ class movegen
     chess::Bitboard pawn_threats{};
     chess::PieceType threat_piece{};
 
-  public:
-    explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
-                     chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth,
-                     uint64_t pawn_key, movegen_stage stage = movegen_stage::PV)
-        : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
-          m_heuristics(heuristics), m_pv_move(pv_move), m_prev_move{prev_move}, m_ply(ply),
-          m_depth(depth), m_pawn_key{pawn_key}
-    {
-    }
+    nnue2::net *nnue = nullptr;
 
+  public:
+    // probcut
     explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
                      chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth,
                      int16_t margin, uint64_t pawn_key, movegen_stage stage = movegen_stage::PV)
-        : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
-          m_heuristics(heuristics), m_pv_move(pv_move), m_prev_move{prev_move}, m_ply(ply),
-          m_prob_margin{margin}, m_depth(depth), m_pawn_key{pawn_key}
+        : m_stage{static_cast<int>(stage)}, m_moves{moves}, m_position(position),
+          m_heuristics(heuristics), m_pv_move(pv_move), m_ply(ply), m_depth(depth),
+          m_prev_move{prev_move}, m_prob_margin{margin}, m_pawn_key{pawn_key}
     {
     }
 
+    // negamax main
     explicit movegen(
         chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
         chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth, uint64_t pawn_key,
         const std::array<const continuation_history *, NUM_CONTINUATION> &continuations,
-        movegen_stage stage = movegen_stage::PV)
-        : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
-          m_heuristics(heuristics), m_pv_move(pv_move), m_prev_move{prev_move}, m_ply(ply),
-          m_continuations{continuations}, m_depth(depth), m_pawn_key(pawn_key)
+        nnue2::net *nnue, movegen_stage stage = movegen_stage::PV)
+        : m_stage{static_cast<int>(stage)}, m_moves{moves}, m_position(position),
+          m_heuristics(heuristics), m_pv_move(pv_move), m_ply(ply), m_depth(depth),
+          m_prev_move{prev_move}, m_continuations{continuations}, m_pawn_key(pawn_key), nnue(nnue)
     {
     }
 
+    // qsearch
     explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
                      chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth,
                      uint64_t pawn_key, const continuation_history *continuation1,
                      movegen_stage stage = movegen_stage::PV)
-        : m_moves{moves}, m_stage{static_cast<int>(stage)}, m_position(position),
-          m_heuristics(heuristics), m_pv_move(pv_move), m_prev_move{prev_move}, m_ply(ply),
-          m_depth(depth), m_pawn_key(pawn_key)
+        : m_stage{static_cast<int>(stage)}, m_moves{moves}, m_position(position),
+          m_heuristics(heuristics), m_pv_move(pv_move), m_ply(ply), m_depth(depth),
+          m_prev_move{prev_move}, m_pawn_key(pawn_key)
     {
         m_continuations[0] = continuation1;
+    }
+
+    int16_t evaluate_after_move(chess::Move move)
+    {
+        nnue->make_move(m_position, move);
+        m_position.makeMove(move);
+        int32_t score = nnue->evaluate(m_position);
+        m_position.unmakeMove(move);
+        nnue->unmake_move();
+
+        return -score;
     }
 
     void skip_quiet()
@@ -450,6 +458,17 @@ class movegen
                     }
 
                     sort_moves(m_moves, m_capture_end, m_moves.size(), -4000 * m_depth);
+
+                    // TODO: static nnue ordering
+                    // constexpr int TOP_N = 4;
+
+                    // for (int i = m_capture_end; i < std::min(m_moves.size(), m_capture_end + 4);
+                    //      ++i)
+                    // {
+                    //     auto &move = m_moves[i];
+
+                    //     int32_t nnue_score = 0;
+                    // }
                 }
 
                 m_move_index = m_capture_end;
