@@ -227,7 +227,7 @@ class movegen
 
                         // baseline
                         score += 20000;
-                        score = std::clamp(score, -32000, 32000);
+                        score = std::clamp(score, 15000, 32000);
                         move.setScore(score);
                     }
                     else

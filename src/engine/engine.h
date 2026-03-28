@@ -522,6 +522,17 @@ struct engine
         return std::clamp(score, -param::NNUE_MAX, (int)param::NNUE_MAX);
     }
 
+    int16_t evaluate_after_move(chess::Move move)
+    {
+        m_nnue->make_move(m_position, move);
+        m_position.makeMove(move); 
+        int32_t score = m_nnue->evaluate(m_position);
+        m_position.unmakeMove(move);
+        m_nnue->unmake_move();
+        
+        return -score;
+    }
+
     void make_move(const chess::Move &move, search_stack *ss)
     {
         ss->move = move;
