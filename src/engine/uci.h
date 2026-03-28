@@ -2,6 +2,7 @@
 
 #include "../helper.h"
 #include "../version.h"
+#include "chess960.h"
 #include "lazysmp.h"
 #include <thread>
 
@@ -54,7 +55,6 @@ class uci_handler
     search_param m_param{};
     int m_num_threads = 1;
 
-    // std::unique_ptr<engine> m_engine;
     std::unique_ptr<lazysmp> m_engine;
     table *m_tt;
     std::thread m_engine_thread;
@@ -159,10 +159,12 @@ class uci_handler
                 std::cout << "option name SyzygyPath type string default <empty>\n";
                 std::cout << "option name EVALFILE type string default <empty>\n";
                 std::cout << "option name Hash type spin default 128 min 8 max 4096\n";
-                std::cout << "option name Threads type spin default 1 min 1 max " << total_threads << "\n";
+                std::cout << "option name Threads type spin default 1 min 1 max " << total_threads
+                          << "\n";
                 std::cout << "option name CoreAff type spin default -1 min -1 max "
                           << total_threads - 1 << "\n";
                 std::cout << "option name MoveOverhead type spin default 10 min 0 max 2000\n";
+                std::cout << "option name UCI_Chess960 type check default false\n";
 
 #ifdef TDCHESS_TUNE
                 auto &features = tunable_features_list();
@@ -229,6 +231,10 @@ class uci_handler
                     m_num_threads = parse_i64(parts[4]);
                     reload_engine();
                 }
+                else if (parts[2] == "UCI_Chess960")
+                {
+                    global::chess_960 = parts[4] == "true";
+                }
                 else
                 {
 
@@ -276,6 +282,7 @@ class uci_handler
                     std::cout << "warning unknown position type\n";
                 }
 
+                m_position.set960(global::chess_960);
                 if (moves < parts.size() && parts[moves] == "moves")
                 {
                     for (size_t move = moves + 1; move < parts.size(); ++move)
@@ -451,10 +458,10 @@ class uci_handler
             }
 
             // display results
-            std::cout << "bestmove " << chess::uci::moveToUci(result.pv_line[0]);
+            std::cout << "bestmove " << chess::uci::moveToUci(result.pv_line[0], global::chess_960);
             if (result.pv_line.size() >= 2)
             {
-                std::cout << " ponder " << chess::uci::moveToUci(result.pv_line[1]);
+                std::cout << " ponder " << chess::uci::moveToUci(result.pv_line[1], global::chess_960);
             }
             std::cout << std::endl;
             std::cout << std::flush;

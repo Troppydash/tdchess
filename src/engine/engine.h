@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "chess.h"
+#include "chess960.h"
 #include "cuckoo.h"
 #include "endgame.h"
 #include "features.h"
@@ -71,23 +72,6 @@ struct engine_stats
     int32_t sel_depth;
     std::chrono::milliseconds total_time;
 
-    void display_delta(const engine_stats &old, const search_result &result) const
-    {
-        long delta = (total_time - old.total_time).count();
-        uint32_t depth_nps = (nodes_searched - old.nodes_searched) * 1000 / std::max(1L, delta);
-        uint32_t nps =
-            nodes_searched * 1000 / std::max(static_cast<int64_t>(1), total_time.count());
-
-        printf("info depth %2d, nodes %10d, score %10s (%7d), nps %10d/%10d, moves", result.depth,
-               nodes_searched, result.get_score().c_str(), result.score, depth_nps, nps);
-
-        for (auto &m : result.pv_line)
-        {
-            std::cout << " " << chess::uci::moveToUci(m);
-        }
-        std::cout << std::endl;
-    }
-
     long get_nps() const
     {
         return static_cast<long>(nodes_searched) * 1000 /
@@ -103,7 +87,7 @@ struct engine_stats
 
         for (auto &m : result.pv_line)
         {
-            std::cout << " " << chess::uci::moveToUci(m);
+            std::cout << " " << chess::uci::moveToUci(m, global::chess_960);
         }
         std::cout << std::endl;
     }
@@ -286,7 +270,7 @@ struct search_stack
     std::array<std::array<chess::Move, param::QUIET_MOVES>, 2> capture_moves{};
     std::array<chess::Movelist, 2> moves{};
     int complex = 0;
-    
+
     bool verify_null = false;
 
     // records the pv line
@@ -311,7 +295,7 @@ struct search_stack
         complex = 0;
         key = 0;
         computed_check = false;
-        
+
         verify_null = false;
 
         pv.fill(chess::Move::NO_MOVE);
@@ -382,7 +366,7 @@ struct root_move_list
             if (m.move == src)
                 return m;
 
-        std::cout << "invalid move " << chess::uci::moveToUci(src) << std::endl;
+        std::cout << "invalid move " << chess::uci::moveToUci(src, global::chess_960) << std::endl;
         exit(0);
     }
 
@@ -1091,9 +1075,9 @@ struct engine
         // [null move pruning]
         {
             const bool has_non_pawns = m_position.hasNonPawnMaterial(m_position.sideToMove());
-            if (cut_node && !ss->verify_null && (ss - 1)->move != chess::Move::NO_MOVE && has_non_pawns &&
-                param::IS_VALID(adjusted_static_eval) && adjusted_static_eval >= beta &&
-                param::IS_VALID(ss->static_eval) &&
+            if (cut_node && !ss->verify_null && (ss - 1)->move != chess::Move::NO_MOVE &&
+                has_non_pawns && param::IS_VALID(adjusted_static_eval) &&
+                adjusted_static_eval >= beta && param::IS_VALID(ss->static_eval) &&
                 ss->static_eval >= beta - 30 * depth + 200 - 50 * improving &&
                 !param::IS_LOSS(beta) && !has_excluded)
             {
@@ -1104,7 +1088,7 @@ struct engine
                 int32_t reduction = std::min((adjusted_static_eval - beta) / 300, 3) +
                                     features::NMP_REDUCTION_BASE +
                                     depth / features::NMP_REDUCTION_MULT + is_tt_capture;
-                
+
                 int reduced_depth = std::max(0, depth - reduction);
 
                 // since nmp uses ss+1, we fake that this move is nothing
