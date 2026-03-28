@@ -35,6 +35,7 @@ enum class movegen_stage
 };
 
 constexpr int16_t IGNORE_SCORE = std::numeric_limits<int16_t>::min();
+constexpr int STATIC_SORT_TOP_N = 6;
 
 class movegen
 {
@@ -115,16 +116,18 @@ class movegen
         bool bucket_hit = false;
         auto [_, result] = bucket.probe(hash, bucket_hit, tt->m_generation);
         if (bucket_hit && param::IS_VALID(result.m_static_eval))
+        {
+            // use exact results
+            if (GET_FLAG(result.m_mask) == param::EXACT_FLAG && param::IS_VALID(result.m_score)
+                && result.m_depth >= m_depth)
+            {
+                return -result.m_score;
+            }
+
             return -result.m_static_eval;
+        }
 
         return param::VALUE_NONE;
-        // nnue->make_move(m_position, move);
-        // m_position.makeMove(move);
-        // int32_t score = nnue->evaluate(m_position);
-        // m_position.unmakeMove(move);
-        // nnue->unmake_move();
-
-        // return -score;
     }
 
     void skip_quiet()
@@ -370,6 +373,10 @@ class movegen
                     chess::movegen::legalmoves_quiet(m_moves, m_position, m_precompute);
                     auto counter = get_counter();
 
+                    int static_start = m_capture_end;
+                    int static_end = std::min(m_moves.size(), m_capture_end + STATIC_SORT_TOP_N);
+                    bool will_static_sort = static_end - static_start > 1 && m_depth < 12;
+
                     for (int i = m_capture_end;; ++i)
                     {
                         if (i >= m_moves.size())
@@ -459,28 +466,19 @@ class movegen
                             }
                         }
 
-                        // score +=
-                        //     m_heuristics.king
-                        //              [m_heuristics.get_king_bucket(m_position,
-                        //              chess::Color::WHITE)]
-                        //              [m_heuristics.get_king_bucket(m_position,
-                        //              chess::Color::BLACK)]
-                        //              [m_position.at(move.from())][move.to().index()]
-                        //         .get_value() ;
-
                         score = std::clamp(score, -32000, 32000);
                         move.setScore(score);
+
+                        if (will_static_sort)
+                            tt->prefetch(m_position.zobristAfter(move));
                     }
 
                     sort_moves(m_moves, m_capture_end, m_moves.size(), -4000 * m_depth);
 
                     // static nnue ordering
-                    constexpr int TOP_N = 6;
-                    int static_start = m_capture_end;
-                    int static_end = std::min(m_moves.size(), m_capture_end + TOP_N);
-                    if (static_end - static_start > 1 && m_depth < 12)
+                    if (will_static_sort)
                     {
-                        std::array<int, TOP_N> static_scores{};
+                        std::array<int, STATIC_SORT_TOP_N> static_scores{};
                         int static_scores_index = 0;
                         int32_t baseline = param::INF;
 
@@ -489,11 +487,11 @@ class movegen
                             auto &move = m_moves[i];
                             int32_t score = evaluate_after_move(move);
                             static_scores[static_scores_index++] = score;
-                            
+
                             if (param::IS_VALID(score))
                                 baseline = std::min(baseline, score);
                         }
-                        
+
                         if (baseline != param::INF)
                         {
                             static_scores_index = 0;
@@ -504,13 +502,11 @@ class movegen
                                 {
                                     auto &move = m_moves[i];
                                     int32_t adjusted_score = std::clamp(
-                                        move.score() +
-                                            (static_score - baseline) / 2,
-                                        -32000, 32000);
+                                        move.score() + (static_score - baseline), -32000, 32000);
                                     move.setScore(adjusted_score);
                                 }
                             }
-    
+
                             sort_moves(m_moves, static_start, static_end);
                         }
                     }

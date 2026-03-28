@@ -44,8 +44,6 @@ constexpr int PAWN_STRUCTURE_SIZE = 1 << 10;
 constexpr int PAWN_STRUCTURE_SIZE_M1 = PAWN_STRUCTURE_SIZE - 1;
 using pawn_history = history_entry<int16_t, 20000>[PAWN_STRUCTURE_SIZE][12][64];
 
-using king_history = history_entry<int16_t, 20000>[16][16][12][64];
-
 constexpr int NON_PAWN_SIZE = 1 << 15;
 constexpr int NON_PAWN_SIZE_M1 = NON_PAWN_SIZE - 1;
 using pawn_correction_history = history_entry<int16_t, CORRECTION_LIMIT>[2][NON_PAWN_SIZE];
