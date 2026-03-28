@@ -286,6 +286,8 @@ struct search_stack
     std::array<std::array<chess::Move, param::QUIET_MOVES>, 2> capture_moves{};
     std::array<chess::Movelist, 2> moves{};
     int complex = 0;
+    
+    bool verify_null = false;
 
     // records the pv line
     std::array<chess::Move, chess::constants::MAX_MOVES> pv;
@@ -309,6 +311,8 @@ struct search_stack
         complex = 0;
         key = 0;
         computed_check = false;
+        
+        verify_null = false;
 
         pv.fill(chess::Move::NO_MOVE);
         pv_length = 0;
@@ -1087,7 +1091,7 @@ struct engine
         // [null move pruning]
         {
             const bool has_non_pawns = m_position.hasNonPawnMaterial(m_position.sideToMove());
-            if (cut_node && (ss - 1)->move != chess::Move::NO_MOVE && has_non_pawns &&
+            if (cut_node && !ss->verify_null && (ss - 1)->move != chess::Move::NO_MOVE && has_non_pawns &&
                 param::IS_VALID(adjusted_static_eval) && adjusted_static_eval >= beta &&
                 param::IS_VALID(ss->static_eval) &&
                 ss->static_eval >= beta - 30 * depth + 200 - 50 * improving &&
@@ -1100,11 +1104,13 @@ struct engine
                 int32_t reduction = std::min((adjusted_static_eval - beta) / 300, 3) +
                                     features::NMP_REDUCTION_BASE +
                                     depth / features::NMP_REDUCTION_MULT + is_tt_capture;
+                
+                int reduced_depth = std::max(0, depth - reduction);
 
                 // since nmp uses ss+1, we fake that this move is nothing
                 make_move(chess::Move::NO_MOVE, ss);
                 int16_t null_score =
-                    -negamax<false>(-beta, -beta + 1, depth - reduction, ss + 1, false);
+                    -negamax<false>(-beta, -beta + 1, reduced_depth, ss + 1, false);
                 unmake_move(chess::Move::NO_MOVE, ss);
 
                 if (m_timer.is_stopped())
@@ -1113,10 +1119,12 @@ struct engine
                 if (null_score >= beta)
                 {
                     // if high depth, do confirm
-                    if (depth > 16)
+                    if (depth > 14)
                     {
+                        ss->verify_null = true;
                         int16_t verify_score =
-                            negamax<false>(beta - 1, beta, depth - reduction, ss, cut_node);
+                            negamax<false>(beta - 1, beta, reduced_depth, ss, cut_node);
+                        ss->verify_null = false;
 
                         if (m_timer.is_stopped())
                             return 0;
@@ -1315,62 +1323,6 @@ struct engine
 
             // [history calculation]
             history_score = move.score();
-            // if (is_capture)
-            // {
-            //     auto captured = m_heuristics->get_capture(m_position, move);
-            //     int mvv = see::PIECE_VALUES[captured] * features::CAPTURE_MVV_SCALE;
-            //
-            //     // capture history
-            //     int capture_score =
-            //         m_heuristics
-            //             ->capture_history[m_position.at(move.from())][move.to().index()][captured]
-            //             .get_value();
-            //
-            //     int32_t score = mvv + capture_score;
-            //     history_score = std::clamp(score, -32000, 32000);
-            // }
-            // else
-            // {
-            //     int32_t score = 0;
-            //
-            //     // normal
-            //     score += m_heuristics
-            //                  ->main_history[m_position.sideToMove()][move.from().index()]
-            //                                [move.to().index()]
-            //                  .get_value();
-            //
-            //     // low ply
-            //     if (ply < LOW_PLY)
-            //     {
-            //         score += features::QUIET_LOW_PLY_SCALE *
-            //                  m_heuristics
-            //                      ->low_ply[m_position.sideToMove()][ply][move.from().index()]
-            //                               [move.to().index()]
-            //                      .get_value() /
-            //                  (1 + ply);
-            //     }
-            //
-            //     // pawn history
-            //     score += m_heuristics
-            //                  ->pawn[m_keys.get_pawn_key() & PAWN_STRUCTURE_SIZE_M1]
-            //                        [m_position.at(move.from())][move.to().index()]
-            //                  .get_value();
-            //
-            //     // continuation
-            //     for (int i = 0; i < NUM_CONTINUATION; ++i)
-            //     {
-            //         score += (*(ss - i - 1)
-            //                       ->continuation)[m_position.at(move.from())][move.to().index()]
-            //                      .get_value() /
-            //                  2;
-            //     }
-            //
-            //     if (move == m_heuristics->killers[ply][0].first
-            //         || move == m_heuristics->killers[ply][1].first)
-            //         score += 10000;
-            //
-            //     history_score = std::clamp(score, -32000, 32000);
-            // }
 
             // [low depth pruning]
             if (!is_root && has_non_pawn && !param::IS_LOSS(best_score))
