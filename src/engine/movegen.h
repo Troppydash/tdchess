@@ -4,7 +4,9 @@
 #include "heuristic.h"
 #include "legal.h"
 #include "nnue2.h"
+#include "param.h"
 #include "see.h"
+#include "table.h"
 
 enum class movegen_stage
 {
@@ -64,7 +66,9 @@ class movegen
     chess::Bitboard pawn_threats{};
     chess::PieceType threat_piece{};
 
+    // for nnue based move ordering
     nnue2::net *nnue = nullptr;
+    table *tt = nullptr;
 
   public:
     // probcut
@@ -82,11 +86,13 @@ class movegen
         chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
         chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth, uint64_t pawn_key,
         const std::array<const continuation_history *, NUM_CONTINUATION> &continuations,
-        nnue2::net *nnue, movegen_stage stage = movegen_stage::PV)
+        nnue2::net *nnue, table *tt, movegen_stage stage = movegen_stage::PV)
         : m_stage{static_cast<int>(stage)}, m_moves{moves}, m_position(position),
           m_heuristics(heuristics), m_pv_move(pv_move), m_ply(ply), m_depth(depth),
-          m_prev_move{prev_move}, m_continuations{continuations}, m_pawn_key(pawn_key), nnue(nnue)
+          m_prev_move{prev_move}, m_continuations{continuations}, m_pawn_key(pawn_key), nnue(nnue),
+          tt(tt)
     {
+        assert(stage == movegen_stage::PV);
     }
 
     // qsearch
@@ -101,15 +107,24 @@ class movegen
         m_continuations[0] = continuation1;
     }
 
+    // computes the (current perspective) static evaluation assuming we've made [move]
     int16_t evaluate_after_move(chess::Move move)
     {
-        nnue->make_move(m_position, move);
-        m_position.makeMove(move);
-        int32_t score = nnue->evaluate(m_position);
-        m_position.unmakeMove(move);
-        nnue->unmake_move();
+        uint64_t hash = m_position.zobristAfter(move);
+        auto &bucket = tt->probe(hash);
+        bool bucket_hit = false;
+        auto [_, result] = bucket.probe(hash, bucket_hit, tt->m_generation);
+        if (bucket_hit && param::IS_VALID(result.m_static_eval))
+            return -result.m_static_eval;
 
-        return -score;
+        return param::VALUE_NONE;
+        // nnue->make_move(m_position, move);
+        // m_position.makeMove(move);
+        // int32_t score = nnue->evaluate(m_position);
+        // m_position.unmakeMove(move);
+        // nnue->unmake_move();
+
+        // return -score;
     }
 
     void skip_quiet()
@@ -459,16 +474,46 @@ class movegen
 
                     sort_moves(m_moves, m_capture_end, m_moves.size(), -4000 * m_depth);
 
-                    // TODO: static nnue ordering
-                    // constexpr int TOP_N = 4;
+                    // static nnue ordering
+                    constexpr int TOP_N = 6;
+                    int static_start = m_capture_end;
+                    int static_end = std::min(m_moves.size(), m_capture_end + TOP_N);
+                    if (static_end - static_start > 1 && m_depth < 12)
+                    {
+                        std::array<int, TOP_N> static_scores{};
+                        int static_scores_index = 0;
+                        int32_t baseline = param::INF;
 
-                    // for (int i = m_capture_end; i < std::min(m_moves.size(), m_capture_end + 4);
-                    //      ++i)
-                    // {
-                    //     auto &move = m_moves[i];
-
-                    //     int32_t nnue_score = 0;
-                    // }
+                        for (int i = static_start; i < static_end; ++i)
+                        {
+                            auto &move = m_moves[i];
+                            int32_t score = evaluate_after_move(move);
+                            static_scores[static_scores_index++] = score;
+                            
+                            if (param::IS_VALID(score))
+                                baseline = std::min(baseline, score);
+                        }
+                        
+                        if (baseline != param::INF)
+                        {
+                            static_scores_index = 0;
+                            for (int i = static_start; i < static_end; ++i)
+                            {
+                                int32_t static_score = static_scores[static_scores_index++];
+                                if (param::IS_VALID(static_score))
+                                {
+                                    auto &move = m_moves[i];
+                                    int32_t adjusted_score = std::clamp(
+                                        move.score() +
+                                            (static_score - baseline) / 2,
+                                        -32000, 32000);
+                                    move.setScore(adjusted_score);
+                                }
+                            }
+    
+                            sort_moves(m_moves, static_start, static_end);
+                        }
+                    }
                 }
 
                 m_move_index = m_capture_end;

@@ -1277,7 +1277,8 @@ struct engine
                     depth,
                     m_keys.get_pawn_key(),
                     conthist,
-                    m_nnue};
+                    m_nnue,
+                    m_table};
 
         chess::Move best_move = chess::Move::NO_MOVE;
         // track quiet/capture moves for malus
