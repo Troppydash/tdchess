@@ -926,7 +926,7 @@ struct engine
             }
 
             // ignore tt for close to half move
-            if (m_position.halfMoveClock() < 90)
+            if (m_position.halfMoveClock() < 80)
                 return tt_result.score;
         }
 
@@ -983,7 +983,7 @@ struct engine
         int16_t best_score = -param::VALUE_INF;
         int16_t max_score = param::VALUE_INF;
         if (m_endgame != nullptr && !has_excluded && !is_root && depth >= features::TB_HIT_DEPTH &&
-            m_endgame->is_stored(m_position) && m_position.halfMoveClock() <= 90)
+            m_endgame->is_stored(m_position) && m_position.halfMoveClock() <= 8)
         {
             int16_t wdl = m_endgame->probe_wdl(m_position);
             int16_t tb_score = param::VALUE_SYZYGY - ply;
@@ -1687,7 +1687,7 @@ struct engine
             value += 24 * (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
         }
 
-        value = std::clamp(value, -1000, 1000);
+        value = std::clamp(value, -2000, 2000);
         int scaled_value = (value * (200 - (int32_t)m_position.halfMoveClock())) / 200;
         static_eval += scaled_value;
         return {std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX), scaled_value};

@@ -196,6 +196,7 @@ class movegen
             case movegen_stage::EINIT: {
                 // don't use the sep movegen since all moves are generated
                 chess::movegen::legalmoves(m_moves, m_position);
+                auto counter = get_counter();
 
                 // score
                 for (int i = 0;; ++i)
@@ -270,6 +271,10 @@ class movegen
                         else if (m_heuristics.killers[m_ply][1].first == move)
                         {
                             score += 8000;
+                        }
+                        else if (move == counter)
+                        {
+                            score += 4000;
                         }
 
                         //
