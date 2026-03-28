@@ -1815,7 +1815,7 @@ struct engine
         int last_score = 0;
         int complexity = 0;
         int error = 0;
-        for (int32_t depth = 0; depth <= std::min(param::MAX_DEPTH - 4, control.depth); depth += 1)
+        for (int32_t depth = 1; depth <= std::min(param::MAX_DEPTH - 4, control.depth); depth += 1)
         {
             const auto &pv = m_root_moves.get_pv();
 
@@ -1834,7 +1834,7 @@ struct engine
             int alpha = -param::INF;
             int beta = param::INF;
 
-            if (depth >= 3)
+            if (depth >= 2)
             {
                 alpha = std::max(-param::INF, pv.score - window);
                 beta = std::min((int)param::INF, pv.score + window);
@@ -1844,8 +1844,8 @@ struct engine
             int fail_highs = 0;
             while (true)
             {
-                // int adjusted_depth = std::max(1, depth - fail_highs);
-                score = negamax<true>(alpha, beta, depth, root_ss, false);
+                int adjusted_depth = std::max(1, depth - fail_highs);
+                score = negamax<true>(alpha, beta, adjusted_depth, root_ss, false);
                 m_root_moves.sort();
 
                 if (m_timer.is_stopped())
