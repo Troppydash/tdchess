@@ -513,7 +513,8 @@ struct engine
 
         // tempo, acts like a contempt value, decrease to draw more, increase to win more against
         // weaker opponents
-        int32_t tempo = 20;
+        // this breaks drawish positions
+        int32_t tempo = 10;
         score += tempo;
 
         // taper to 70%
@@ -1648,8 +1649,6 @@ struct engine
                 auto piece = heuristics::get_prev_piece(m_position, prev_move);
                 if ((ss - 2)->move != chess::Move::NO_MOVE)
                     (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].add_bonus(bonus);
-                if ((ss - 3)->move != chess::Move::NO_MOVE)
-                    (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].add_bonus(bonus);
             }
         }
 
@@ -1659,7 +1658,7 @@ struct engine
     std::pair<int16_t, int32_t> to_corrected_static_eval(int32_t static_eval,
                                                          search_stack *ss) const
     {
-        static_eval = (static_eval * (200 - (int32_t)m_position.halfMoveClock())) / 200;
+        static_eval = (static_eval * (150 - (int32_t)m_position.halfMoveClock())) / 150;
 
         int32_t value = 30 *
                         m_heuristics
@@ -1686,11 +1685,10 @@ struct engine
         {
             auto piece = heuristics::get_prev_piece(m_position, prev_move);
             value += 24 * (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
-            value += 24 * (*(ss - 3)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
         }
 
         value = std::clamp(value, -2000, 2000);
-        int scaled_value = (value * (200 - (int32_t)m_position.halfMoveClock())) / 200;
+        int scaled_value = (value * (150 - (int32_t)m_position.halfMoveClock())) / 150;
         static_eval += scaled_value;
         return {std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX), scaled_value};
     }
