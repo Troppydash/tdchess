@@ -35,7 +35,7 @@ enum class movegen_stage
 };
 
 constexpr int16_t IGNORE_SCORE = std::numeric_limits<int16_t>::min();
-constexpr int STATIC_SORT_TOP_N = 6;
+constexpr int STATIC_SORT_TOP_N = 12;
 
 class movegen
 {
@@ -375,7 +375,7 @@ class movegen
 
                     int static_start = m_capture_end;
                     int static_end = std::min(m_moves.size(), m_capture_end + STATIC_SORT_TOP_N);
-                    bool will_static_sort = static_end - static_start > 1 && m_depth < 12;
+                    bool will_static_sort = static_end - static_start > 1 && m_depth < 8;
 
                     for (int i = m_capture_end;; ++i)
                     {
