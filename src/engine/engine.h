@@ -1359,7 +1359,7 @@ struct engine
 
                 // [futility pruning]
                 // prune quiet moves that doesn't raise alpha
-                if (is_quiet && quiet_count >= 1 && lmr_depth <= 12 && !ss->in_check &&
+                if (is_quiet && quiet_count > 1 && lmr_depth <= 12 && !ss->in_check &&
                     ss->static_eval + 150 + 150 * lmr_depth <= alpha)
                 {
                     gen.skip_quiet();
@@ -1372,6 +1372,7 @@ struct engine
                 if (is_capture && lmr_depth <= 12 && !ss->in_check &&
                     ss->static_eval + 200 + 200 * lmr_depth + see::PIECE_VALUES[captured] <= alpha)
                 {
+                    gen.skip_quiet();
                     continue;
                 }
             }
