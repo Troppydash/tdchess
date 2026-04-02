@@ -1317,7 +1317,7 @@ struct engine
                 // adjust the relevant depth
                 int32_t lmr_depth =
                     std::max(0, depth - m_param.lookup(is_quiet, depth, move_count) - !improving +
-                                    history_score / 6000);
+                                    history_score / 8000);
 
                 // [see pruning]
                 int see_margin =
