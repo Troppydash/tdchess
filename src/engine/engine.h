@@ -430,6 +430,8 @@ struct engine
     // root move list
     root_move_list m_root_moves{};
 
+    int16_t contempt_score[64]{};
+
     // must be set via methods
     explicit engine(table *table) : engine(nullptr, nullptr, table)
     {
@@ -450,11 +452,29 @@ struct engine
 
         m_stack = new search_stack[param::MAX_DEPTH + SEARCH_STACK_PREFIX];
         post_search_smp();
+        compute_contempt();
     }
 
     ~engine()
     {
         delete[] m_stack;
+    }
+
+    void compute_contempt()
+    {
+        for (int piece_count = 2; piece_count < 64; ++piece_count)
+        {
+            // increase this to draw more, decrease to draw less
+            constexpr int cutoff = 24;
+            if (piece_count <= cutoff)
+                contempt_score[piece_count] = 0;
+            else
+            {
+                int16_t MAX_CONTEMPT = global::contempt;
+                contempt_score[piece_count] =
+                    static_cast<int16_t>((MAX_CONTEMPT * (piece_count - cutoff)) / (32 - cutoff));
+            }
+        }
     }
 
     void post_search_smp()
@@ -798,17 +818,8 @@ struct engine
     // avoid draws in midgame by giving a negative draw score
     int16_t get_contempt() const
     {
-        // disabled
-        return 0;
-
         int piece_count = m_position.occ().count();
-        // increase this to draw more, decrease to draw less
-        constexpr int cutoff = 24;
-        if (piece_count <= cutoff)
-            return 0;
-
-        constexpr int16_t MAX_CONTEMPT = -15;
-        return static_cast<int16_t>((MAX_CONTEMPT * (piece_count - cutoff)) / (32 - cutoff));
+        return contempt_score[piece_count];
     }
 
     int history_malus(int depth) const

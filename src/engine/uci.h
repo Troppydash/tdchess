@@ -165,6 +165,7 @@ class uci_handler
                           << total_threads - 1 << "\n";
                 std::cout << "option name MoveOverhead type spin default 10 min 0 max 2000\n";
                 std::cout << "option name UCI_Chess960 type check default false\n";
+                std::cout << "option name DrawContempt type spin default -20 min -100 max 100\n";
 
 #ifdef TDCHESS_TUNE
                 auto &features = tunable_features_list();
@@ -234,6 +235,10 @@ class uci_handler
                 else if (parts[2] == "UCI_Chess960")
                 {
                     global::chess_960 = parts[4] == "true";
+                }
+                else if (parts[2] == "DrawContempt")
+                {
+                    global::contempt = parse_i32(parts[4]);
                 }
                 else
                 {
