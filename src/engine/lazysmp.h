@@ -57,6 +57,7 @@ struct lazysmp
                 // do work
                 s_param.is_main_thread = is_main_thread();
                 s_param.thread_index = index;
+                s_param.main_thread_index = parent->main_thread_index;
                 s_result = eng->search(s_board, s_param, s_verbose);
 
                 // stop other threads if main thread exits
@@ -213,7 +214,7 @@ struct lazysmp
                 {
                     assert(!result.pv_line.empty());
                     votes[result.pv_line[0].move()] +=
-                        (result.score - min_score + 200) * (result.depth);
+                        (result.score - min_score + 100) * (result.depth);
                 }
             }
 

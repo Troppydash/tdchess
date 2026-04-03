@@ -19,6 +19,7 @@ struct search_param
     bool ponder = false;
     bool is_main_thread = true;
     int thread_index = 0;
+    int main_thread_index = 0;
 
     struct result
     {
@@ -55,6 +56,7 @@ struct search_param
         ponder = false;
         is_main_thread = true;
         thread_index = 0;
+        main_thread_index = 0;
     }
 
     void reset()

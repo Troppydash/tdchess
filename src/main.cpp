@@ -100,6 +100,7 @@ int main()
 #include "elo/agent.h"
 #include "engine/nnue.h"
 #include "engine/lazysmp.h"
+#include "engine/chessmap.h"
 
 int evaluate_bucket(const chess::Board &position)
 {
@@ -148,7 +149,12 @@ void position_test()
     // int c = t.lookup(1);
     // std::cout << c << std::endl;
     // exit(0);
+    
+    chessmap::net net{};
 
+    
+    exit(0);
+    
     std::vector<std::pair<std::string, std::string>> positions{
         // {"8/8/8/8/2k5/8/2K5/8 w - - 0 61", ""},
         // {"2r2nk1/4qb1p/p2p2pP/Pp1Pp3/1Q4P1/2rBB3/P1P5/1K1R3R w - - 0 27", "0 draw, or h1e1"},

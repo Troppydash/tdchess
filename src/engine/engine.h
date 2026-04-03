@@ -1825,7 +1825,8 @@ struct engine
             }
 
             // scale window by score, larger scores warrants higher window
-            int window = 10 + param.thread_index % 8 + pv.average_score * pv.average_score / 12000;
+            constexpr int MOD = 8;
+            int window = 10 + (param.thread_index + MOD - param.main_thread_index) % MOD + pv.average_score * pv.average_score / 12000;
 
             int alpha = -param::INF;
             int beta = param::INF;
