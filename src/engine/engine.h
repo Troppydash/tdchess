@@ -1875,7 +1875,6 @@ struct engine
             }
 
             // update lines always, since root moves are updated only when timer ok
-            result.score = m_root_moves.get_pv().score;
             if (!root_ss->get_pv().empty())
                 result.pv_line = root_ss->get_pv();
 
