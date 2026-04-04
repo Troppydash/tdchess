@@ -1,5 +1,6 @@
 #pragma once
 
+#include "chessmap.h"
 #include "features.h"
 #include "heuristic.h"
 #include "legal.h"
@@ -69,6 +70,7 @@ class movegen
 
     // for nnue based move ordering
     nnue2::net *nnue = nullptr;
+    chessmap::net *chessmap = nullptr;
     table *tt = nullptr;
 
   public:
@@ -87,11 +89,12 @@ class movegen
         chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
         chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth, uint64_t pawn_key,
         const std::array<const continuation_history *, NUM_CONTINUATION> &continuations,
-        nnue2::net *nnue, table *tt, movegen_stage stage = movegen_stage::PV)
+        nnue2::net *nnue, chessmap::net *chessmap, table *tt,
+        movegen_stage stage = movegen_stage::PV)
         : m_stage{static_cast<int>(stage)}, m_moves{moves}, m_position(position),
           m_heuristics(heuristics), m_pv_move(pv_move), m_ply(ply), m_depth(depth),
           m_prev_move{prev_move}, m_continuations{continuations}, m_pawn_key(pawn_key), nnue(nnue),
-          tt(tt)
+          chessmap(chessmap), tt(tt)
     {
         assert(stage == movegen_stage::PV);
     }
@@ -118,8 +121,8 @@ class movegen
         if (bucket_hit && param::IS_VALID(result.m_static_eval))
         {
             // use exact results
-            if (GET_FLAG(result.m_mask) == param::EXACT_FLAG && param::IS_VALID(result.m_score)
-                && result.m_depth >= m_depth)
+            if (GET_FLAG(result.m_mask) == param::EXACT_FLAG && param::IS_VALID(result.m_score) &&
+                result.m_depth >= m_depth)
             {
                 return -result.m_score;
             }
@@ -377,6 +380,8 @@ class movegen
                     int static_end = std::min(m_moves.size(), m_capture_end + STATIC_SORT_TOP_N);
                     bool will_static_sort = static_end - static_start > 1 && m_depth < 8;
 
+                    chessmap->catchup(m_position);
+
                     for (int i = m_capture_end;; ++i)
                     {
                         if (i >= m_moves.size())
@@ -410,7 +415,7 @@ class movegen
                             continue;
                         }
 
-                        int32_t score = 0;
+                        int32_t score = chessmap->evaluate_cached(m_position, move);
 
                         // normal
                         score += m_heuristics

@@ -1,9 +1,11 @@
 #pragma once
 #include <chrono>
+#include <memory>
 #include <utility>
 
 #include "chess.h"
 #include "chess960.h"
+#include "chessmap.h"
 #include "cuckoo.h"
 #include "endgame.h"
 #include "features.h"
@@ -431,6 +433,8 @@ struct engine
     root_move_list m_root_moves{};
 
     int16_t contempt_score[64]{};
+    
+    std::unique_ptr<chessmap::net> m_chessmap;
 
     // must be set via methods
     explicit engine(table *table) : engine(nullptr, nullptr, table)
@@ -446,6 +450,8 @@ struct engine
             std::cout << "no nnue\n";
             exit(0);
         }
+        
+        m_chessmap = std::make_unique<chessmap::net>();
 
         util::init();
         cuckoo::init();
@@ -511,6 +517,8 @@ struct engine
 
         // init nnue
         m_nnue->initialize(m_position);
+        
+        m_chessmap->initialize(m_position);
 
         m_filter.load(m_position);
 
@@ -571,6 +579,7 @@ struct engine
                 &(m_heuristics->cont_corr[m_position.at(move.from())][move.to().index()]);
 
             m_nnue->make_move(m_position, move);
+            m_chessmap->make_move(m_position, move);
 
             m_position.makeMove(move);
         }
@@ -587,6 +596,7 @@ struct engine
         {
             m_position.unmakeMove(move);
             m_nnue->unmake_move();
+            m_chessmap->unmake_move();
             m_keys.unmake_move();
         }
 
@@ -1290,6 +1300,7 @@ struct engine
                     m_keys.get_pawn_key(),
                     conthist,
                     m_nnue,
+                    m_chessmap.get(),
                     m_table};
 
         chess::Move best_move = chess::Move::NO_MOVE;

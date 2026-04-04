@@ -150,15 +150,15 @@ void position_test()
     // std::cout << c << std::endl;
     // exit(0);
     
-    chessmap::net net{};
-    chess::Board pos{"7k/7r/7Q/2P5/P7/K5RP/6P1/8 w - - 1 75"};
-    // chess::Board pos{};
-    net.initialize(pos);
-    net.evaluate(pos);
-    net.show_evaluation(pos);
+    // chessmap::net net{};
+    // chess::Board pos{"1r3qk1/p2b3p/2pNrnp1/4pp2/B1P5/5P2/PP1Q2PP/2KRR3 b - - 3 22"};
+    // // chess::Board pos{};
+    // net.initialize(pos);
+    // net.evaluate(pos, 0xFFFFFFFFFFFFFFFF);
+    // net.show_evaluation(pos);
 
     
-    exit(0);
+    // exit(0);
     
     std::vector<std::pair<std::string, std::string>> positions{
         // {"8/8/8/8/2k5/8/2K5/8 w - - 0 61", ""},
