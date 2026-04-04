@@ -152,9 +152,10 @@ void position_test()
     
     chessmap::net net{};
     chess::Board pos{"7k/7r/7Q/2P5/P7/K5RP/6P1/8 w - - 1 75"};
+    // chess::Board pos{};
     net.initialize(pos);
     net.evaluate(pos);
-    net.show_evaluation();
+    net.show_evaluation(pos);
 
     
     exit(0);
