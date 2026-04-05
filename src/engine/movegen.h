@@ -224,6 +224,7 @@ class movegen
                 // generate all evasion moves
             case movegen_stage::EINIT: {
                 // don't use the sep movegen since all moves are generated
+                // TODO: think about if splitting this would be good?
                 chess::movegen::legalmoves(m_moves, m_position);
                 auto counter = get_counter();
 
@@ -252,11 +253,11 @@ class movegen
                                                 [m_heuristics.get_capture(m_position, move)]
                                 .get_value();
 
-                        score *= 2;
-
                         // baseline
-                        score += 20000;
-                        score = std::clamp(score, 15000, 32000);
+                        score += 10000;
+                        
+                        // not too low
+                        score = std::clamp(score, 10000, 32000);
                         move.setScore(score);
                     }
                     else
@@ -305,13 +306,10 @@ class movegen
                         {
                             score += 4000;
                         }
+                        
+                        score /= 2;
 
-                        //
-                        // score += m_heuristics
-                        //     .king[m_position.sideToMove()][m_heuristics.get_king_bucket(m_position)][move.from().index()]
-                        //          [move.to().index()]
-                        //     .get_value();
-
+                        // not too high
                         score = std::clamp(score, -32000, 20000);
                         move.setScore(score);
                     }
