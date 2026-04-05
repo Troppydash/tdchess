@@ -380,7 +380,8 @@ class movegen
                     int static_end = std::min(m_moves.size(), m_capture_end + STATIC_SORT_TOP_N);
                     bool will_static_sort = static_end - static_start > 1 && m_depth < 8;
 
-                    chessmap->catchup(m_position);
+                    if (m_depth < 12)
+                        chessmap->catchup(m_position);
 
                     for (int i = m_capture_end;; ++i)
                     {
@@ -415,7 +416,9 @@ class movegen
                             continue;
                         }
 
-                        int32_t score = chessmap->evaluate_cached(m_position, move);
+                        int32_t score = m_depth < 12 ? chessmap->evaluate_cached(m_position, move) *
+                                                           6 / (1 + m_depth)
+                                                     : 0;
 
                         // normal
                         score += m_heuristics

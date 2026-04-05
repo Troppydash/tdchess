@@ -14,11 +14,11 @@ constexpr int HL = 128;
 constexpr int OUTPUTS = 64;
 constexpr int QA = 255;
 constexpr int QB = 64;
-constexpr int SCALE = 700;
+constexpr int SCALE = 500;
 
 #define INCBIN_SILENCE_BITCODE_WARNING
 #include "../hpplib/incbin.h"
-INCBIN(Chessmap, "../nets/chessmap/chessmap_10.bin");
+INCBIN(Chessmap, "../nets/chessmap/chessmap_20.bin");
 
 
 
@@ -250,7 +250,7 @@ class net
             result = (int)m_side[m_head].outputs[move.from().index()];
         }
 
-        return std::clamp(result, 0, 1000);
+        return std::clamp(result, 0, 2000);
     }
 
     int32_t evaluate_cached(const chess::Board &ref, chess::Move move)
