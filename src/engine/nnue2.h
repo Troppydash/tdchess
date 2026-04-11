@@ -613,49 +613,49 @@ struct net
 
     /// fused updates ///
 
-    template <int Size>
+    template <size_t Size>
     static void fused_copy(simd::Vec *__restrict__ out, const simd::Vec *__restrict__ in)
     {
-        for (int i = 0; i < Size / simd::WIDTH; ++i)
+        for (size_t i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = in[i];
     }
 
-    template <int Size>
+    template <size_t Size>
     static void fused_add(simd::Vec *out, const simd::Vec *in, const simd::Vec *add)
     {
-        for (int i = 0; i < Size / simd::WIDTH; ++i)
+        for (size_t i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::add16(in[i], add[i]);
     }
 
-    template <int Size>
+    template <size_t Size>
     static void fused_sub(simd::Vec *out, const simd::Vec *in, const simd::Vec *sub)
     {
-        for (int i = 0; i < Size / simd::WIDTH; ++i)
+        for (size_t i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::sub16(in[i], sub[i]);
     }
 
-    template <int Size>
+    template <size_t Size>
     static void fused_add_sub(simd::Vec *out, const simd::Vec *in, const simd::Vec *add,
                               const simd::Vec *sub)
     {
-        for (int i = 0; i < Size / simd::WIDTH; ++i)
+        for (size_t i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::sub16(simd::add16(in[i], add[i]), sub[i]);
     }
 
-    template <int Size>
+    template <size_t Size>
     static void fused_add_sub_sub(simd::Vec *out, const simd::Vec *in, const simd::Vec *add,
                                   const simd::Vec *sub1, const simd::Vec *sub2)
     {
-        for (int i = 0; i < Size / simd::WIDTH; ++i)
+        for (size_t i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::sub16(simd::sub16(simd::add16(in[i], add[i]), sub1[i]), sub2[i]);
     }
 
-    template <int Size>
+    template <size_t Size>
     static void fused_add_add_sub_sub(simd::Vec *out, const simd::Vec *in, const simd::Vec *add1,
                                       const simd::Vec *add2, const simd::Vec *sub1,
                                       const simd::Vec *sub2)
     {
-        for (int i = 0; i < Size / simd::WIDTH; ++i)
+        for (size_t i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::sub16(
                 simd::add16(simd::sub16(simd::add16(in[i], add1[i]), sub1[i]), add2[i]), sub2[i]);
     }

@@ -21,7 +21,7 @@ struct bucket_map
     };
 
     bucket *buckets;
-    int size;
+    size_t size;
 
     bucket_map()
     {
@@ -105,7 +105,7 @@ struct bucket_map2
     };
 
     bucket *buckets;
-    int size;
+    size_t size;
 
     bucket_map2()
     {
@@ -174,8 +174,7 @@ class rep_filter
     bucket_map2 history{};
     bucket_map current{};
 
-    uint64_t bloom_filter[param::MAX_DEPTH]{};
-    int ply = 0;
+    uint64_t bloom_filter[1]{};
 
   public:
     void prefetch(uint64_t key) const

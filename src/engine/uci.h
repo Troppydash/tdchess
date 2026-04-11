@@ -261,7 +261,6 @@ class uci_handler
                     }
 #endif
                     std::cout << "warning unknown option\n";
-                end:
                 }
             }
             else if (lead == "position")
