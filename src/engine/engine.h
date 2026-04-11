@@ -1936,7 +1936,7 @@ struct engine
             std::cout << "info ponderhit new searchtime " << control.time << std::endl;
 
         auto already_spent = m_stats.total_time;
-        long long max_time = control.time;
+        int64_t max_time = control.time;
 
         // handles when opp takes a long time to explore and we are at high depth
         if (already_spent.count() > control.opt_time)

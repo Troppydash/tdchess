@@ -4,11 +4,11 @@ test:
 	cmake -DCMAKE_BUILD_TYPE=Debug -G Ninja -S . -B ./cmake-build-release
 	cmake --build ./cmake-build-release --target tdchess_test
 	./cmake-build-release/tdchess_test
-	
+
 uci_build:
 	cmake -DCMAKE_BUILD_TYPE=Release -G Ninja -S . -B ./cmake-build-release
 	cmake --build ./cmake-build-release --target tdchess_uci
-	
+
 config_gen:
 	cmake -DCMAKE_BUILD_TYPE=Release -G Ninja -S . -B ./cmake-build-release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 	[ -e compile_commands.json ] || ln -s cmake-build-release/compile_commands.json .

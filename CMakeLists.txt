@@ -7,7 +7,7 @@ set(CMAKE_C_STANDARD 99)
 if (POLICY CMP0167)
     cmake_policy(SET CMP0167 NEW)
 endif ()
-find_package(Boost REQUIRED)
+# find_package(Boost REQUIRED)
 
 
 # static link with fathom

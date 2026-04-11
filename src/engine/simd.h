@@ -1,11 +1,32 @@
 #pragma once
 
-#include <arm_neon.h>
 #include <stdlib.h>
+
+#if defined(__AVX2__)
+#include <immintrin.h>
+#else
+#include <arm_neon.h>
+#endif
 
 namespace simd
 {
 
+#if defined(__AVX2__)
+
+using Vec = __m256i;
+constexpr size_t WIDTH = 16;
+constexpr size_t ALIGN = 64;
+
+inline __attribute__((always_inline)) Vec add16(Vec a, Vec b)
+{
+    return _mm256_add_epi16(a, b);
+}
+
+inline __attribute__((always_inline)) Vec sub16(Vec a, Vec b)
+{
+    return _mm256_sub_epi16(a, b);
+}
+#else
 // needs this to prevent aliasing in evaluate/catchup
 using Vec __attribute__((may_alias)) = int16x8x4_t;
 constexpr size_t WIDTH = 32;
@@ -23,4 +44,5 @@ inline __attribute__((always_inline)) Vec sub16(Vec a, Vec b)
             vsubq_s16(a.val[2], b.val[2]), vsubq_s16(a.val[3], b.val[3])};
 }
 
+#endif
 } // namespace simd

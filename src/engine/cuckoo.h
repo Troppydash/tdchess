@@ -1,8 +1,9 @@
 #pragma once
 
+#include "chess.h"
+#include <atomic>
 #include <cinttypes>
 #include <cstring>
-#include "chess.h"
 
 namespace cuckoo
 {

@@ -4,6 +4,8 @@
 #include "param.h"
 #include "simd.h"
 #include <cinttypes>
+#include <cstring>
+#include <immintrin.h>
 #include <iostream>
 #include <vector>
 
@@ -255,10 +257,14 @@ class net
     {
         assert(m_side[m_head].is_clean[0]);
 
+#if defined(__AVX2__)
+        const __m256i *__restrict__ us = (__m256i *)(m_side[m_head].vals[ref.sideToMove()]);
+        const __m256i *__restrict__ them = (__m256i *)(m_side[m_head].vals[ref.sideToMove() ^ 1]);
+#else
         const int16x8_t *__restrict__ us = (int16x8_t *)(m_side[m_head].vals[ref.sideToMove()]);
         const int16x8_t *__restrict__ them =
             (int16x8_t *)(m_side[m_head].vals[ref.sideToMove() ^ 1]);
-
+#endif
         int bucket_from = move.from().index();
 
         if (ref.sideToMove() == chess::Color::BLACK)
@@ -270,11 +276,17 @@ class net
         {
             m_side[m_head].outputs_cached[bucket_from] = true;
 
+#if defined(__AVX2__)
+            const __m256i *__restrict__ us_weights =
+                (__m256i *)(m_network.output_weights[bucket_from]);
+            const __m256i *__restrict__ them_weights =
+                (__m256i *)(m_network.output_weights[bucket_from] + HL);
+#else
             const int16x8_t *__restrict__ us_weights =
                 (int16x8_t *)(m_network.output_weights[bucket_from]);
             const int16x8_t *__restrict__ them_weights =
                 (int16x8_t *)(m_network.output_weights[bucket_from] + HL);
-
+#endif
             int32_t output = flatten(us, us_weights) + flatten(them, them_weights);
 
             output /= QA;
@@ -289,6 +301,55 @@ class net
         return get_output(ref, move);
     }
 
+#if defined(__AVX2__)
+    int32_t flatten(const __m256i *__restrict__ acc, const __m256i *__restrict__ weight)
+    {
+        const __m256i vec_zero = _mm256_setzero_si256();
+        const __m256i vec_qa = _mm256_set1_epi16(QA);
+
+        __m256i sum = vec_zero;
+
+        // HL / 16 gives us the total number of __m256i blocks.
+        // We process 2 blocks (32 elements) per iteration.
+        for (int i = 0; i < (HL / 16); i += 2)
+        {
+            // Prefetching next blocks
+            _mm_prefetch((const char *)&acc[i + 2], _MM_HINT_T0);
+            _mm_prefetch((const char *)&weight[i + 2], _MM_HINT_T0);
+
+            // Load 256-bit vectors via pointer dereference
+            const __m256i us = acc[i + 0];
+            const __m256i them = acc[i + 1];
+            const __m256i us_weights = weight[i + 0];
+            const __m256i them_weights = weight[i + 1];
+
+            // Clamp: min(max(x, 0), QA)
+            const __m256i us_clamped = _mm256_min_epi16(_mm256_max_epi16(us, vec_zero), vec_qa);
+            const __m256i them_clamped = _mm256_min_epi16(_mm256_max_epi16(them, vec_zero), vec_qa);
+
+            // Compute: (weight * clamped) then horizontal-multiply-add with clamped
+            // This effectively computes sum(weight * clamped^2) widened to 32-bit
+            const __m256i us_results =
+                _mm256_madd_epi16(_mm256_mullo_epi16(us_weights, us_clamped), us_clamped);
+            const __m256i them_results =
+                _mm256_madd_epi16(_mm256_mullo_epi16(them_weights, them_clamped), them_clamped);
+
+            sum = _mm256_add_epi32(sum, us_results);
+            sum = _mm256_add_epi32(sum, them_results);
+        }
+
+        // Final horizontal reduction: 256-bit -> 128-bit -> scalar int32
+        __m128i v_low = _mm256_castsi256_si128(sum);
+        __m128i v_high = _mm256_extracti128_si256(sum, 1);
+        __m128i res = _mm_add_epi32(v_low, v_high);
+
+        // Collapse 4x32-bit into 1x32-bit
+        res = _mm_add_epi32(res, _mm_shuffle_epi32(res, _MM_SHUFFLE(0, 1, 2, 3)));
+        res = _mm_add_epi32(res, _mm_shuffle_epi32(res, _MM_SHUFFLE(1, 0, 0, 1)));
+
+        return _mm_cvtsi128_si32(res);
+    }
+#else
     int32_t flatten(const int16x8_t *__restrict__ acc, const int16x8_t *__restrict__ weight)
     {
         const int16x8_t v_zero = vdupq_n_s16(0);
@@ -318,6 +379,7 @@ class net
 
         return vaddvq_s32(vaddq_s32(vaddq_s32(out0, out1), vaddq_s32(out2, out3)));
     }
+#endif
 
     void initialize(const chess::Board &position)
     {
@@ -330,7 +392,7 @@ class net
         fused_copy<HL>((simd::Vec *)m_side[m_head].vals[1], (simd::Vec *)m_network.feature_bias);
 
         memset(m_side[m_head].outputs_cached, 0, sizeof(m_side[m_head].outputs_cached));
-        
+
         auto occ = position.occ();
         while (occ)
         {
