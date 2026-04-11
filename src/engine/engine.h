@@ -1061,12 +1061,6 @@ struct engine
             improving = ss->static_eval > (ss - 4)->static_eval;
         }
 
-        bool opp_worsening = false;
-        if (param::IS_VALID((ss - 1)->static_eval) && param::IS_VALID((ss - 3)->static_eval))
-        {
-            opp_worsening = (ss - 1)->static_eval < (ss - 3)->static_eval;
-        }
-
         if (ss->in_check)
         {
             goto moves;
@@ -1681,7 +1675,7 @@ struct engine
     std::pair<int16_t, int32_t> to_corrected_static_eval(int32_t static_eval,
                                                          search_stack *ss) const
     {
-        static_eval = (static_eval * (150 - (int32_t)m_position.halfMoveClock())) / 150;
+        static_eval = (static_eval * (200 - (int32_t)m_position.halfMoveClock())) / 200;
 
         int32_t value = 30 *
                         m_heuristics
@@ -1711,7 +1705,7 @@ struct engine
         }
 
         value = std::clamp(value, -2000, 2000);
-        int scaled_value = (value * (150 - (int32_t)m_position.halfMoveClock())) / 150;
+        int scaled_value = (value * (200 - (int32_t)m_position.halfMoveClock())) / 200;
         static_eval += scaled_value;
         return {std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX), scaled_value};
     }

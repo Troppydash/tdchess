@@ -276,7 +276,10 @@ class movegen
             case movegen_stage::QUIET_INIT: {
                 if (!m_skip_quiet)
                 {
-                    generate_threat();
+                    bool use_threat = m_depth < 14;
+                    if (use_threat)
+                        generate_threat();
+
                     chess::movegen::legalmoves_quiet(m_moves, m_position, m_precompute);
                     auto counter = get_counter();
 
@@ -285,10 +288,10 @@ class movegen
                     bool will_static_sort = static_end - static_start > 1 && m_depth < 8;
 
                     // chessmap limit
-                    const int CHESSMAP_DEPTH_LIMIT = 12;
-                    // bool use_chessmap = m_depth < CHESSMAP_DEPTH_LIMIT &&
-                    // m_position.us(m_position.sideToMove()).count() > 8;
+                    const int CHESSMAP_DEPTH_LIMIT = 10;
                     bool use_chessmap = m_depth < CHESSMAP_DEPTH_LIMIT;
+                    if (use_chessmap)
+                        chessmap->catchup(m_position);
 
                     for (int i = m_capture_end;; ++i)
                     {
@@ -362,7 +365,7 @@ class movegen
                             score += 10000;
 
                         // threat
-                        if (std::abs(score) < 700)
+                        if (use_threat)
                         {
                             auto piece = m_position.at(move.from()).type();
                             if (threat_piece != chess::PieceType::NONE && piece > threat_piece &&
@@ -378,14 +381,10 @@ class movegen
                                 score += additional;
                             }
                         }
-                        
-                        if (std::abs(score) < 5000)
+
+                        if (use_chessmap)
                         {
-                            if (use_chessmap)
-                            {
-                                chessmap->catchup(m_position);
-                                score += chessmap->evaluate_cached(m_position, move) / (1 + m_depth);
-                            }
+                            score += chessmap->evaluate_cached(m_position, move) / (1 + m_depth);
                         }
 
                         score = std::clamp(score, -32000, 32000);
