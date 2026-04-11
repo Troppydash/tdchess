@@ -10,17 +10,15 @@
 namespace chessmap
 {
 
-constexpr int HL = 128;
+constexpr int HL = 64;
 constexpr int OUTPUTS = 64;
 constexpr int QA = 255;
 constexpr int QB = 64;
-constexpr int SCALE = 500;
+constexpr int SCALE = 2000;
 
 #define INCBIN_SILENCE_BITCODE_WARNING
 #include "../hpplib/incbin.h"
-INCBIN(Chessmap, "../nets/chessmap/chessmap_20.bin");
-
-
+INCBIN(Chessmap, "../nets/chessmap/chessmap_1.8.15.bin");
 
 struct network
 {
@@ -250,7 +248,7 @@ class net
             result = (int)m_side[m_head].outputs[move.from().index()];
         }
 
-        return std::clamp(result, 0, 2000);
+        return std::clamp(result, 0, SCALE);
     }
 
     int32_t evaluate_cached(const chess::Board &ref, chess::Move move)
@@ -262,12 +260,10 @@ class net
             (int16x8_t *)(m_side[m_head].vals[ref.sideToMove() ^ 1]);
 
         int bucket_from = move.from().index();
-        int bucket_to = move.to().index();
 
         if (ref.sideToMove() == chess::Color::BLACK)
         {
             bucket_from ^= 56;
-            bucket_to ^= 56;
         }
 
         if (!m_side[m_head].outputs_cached[bucket_from])
@@ -290,64 +286,7 @@ class net
             m_side[m_head].outputs[bucket_from] = output;
         }
 
-        // if (!m_side[m_head].outputs_cached[64 + bucket_to])
-        // {
-        //     m_side[m_head].outputs_cached[64 + bucket_to] = true;
-
-        //     const int16x8_t *__restrict__ us_weights =
-        //         (int16x8_t *)(m_network.output_weights[64 + bucket_to]);
-        //     const int16x8_t *__restrict__ them_weights =
-        //         (int16x8_t *)(m_network.output_weights[64 + bucket_to] + HL);
-
-        //     int32_t output = flatten(us, us_weights) + flatten(them, them_weights);
-
-        //     output /= QA;
-        //     output += m_network.output_bias[64 + bucket_to];
-
-        //     output *= SCALE;
-        //     output /= QA * QB;
-
-        //     m_side[m_head].outputs[64 + bucket_to] = output;
-        // }
-
         return get_output(ref, move);
-    }
-
-    // deprecated
-    int16_t *evaluate(const chess::Board &ref, chess::Bitboard mask)
-    {
-        catchup(ref);
-        assert(m_side[m_head].is_clean[0]);
-
-        const int16x8_t *__restrict__ us = (int16x8_t *)(m_side[m_head].vals[ref.sideToMove()]);
-        const int16x8_t *__restrict__ them =
-            (int16x8_t *)(m_side[m_head].vals[ref.sideToMove() ^ 1]);
-
-        while (mask)
-        {
-            int bucket = mask.pop();
-
-            // if it is black moving, the squares are flipped
-            int bucket_index = ref.sideToMove() == chess::Color::WHITE ? bucket : bucket ^ 56;
-
-            const int16x8_t *__restrict__ us_weights =
-                (int16x8_t *)(m_network.output_weights[bucket_index]);
-            const int16x8_t *__restrict__ them_weights =
-                (int16x8_t *)(m_network.output_weights[bucket_index] + HL);
-
-            int32_t output = flatten(us, us_weights) + flatten(them, them_weights);
-
-            output /= QA;
-            output += m_network.output_bias[bucket_index];
-
-            output *= SCALE;
-            output /= QA * QB;
-
-            // we always store using the abs bucket index
-            m_side[m_head].outputs[bucket] = output;
-        }
-
-        return m_side[m_head].outputs;
     }
 
     int32_t flatten(const int16x8_t *__restrict__ acc, const int16x8_t *__restrict__ weight)
@@ -390,6 +329,8 @@ class net
         fused_copy<HL>((simd::Vec *)m_side[m_head].vals[0], (simd::Vec *)m_network.feature_bias);
         fused_copy<HL>((simd::Vec *)m_side[m_head].vals[1], (simd::Vec *)m_network.feature_bias);
 
+        memset(m_side[m_head].outputs_cached, 0, sizeof(m_side[m_head].outputs_cached));
+        
         auto occ = position.occ();
         while (occ)
         {

@@ -284,8 +284,11 @@ class movegen
                     int static_end = std::min(m_moves.size(), m_capture_end + STATIC_SORT_TOP_N);
                     bool will_static_sort = static_end - static_start > 1 && m_depth < 8;
 
-                    if (m_depth < 12)
-                        chessmap->catchup(m_position);
+                    // chessmap limit
+                    const int CHESSMAP_DEPTH_LIMIT = 12;
+                    // bool use_chessmap = m_depth < CHESSMAP_DEPTH_LIMIT &&
+                    // m_position.us(m_position.sideToMove()).count() > 8;
+                    bool use_chessmap = m_depth < CHESSMAP_DEPTH_LIMIT;
 
                     for (int i = m_capture_end;; ++i)
                     {
@@ -320,9 +323,7 @@ class movegen
                             continue;
                         }
 
-                        int32_t score = m_depth < 12 ? chessmap->evaluate_cached(m_position, move) *
-                                                           6 / (1 + m_depth)
-                                                     : 0;
+                        int32_t score = 0;
 
                         // normal
                         score += m_heuristics
@@ -375,6 +376,15 @@ class movegen
 
                                 assert(additional > 0);
                                 score += additional;
+                            }
+                        }
+                        
+                        if (std::abs(score) < 5000)
+                        {
+                            if (use_chessmap)
+                            {
+                                chessmap->catchup(m_position);
+                                score += chessmap->evaluate_cached(m_position, move) / (1 + m_depth);
                             }
                         }
 
