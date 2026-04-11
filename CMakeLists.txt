@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_STANDARD 99)
 
 if (POLICY CMP0167)
-    cmake_policy(SET CMP0167 NEW)
+  cmake_policy(SET CMP0167 NEW)
 endif ()
 # find_package(Boost REQUIRED)
 
@@ -16,7 +16,6 @@ set_source_files_properties(${FATHOM_SRC} PROPERTIES LANGUAGE CXX)
 add_library(fathom STATIC ${FATHOM_SRC})
 target_include_directories(fathom PUBLIC lib/Fathom/src)
 set_target_properties(fathom PROPERTIES
-        POSITION_INDEPENDENT_CODE ON
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
 )
@@ -24,7 +23,8 @@ target_link_options(fathom PRIVATE
         "-flto"
 )
 target_compile_options(fathom PRIVATE
-        "-Ofast"
+        "-O3"
+        "-ffast-math"
         "-march=native"
         "-mtune=native"
         "-fomit-frame-pointer"
@@ -43,7 +43,8 @@ target_link_options(tdchess_uci PRIVATE
         "-flto"
 )
 target_compile_options(tdchess_uci PRIVATE
-        "-Ofast"
+        "-O3"
+        "-ffast-math"
         "-march=native"
         "-mtune=native"
         "-flto"
@@ -64,7 +65,8 @@ target_link_options(tdchess_uci_tune PRIVATE
         "-flto"
 )
 target_compile_options(tdchess_uci_tune PRIVATE
-        "-Ofast"
+        "-O3"
+        "-ffast-math"
         "-march=native"
         "-mtune=native"
         "-flto"

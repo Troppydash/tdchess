@@ -83,8 +83,8 @@ struct endgame_table
             }
 
             // hack to prevent timer overrun
-            if (ply > 4)
-                break;
+            // if (ply > 4)
+                // break;
         }
 
         int32_t score = 0;
@@ -189,19 +189,19 @@ struct endgame_table
     int16_t probe_wdl(const chess::Board &position)
     {
         // technically this is wrong, since we don't have dtz data, but yolo
-        tb_cache_entry &cache = m_entries[position.hash() & TB_MASK];
-        if (cache.hash == position.hash())
-        {
-            // assuming the wdl is computed against the dtz clock, fix later if needed
-            // if (std::abs(cache.score) == 2 && (int)position.halfMoveClock() <= cache.move50)
-            //     return cache.score;
-            //
-            // if (std::abs(cache.score) == 1 && (int)position.halfMoveClock() >= cache.move50)
-            //     return cache.score;
-            //
-            // if (cache.score == 0)
-            return cache.score;
-        }
+        // tb_cache_entry &cache = m_entries[position.hash() & TB_MASK];
+        // if (cache.hash == position.hash())
+        // {
+        //     // assuming the wdl is computed against the dtz clock, fix later if needed
+        //     // if (std::abs(cache.score) == 2 && (int)position.halfMoveClock() <= cache.move50)
+        //     //     return cache.score;
+        //     //
+        //     // if (std::abs(cache.score) == 1 && (int)position.halfMoveClock() >= cache.move50)
+        //     //     return cache.score;
+        //     //
+        //     // if (cache.score == 0)
+        //     return cache.score;
+        // }
 
         unsigned ep =
             position.enpassantSq() == chess::Square::NO_SQ ? 0 : position.enpassantSq().index();
@@ -246,9 +246,9 @@ struct endgame_table
             exit(0);
         }
 
-        cache.hash = position.hash();
-        cache.score = ret;
-        cache.move50 = position.halfMoveClock();
+        // cache.hash = position.hash();
+        // cache.score = ret;
+        // cache.move50 = position.halfMoveClock();
 
         return ret;
     }

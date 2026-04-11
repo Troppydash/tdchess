@@ -261,6 +261,10 @@ class uci_handler
                     }
 #endif
                     std::cout << "warning unknown option\n";
+
+#ifdef TDCHESS_TUNE
+                end:
+#endif
                 }
             }
             else if (lead == "position")
@@ -465,7 +469,8 @@ class uci_handler
             std::cout << "bestmove " << chess::uci::moveToUci(result.pv_line[0], global::chess_960);
             if (result.pv_line.size() >= 2)
             {
-                std::cout << " ponder " << chess::uci::moveToUci(result.pv_line[1], global::chess_960);
+                std::cout << " ponder "
+                          << chess::uci::moveToUci(result.pv_line[1], global::chess_960);
             }
             std::cout << std::endl;
             std::cout << std::flush;
