@@ -5,9 +5,14 @@
 #include "simd.h"
 #include <cinttypes>
 #include <cstring>
-#include <immintrin.h>
 #include <iostream>
 #include <vector>
+
+#if defined(__AVX2__)
+#include <immintrin.h>
+#else
+#include <arm_neon.h>
+#endif
 
 namespace chessmap
 {
