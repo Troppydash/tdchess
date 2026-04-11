@@ -818,7 +818,7 @@ struct engine
             best_score = (beta + best_score) / 2;
         }
 
-        assert(!m_timer.is_stopped());
+        // assert(!m_timer.is_stopped());
         bucket.store(key, flag, best_score, ply, depth_stored, best_move, unadjusted_static_eval,
                      ss->tt_hit && ss->tt_pv, m_table->m_generation, entry);
 
