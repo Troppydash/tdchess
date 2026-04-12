@@ -1,7 +1,7 @@
 #pragma once
 
-#include "param.h"
 #include "chess.h"
+#include "param.h"
 
 #include <cmath>
 #include <cstring>
@@ -149,7 +149,7 @@ class table_entry
 
         int age_diff = (MAX_AGE + age - GET_AGE(m_mask)) & AGE_MASK;
         if (flag == param::EXACT_FLAG || !MATCHES(hash, m_hash) ||
-            depth + 5 + 2 * is_pv > (m_depth + param::DEPTH_OFFSET) || age_diff >= 1)
+            (depth + 5 + 2 * is_pv > (m_depth + param::DEPTH_OFFSET)) || age_diff >= 1)
         {
             m_hash = BUCKET_HASH(hash);
             m_depth = int8_t(depth - param::DEPTH_OFFSET);
@@ -190,7 +190,8 @@ struct alignas(32) bucket
         }
     }
 
-    std::pair<table_entry &, table_entry_copy> probe(const uint64_t hash, bool &bucket_hit, uint8_t age)
+    std::pair<table_entry &, table_entry_copy> probe(const uint64_t hash, bool &bucket_hit,
+                                                     uint8_t age)
     {
         const BUCKET_HASH key = hash;
         for (int i = 0; i < NUM_BUCKETS; ++i)

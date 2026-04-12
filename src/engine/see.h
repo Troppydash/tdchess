@@ -1,7 +1,7 @@
 #pragma once
 
-#include <array>
 #include "chess.h"
+#include <array>
 
 struct see
 {
@@ -18,7 +18,7 @@ struct see
     // for when the king is treated as a valuable piece
     constexpr static std::array<int16_t, 7> ATTACKED_PIECE_VALUES = {
         // pawn, knight, bishop, rook, queen, king, none
-        PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, QUEEN_VALUE+100, 0};
+        PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, QUEEN_VALUE, 0};
 
     template <chess::Color::underlying Pinner>
     static chess::Bitboard remove_pinned(const chess::Board &board, chess::Bitboard occ_pinner,

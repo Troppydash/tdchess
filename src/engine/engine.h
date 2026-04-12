@@ -352,7 +352,7 @@ struct root_move_list
             moves[size++] = {
                 .move = m,
                 .average_score = param::VALUE_NONE,
-                .score = param::VALUE_NONE,
+                .score = -param::INF,
             };
         }
     }
@@ -433,7 +433,7 @@ struct engine
     root_move_list m_root_moves{};
 
     int16_t contempt_score[64]{};
-    
+
     std::unique_ptr<chessmap::net> m_chessmap;
 
     // must be set via methods
@@ -450,7 +450,7 @@ struct engine
             std::cout << "no nnue\n";
             exit(0);
         }
-        
+
         m_chessmap = std::make_unique<chessmap::net>();
 
         util::init();
@@ -517,7 +517,7 @@ struct engine
 
         // init nnue
         m_nnue->initialize(m_position);
-        
+
         m_chessmap->initialize(m_position);
 
         m_filter.load(m_position);
@@ -1332,7 +1332,7 @@ struct engine
             {
                 // adjust the relevant depth
                 int32_t lmr_depth =
-                    std::max(0, depth - m_param.lookup(is_quiet, depth, move_count) - !improving +
+                    std::max(1, depth - m_param.lookup(is_quiet, depth, move_count) - !improving +
                                     history_score / 8000);
 
                 // [see pruning]
@@ -1347,7 +1347,7 @@ struct engine
                         m_position.pieces(chess::PieceType::KING, m_position.sideToMove()) ^
                         m_position.pieces(chess::PieceType::PAWN, m_position.sideToMove());
                     auto moved_sq = chess::Bitboard::fromSquare(move.from());
-                    if (alpha >= param::VALUE_DRAW || non_pawn_pieces_sqs != moved_sq)
+                    if (alpha >= get_contempt() || non_pawn_pieces_sqs != moved_sq)
                     {
                         if (!see::test_ge(m_position, move, -see_margin))
                             continue;
@@ -1385,10 +1385,10 @@ struct engine
                 // [capture futility pruning]
                 // prune capture moves that doesn't raise alpha
                 auto captured = m_heuristics->get_capture(m_position, move);
-                if (is_capture && lmr_depth <= 12 && !ss->in_check &&
+                if (is_capture && lmr_depth <= 14 && !ss->in_check &&
                     ss->static_eval + 200 + 200 * lmr_depth + see::PIECE_VALUES[captured] <= alpha)
                 {
-                    gen.skip_quiet();
+                    // gen.skip_quiet();
                     continue;
                 }
             }
@@ -1435,7 +1435,7 @@ struct engine
                     extension = -2;
             }
 
-            new_depth += extension;
+            new_depth = std::max(new_depth + extension, 0);
 
             make_move(move, ss);
 
@@ -1591,11 +1591,11 @@ struct engine
                     // [main history]
                     m_heuristics->update_main_history(m_position, best_move, ply,
                                                       m_keys.get_pawn_key(), main_history_bonus);
-                }
 
-                // [continuation history]
-                update_continuation_history(ss, m_position.at(best_move.from()), best_move.to(),
-                                            main_history_bonus);
+                    // [continuation history]
+                    update_continuation_history(ss, m_position.at(best_move.from()), best_move.to(),
+                                                main_history_bonus);
+                }
 
                 // malus apply
                 for (int j = 0; j < quiet_count; ++j)
@@ -1704,7 +1704,7 @@ struct engine
             value += 24 * (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
         }
 
-        value = std::clamp(value, -2000, 2000);
+        value = std::clamp(value, -4000, 4000);
         int scaled_value = (value * (200 - (int32_t)m_position.halfMoveClock())) / 200;
         static_eval += scaled_value;
         return {std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX), scaled_value};
@@ -1831,7 +1831,8 @@ struct engine
 
             // scale window by score, larger scores warrants higher window
             constexpr int MOD = 8;
-            int window = 10 + (param.thread_index + MOD - param.main_thread_index) % MOD + pv.average_score * pv.average_score / 12000;
+            int window = 10 + (param.thread_index + MOD - param.main_thread_index) % MOD +
+                         pv.average_score * pv.average_score / 12000;
 
             int alpha = -param::INF;
             int beta = param::INF;

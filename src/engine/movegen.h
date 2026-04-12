@@ -8,6 +8,7 @@
 #include "param.h"
 #include "see.h"
 #include "table.h"
+#include <cstdint>
 
 enum class movegen_stage
 {
@@ -171,7 +172,7 @@ class movegen
                 if (m_pv_move != chess::Move::NO_MOVE &&
                     legal::is_legal_full(m_position, m_pv_move))
                 {
-                    m_pv_move.setScore(0);
+                    m_pv_move.setScore(10000);
                     return m_pv_move;
                 }
 
@@ -261,8 +262,8 @@ class movegen
                         if (killer != chess::Move::NO_MOVE && killer != m_pv_move &&
                             legal::is_legal_full(m_position, killer) &&
                             !m_heuristics.is_capture(m_position, killer))
-                        {
-                            killer.setScore(0);
+                        {  
+                            killer.setScore(10000);
                             return killer;
                         }
                     }

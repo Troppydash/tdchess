@@ -1,6 +1,6 @@
 set -ex
 
-NEW="1.8.17"
+NEW="1.8.18"
 mkdir -p ./logs/${NEW}_sf
 ./fastchess \
   -engine cmd=../builds/${NEW}/tdchess name=${NEW}  option.DrawContempt=0 option.MoveOverhead=5 option.Hash=32 option.SyzygyPath=/Users/troppydash/Downloads/syzygy \
