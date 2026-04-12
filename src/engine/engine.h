@@ -1005,7 +1005,7 @@ struct engine
         int16_t best_score = -param::VALUE_INF;
         int16_t max_score = param::VALUE_INF;
         if (m_endgame != nullptr && !has_excluded && !is_root && depth >= features::TB_HIT_DEPTH &&
-            m_endgame->is_stored(m_position) && m_position.halfMoveClock() <= 8)
+            m_endgame->is_stored(m_position) && m_position.halfMoveClock() <= 30)
         {
             int16_t wdl = m_endgame->probe_wdl(m_position);
             int16_t tb_score = param::VALUE_SYZYGY - ply;
@@ -1035,18 +1035,6 @@ struct engine
                 }
             }
         }
-
-        // if (!(ss - 1)->is_cap && (ss - 1)->move != chess::Move::NO_MOVE &&
-        //     param::IS_VALID((ss - 1)->static_eval) && param::IS_VALID(ss->static_eval))
-        // {
-        //     // + if worse, - if better
-        //     int loss = (ss - 1)->static_eval + ss->static_eval - 20;
-        //     int bonus = std::clamp(-2 * loss, -200, 200);
-        //     m_heuristics
-        //         ->main_history[~m_position.sideToMove()][(ss - 1)->move.from().index()]
-        //                       [(ss - 1)->move.to().index()]
-        //         .add_bonus(bonus);
-        // }
 
         // improving flag
         bool improving = true;
@@ -1654,7 +1642,7 @@ struct engine
             !(best_move != chess::Move::NO_MOVE && m_position.isCapture(best_move)) &&
             (best_score > ss->static_eval) == (best_move != chess::Move::NO_MOVE))
         {
-            int bonus = std::clamp((best_score - ss->static_eval) * depth / 16,
+            int bonus = std::clamp((best_score - ss->static_eval) * depth / 8,
                                    -CORRECTION_LIMIT / 4, CORRECTION_LIMIT / 4);
             m_heuristics->update_corr_hist_score(m_position, m_keys.get_pawn_key(),
                                                  m_keys.get_white_key(), m_keys.get_black_key(),
