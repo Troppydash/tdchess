@@ -1,7 +1,7 @@
 set -ex
 
-NEW="1.8.12"
-OLD="1.8.11"
+NEW="1.8.20"
+OLD="1.8.19"
 THREADS="4"
 mkdir -p ./logs/${NEW}_${OLD}
 ./fastchess \

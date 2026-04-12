@@ -1107,7 +1107,7 @@ struct engine
                 if (null_score >= beta)
                 {
                     // if high depth, do confirm
-                    if (depth > 14)
+                    if (depth > 16)
                     {
                         ss->verify_null = true;
                         int16_t verify_score =
@@ -1320,7 +1320,7 @@ struct engine
             {
                 // adjust the relevant depth
                 int32_t lmr_depth =
-                    std::max(1, depth - m_param.lookup(is_quiet, depth, move_count) - !improving +
+                    std::max(0, depth - m_param.lookup(is_quiet, depth, move_count) - !improving +
                                     history_score / 8000);
 
                 // [see pruning]
@@ -1588,9 +1588,9 @@ struct engine
                 // malus apply
                 for (int j = 0; j < quiet_count; ++j)
                 {
-                    m_heuristics->update_main_history(
-                        m_position, ss->quiet_moves[has_excluded][j], ply, m_keys.get_pawn_key(),
-                        -main_history_malus * (quiet_count - j + 5) / (quiet_count + 5));
+                    m_heuristics->update_main_history(m_position, ss->quiet_moves[has_excluded][j],
+                                                      ply, m_keys.get_pawn_key(),
+                                                      -main_history_malus);
 
                     update_continuation_history(
                         ss, m_position.at(ss->quiet_moves[has_excluded][j].from()),
@@ -1617,8 +1617,7 @@ struct engine
             for (int j = 0; j < capture_count; ++j)
             {
                 m_heuristics->update_capture_history(m_position, ss->capture_moves[has_excluded][j],
-                                                     -main_history_malus * (capture_count - j + 3) /
-                                                         (capture_count + 3));
+                                                     -main_history_malus);
             }
         }
 
@@ -1638,8 +1637,9 @@ struct engine
         }
 
         // update correction history
-        if (param::IS_VALID(ss->static_eval) && !ss->in_check &&
-            !(best_move != chess::Move::NO_MOVE && m_position.isCapture(best_move)) &&
+        if (!has_excluded && param::IS_VALID(ss->static_eval) && !ss->in_check &&
+            !(best_move != chess::Move::NO_MOVE &&
+              m_heuristics->is_capture(m_position, best_move)) &&
             (best_score > ss->static_eval) == (best_move != chess::Move::NO_MOVE))
         {
             int bonus = std::clamp((best_score - ss->static_eval) * depth / 8,
@@ -1689,10 +1689,11 @@ struct engine
         if (prev_move != chess::Move::NO_MOVE)
         {
             auto piece = heuristics::get_prev_piece(m_position, prev_move);
-            value += 24 * (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
+            if ((ss - 2)->move != chess::Move::NO_MOVE)
+                value +=
+                    24 * (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
         }
 
-        value = std::clamp(value, -4000, 4000);
         int scaled_value = (value * (200 - (int32_t)m_position.halfMoveClock())) / 200;
         static_eval += scaled_value;
         return {std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX), scaled_value};

@@ -39,8 +39,8 @@ using continuation_history = history_entry<int16_t, 8000>[12][64];
 using continuation_history_full = history_entry<int16_t, 8000>[2][2][13][64][12][64];
 constexpr int NUM_CONTINUATION = 6;
 
-constexpr int CORRECTION_LIMIT = 2048;
-constexpr int PAWN_STRUCTURE_SIZE = 1 << 10;
+constexpr int CORRECTION_LIMIT = 4096;
+constexpr int PAWN_STRUCTURE_SIZE = 1 << 15;
 constexpr int PAWN_STRUCTURE_SIZE_M1 = PAWN_STRUCTURE_SIZE - 1;
 using pawn_history = history_entry<int16_t, 20000>[PAWN_STRUCTURE_SIZE][12][64];
 
