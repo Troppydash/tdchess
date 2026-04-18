@@ -165,7 +165,8 @@ void position_test()
         // {"2br4/3q3k/2p1p1pp/4Bp2/Pn3PP1/1r1P1BQ1/R6P/6RK b - - 4 31", ""},
         // {"2br4/3q3k/2p1p1pp/4Bp2/Pn3PP1/1r1P2Q1/R5BP/6RK w - - 3 31", ""},
         // {"2r1b3/1p2k1pQ/r3p1Pp/3pq2P/8/pP3R2/P2B2P1/nB4K1 w - - 0 37", ""},
-        {"2r1bk2/1p2nqpQ/r3pb1p/3p1P1P/3P1N2/pP3NR1/P2B2P1/nB4K1 w - - 7 32", "+1"},
+        // {"3qr1k1/p1r1b2p/1pp1Ppp1/4P3/2bP1Q2/4RN2/PPBp1P1P/R5K1 w - - 4 25", "+1"},
+        {"3qr1k1/p1r1b2p/bpp1Ppp1/4P3/3P1Q2/4RN2/PPBp1P1P/R5K1 b - - 3 24", "+1"},
         // {"8/5k2/R7/4K1p1/5p1n/7P/6P1/8 w - - 0 49", "even"},
         // {"r6q/pb1n1pk1/1p2p3/1NbnP1Nr/2p1QP2/8/PP1B2BP/R4R1K w - - 9 23", "even"},
         // {"8/p1R4p/6pk/8/6KP/8/3r1P2/1B6 b - - 0 48", "0 draw"},
@@ -178,7 +179,7 @@ void position_test()
 
     auto *nnue = new nnue2::net{};
     nnue->incbin_load();
-    table tt{4096};
+    table tt{512};
 
     // for (auto &[pos, target] : positions)
     // {

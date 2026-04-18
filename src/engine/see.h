@@ -20,29 +20,14 @@ struct see
         // pawn, knight, bishop, rook, queen, king, none
         PAWN_VALUE, KNIGHT_VALUE, BISHOP_VALUE, ROOK_VALUE, QUEEN_VALUE, QUEEN_VALUE, 0};
 
-    template <chess::Color::underlying Pinner>
-    static chess::Bitboard remove_pinned(const chess::Board &board, chess::Bitboard occ_pinner,
-                                         chess::Bitboard occ_king, chess::Bitboard attackers)
+    template <chess::Color::underlying c>
+    static chess::Bitboard remove_pinned(const chess::Board &board, chess::Bitboard occ_opp,
+                                         chess::Bitboard occ_us, chess::Bitboard attackers)
     {
-        const chess::Color king_side = ~Pinner;
+        const chess::Color king_side = c;
         chess::Square king_sq = board.kingSq(king_side);
-
-        // generates all squares within (pinner, king)
-        auto vpin = chess::movegen::pinMask<Pinner, chess::PieceType::ROOK>(board, king_sq,
-                                                                            occ_pinner, occ_king);
-
-        auto dpin = chess::movegen::pinMask<Pinner, chess::PieceType::BISHOP>(board, king_sq,
-                                                                              occ_pinner, occ_king);
-
-        auto all_pin = (vpin | dpin);
-
-        if (all_pin)
-        {
-            assert(!(all_pin.getBits() & (1ull << king_sq.index())));
-        }
-
-        // remove attackers in pin
-        return attackers & ~all_pin;
+        auto pin = chess::movegen::customPinMask<c>(board, king_sq, occ_opp, occ_us, attackers);
+        return attackers & ~pin;
     }
 
     /**
@@ -52,11 +37,11 @@ struct see
      * @param threshold
      * @return
      */
-    static bool test_ge(chess::Board &position, const chess::Move &move, int32_t threshold)
+    static bool test_ge(const chess::Board &position, const chess::Move &move, int32_t threshold)
     {
         if (move.typeOf() != chess::Move::NORMAL)
         {
-            return 0 >= threshold;
+            return true;
         }
 
         chess::Square from = move.from();
@@ -77,30 +62,14 @@ struct see
         const auto bishops = position.pieces(chess::PieceType::BISHOP);
         const auto knights = position.pieces(chess::PieceType::KNIGHT);
         const auto pawns = position.pieces(chess::PieceType::PAWN);
-        const chess::Bitboard occs[2] = {position.us(chess::Color::WHITE),
-                                         position.us(chess::Color::BLACK)};
 
-        auto old_pieces = position.pieces_bb_;
-        auto old_occ = position.occ_bb_;
-        auto old_board = position.board_;
-        auto remove_piece = [&](chess::Square s) {
-            assert(position.at(s) != chess::Piece::NONE);
-            position.removePiece(position.at(s), s);
-        };
-
-        remove_piece(from);
-        if (to_piece != chess::Piece::NONE)
-            remove_piece(to);
-
-        chess::Bitboard occ = position.occ();
         chess::Color stm = position.sideToMove();
-        chess::Bitboard attackers = (chess::attacks::attackers(position, chess::Color::WHITE, to) |
-                                     chess::attacks::attackers(position, chess::Color::BLACK, to)) &
-                                    occ;
+        chess::Bitboard occ =
+            position.occ() ^ chess::Bitboard::fromSquare(from) ^ chess::Bitboard::fromSquare(to);
 
-        position.pieces_bb_ = old_pieces;
-        position.occ_bb_ = old_occ;
-        position.board_ = old_board;
+        chess::Bitboard attackers =
+            (chess::attacks::attackers(position, occ, chess::Color::WHITE, to) |
+             chess::attacks::attackers(position, occ, chess::Color::BLACK, to));
 
         chess::Bitboard stm_attackers;
         chess::Bitboard bb;
@@ -111,7 +80,19 @@ struct see
             stm = ~stm;
             attackers &= occ;
 
-            stm_attackers = attackers & occs[stm];
+            stm_attackers = attackers & position.us(stm);
+            if (!stm_attackers)
+                break;
+
+            if (stm == chess::Color::WHITE)
+                stm_attackers = remove_pinned<chess::Color::underlying::WHITE>(
+                    position, position.us(~chess::Color::WHITE) & occ,
+                    position.us(chess::Color::WHITE) & occ, stm_attackers);
+            else
+                stm_attackers = remove_pinned<chess::Color::underlying::BLACK>(
+                    position, position.us(~chess::Color::BLACK) & occ,
+                    position.us(chess::Color::BLACK) & occ, stm_attackers);
+
             if (!stm_attackers)
                 break;
 
@@ -160,7 +141,7 @@ struct see
             else
             {
                 // king
-                return (attackers & occs[~stm]) ? res ^ 1 : res;
+                return (attackers & position.us(~stm)) ? res ^ 1 : res;
             }
         }
 

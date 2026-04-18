@@ -249,17 +249,22 @@ inline bool is_legal_full(const chess::Board &board, const chess::Move move)
     if (move == chess::Move::NO_MOVE)
         return true;
 
-    auto moved_piece = board.at(move.from());
+    // chess::Movelist list;
+    // chess::movegen::legalmoves(list, board);
+    // return std::find(list.begin(), list.end(), move) != list.end();
+    
+    // auto moved_piece = board.at(move.from());
 
-    // from square check
-    if (moved_piece == chess::Piece::NONE || moved_piece.color() != board.sideToMove())
-        return false;
+    // // from square check
+    // if (moved_piece == chess::Piece::NONE || moved_piece.color() != board.sideToMove())
+    //     return false;
 
-    if (move.typeOf() != chess::Move::CASTLING)
-        // end friendly piece check
-        if (board.at(move.to()).color() == board.sideToMove())
-            return false;
-
-    return is_legal(board, move);
+    // if (move.typeOf() != chess::Move::CASTLING)
+    //     // end friendly piece check
+    //     if (board.at(move.to()).color() == board.sideToMove())
+    //         return false;
+    
+    return chess::movegen::isLegal(board, move);
+    // return is_legal(board, move);
 }
 } // namespace legal

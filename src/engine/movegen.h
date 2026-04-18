@@ -501,7 +501,7 @@ class movegen
 
                     if (move == m_heuristics.killers[m_ply][1].first)
                     {
-                        move.setScore(32000);
+                        move.setScore(32300);
                         continue;
                     }
 
@@ -531,14 +531,11 @@ class movegen
                                  .get_value();
 
                     // continuation
-                    for (int i = 0; i < NUM_CONTINUATION; ++i)
-                    {
-                        if (m_continuations[i] != nullptr)
-                            score +=
-                                (*m_continuations[i])[m_position.at(move.from())][move.to().index()]
-                                    .get_value() /
-                                2;
-                    }
+                    if (m_continuations[0] != nullptr)
+                        score +=
+                            (*m_continuations[0])[m_position.at(move.from())][move.to().index()]
+                                .get_value() /
+                            2;
 
                     if (move == counter)
                         score += 10000;

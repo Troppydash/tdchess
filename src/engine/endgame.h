@@ -21,7 +21,7 @@ struct endgame_table
     std::vector<tb_cache_entry> m_entries;
     bool m_original;
 
-    explicit endgame_table(bool original = true) : m_entries(TB_ENTRIES), m_original(original)
+    explicit endgame_table(bool original = true) : m_entries(0), m_original(original)
     {
     }
 
