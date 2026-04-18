@@ -43,7 +43,6 @@ enum class movegen_stage
 };
 
 constexpr int16_t IGNORE_SCORE = std::numeric_limits<int16_t>::min();
-constexpr int STATIC_SORT_TOP_N = 12;
 
 class movegen
 {
@@ -128,8 +127,7 @@ class movegen
         if (bucket_hit)
         {
             // use exact results
-            if (param::IS_VALID(result.m_score) &&
-                result.m_depth + param::DEPTH_OFFSET >= 0)
+            if (param::IS_VALID(result.m_score) && result.m_depth + param::DEPTH_OFFSET >= 0)
             {
                 return -result.m_score;
             }
@@ -285,10 +283,6 @@ class movegen
                     chess::movegen::legalmoves_quiet(m_moves, m_position, m_precompute);
                     auto counter = get_counter();
 
-                    int static_start = m_capture_end;
-                    int static_end = std::min(m_moves.size(), m_capture_end + STATIC_SORT_TOP_N);
-                    bool will_static_sort = static_end - static_start > 1 && m_depth < 8;
-
                     // chessmap limit
                     const int CHESSMAP_DEPTH_LIMIT = 10;
                     bool use_chessmap = m_depth < CHESSMAP_DEPTH_LIMIT;
@@ -391,48 +385,9 @@ class movegen
 
                         score = std::clamp(score, -32000, 32000);
                         move.setScore(score);
-
-                        if (will_static_sort)
-                            tt->prefetch(m_position.zobristAfter(move));
                     }
 
                     sort_moves(m_moves, m_capture_end, m_moves.size(), -4000 * m_depth);
-
-                    // static nnue ordering
-                    if (will_static_sort)
-                    {
-                        std::array<int, STATIC_SORT_TOP_N> static_scores{};
-                        int static_scores_index = 0;
-                        int32_t baseline = param::INF;
-
-                        for (int i = static_start; i < static_end; ++i)
-                        {
-                            auto &move = m_moves[i];
-                            int32_t score = evaluate_after_move(move);
-                            static_scores[static_scores_index++] = score;
-
-                            if (param::IS_VALID(score))
-                                baseline = std::min(baseline, score);
-                        }
-
-                        if (baseline != param::INF)
-                        {
-                            static_scores_index = 0;
-                            for (int i = static_start; i < static_end; ++i)
-                            {
-                                int32_t static_score = static_scores[static_scores_index++];
-                                if (param::IS_VALID(static_score))
-                                {
-                                    auto &move = m_moves[i];
-                                    int32_t adjusted_score = std::clamp(
-                                        move.score() + (static_score - baseline), -32000, 32000);
-                                    move.setScore(adjusted_score);
-                                }
-                            }
-
-                            sort_moves(m_moves, static_start, static_end);
-                        }
-                    }
                 }
 
                 m_move_index = m_capture_end;

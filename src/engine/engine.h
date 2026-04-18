@@ -148,9 +148,10 @@ struct position_pawn_keys
         non_pawn_keys[head][1] = non_pawn_keys[head - 1][1];
 
         auto touch_piece = [&](chess::Piece piece, chess::Square sq) {
-            if (piece.type() == chess::PieceType::PAWN)
+            if (piece.type() == chess::PieceType::PAWN || piece.type() == chess::PieceType::KING)
                 pawn_keys[head] ^= chess::Zobrist::piece(piece, sq);
-            else
+            
+            if (piece.type() != chess::PieceType::PAWN)
                 non_pawn_keys[head][piece.color()] ^= chess::Zobrist::piece(piece, sq);
         };
 
@@ -223,7 +224,7 @@ struct position_pawn_keys
   private:
     [[nodiscard]] uint64_t get_pawn_key(const chess::Board &position) const
     {
-        auto pieces = position.pieces(chess::PieceType::PAWN);
+        auto pieces = position.pieces(chess::PieceType::PAWN) | position.pieces(chess::PieceType::KING);
         uint64_t pawn_key = 0;
         while (pieces)
         {
