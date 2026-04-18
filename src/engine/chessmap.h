@@ -17,15 +17,16 @@
 namespace chessmap
 {
 
-constexpr int HL = 64;
+constexpr int HL = 128;
 constexpr int OUTPUTS = 64;
 constexpr int QA = 255;
 constexpr int QB = 64;
-constexpr int SCALE = 2000;
+constexpr int SCALE = 5000;
+
 
 #define INCBIN_SILENCE_BITCODE_WARNING
 #include "../hpplib/incbin.h"
-INCBIN(Chessmap, "../nets/chessmap/chessmap_1.8.15.bin");
+INCBIN(Chessmap, "../nets/chessmap/chessmap_1.8.22.bin");
 
 struct network
 {

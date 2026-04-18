@@ -125,16 +125,17 @@ class movegen
         auto &bucket = tt->probe(hash);
         bool bucket_hit = false;
         auto [_, result] = bucket.probe(hash, bucket_hit, tt->m_generation);
-        if (bucket_hit && param::IS_VALID(result.m_static_eval))
+        if (bucket_hit)
         {
             // use exact results
-            if (GET_FLAG(result.m_mask) == param::EXACT_FLAG && param::IS_VALID(result.m_score) &&
-                result.m_depth >= m_depth)
+            if (param::IS_VALID(result.m_score) &&
+                result.m_depth + param::DEPTH_OFFSET >= 0)
             {
                 return -result.m_score;
             }
 
-            return -result.m_static_eval;
+            if (param::IS_VALID(result.m_static_eval))
+                return -result.m_static_eval;
         }
 
         return param::VALUE_NONE;
