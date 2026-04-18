@@ -424,7 +424,7 @@ struct net
             while (true)
             {
                 if (need_refresh(side, m_side[base].up.king_sq[side],
-                                 m_side[m_head].up.king_sq[side]))
+                                 m_side[m_head].up.king_sq[side]) || m_head - base > 8)
                 {
                     // full refresh head
                     refresh(position, side, m_head);
@@ -621,39 +621,39 @@ struct net
     }
 
     template <size_t Size>
-    static void fused_add(simd::Vec *out, const simd::Vec *in, const simd::Vec *add)
+    static void fused_add(simd::Vec *out, const simd::Vec *__restrict__ in, const simd::Vec *__restrict__ add)
     {
         for (size_t i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::add16(in[i], add[i]);
     }
 
     template <size_t Size>
-    static void fused_sub(simd::Vec *out, const simd::Vec *in, const simd::Vec *sub)
+    static void fused_sub(simd::Vec *out, const simd::Vec *__restrict__ in, const simd::Vec *__restrict__ sub)
     {
         for (size_t i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::sub16(in[i], sub[i]);
     }
 
     template <size_t Size>
-    static void fused_add_sub(simd::Vec *out, const simd::Vec *in, const simd::Vec *add,
-                              const simd::Vec *sub)
+    static void fused_add_sub(simd::Vec *out, const simd::Vec *__restrict__ in, const simd::Vec *__restrict__ add,
+                              const simd::Vec *__restrict__ sub)
     {
         for (size_t i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::sub16(simd::add16(in[i], add[i]), sub[i]);
     }
 
     template <size_t Size>
-    static void fused_add_sub_sub(simd::Vec *out, const simd::Vec *in, const simd::Vec *add,
-                                  const simd::Vec *sub1, const simd::Vec *sub2)
+    static void fused_add_sub_sub(simd::Vec *out, const simd::Vec *__restrict__ in, const simd::Vec *__restrict__ add,
+                                  const simd::Vec *__restrict__ sub1, const simd::Vec *__restrict__ sub2)
     {
         for (size_t i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::sub16(simd::sub16(simd::add16(in[i], add[i]), sub1[i]), sub2[i]);
     }
 
     template <size_t Size>
-    static void fused_add_add_sub_sub(simd::Vec *out, const simd::Vec *in, const simd::Vec *add1,
-                                      const simd::Vec *add2, const simd::Vec *sub1,
-                                      const simd::Vec *sub2)
+    static void fused_add_add_sub_sub(simd::Vec *out, const simd::Vec *__restrict__ in, const simd::Vec *__restrict__ add1,
+                                      const simd::Vec *__restrict__ add2, const simd::Vec *__restrict__ sub1,
+                                      const simd::Vec *__restrict__ sub2)
     {
         for (size_t i = 0; i < Size / simd::WIDTH; ++i)
             out[i] = simd::sub16(
