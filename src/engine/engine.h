@@ -727,7 +727,7 @@ struct engine
                 if (param::IS_VALID(tt_result.score) && !param::IS_DECISIVE(tt_result.score) &&
                     bound_hit)
                 {
-                    best_score = tt_result.score;
+                    ss->static_eval = best_score = tt_result.score;
                 }
             }
             else
@@ -828,29 +828,23 @@ struct engine
         }
 
         int depth_stored = param::QDEPTH + ss->in_check;
-        uint8_t flag = param::EXACT_FLAG;
 
         // [mate check]
         if (ss->in_check && move_count == 0)
         {
             best_score = param::MATED_IN(ply);
-            depth_stored += 1;
-            flag = best_score >= beta ? param::BETA_FLAG : param::ALPHA_FLAG;
         }
-        else if (!ss->in_check && move_count == 0)
+        else if (!ss->in_check && move_count == 0 && gen.is_draw())
         {
-            if (gen.is_draw())
-            {
-                depth_stored += 2;
-                best_score = get_contempt();
-            }
+            best_score = get_contempt();
         }
         // average out the best score
         else if (!param::IS_DECISIVE(best_score) && best_score > beta)
         {
-            flag = best_score >= beta ? param::BETA_FLAG : param::ALPHA_FLAG;
             best_score = (beta + best_score) / 2;
         }
+
+        uint8_t flag = best_score >= beta ? param::BETA_FLAG : param::ALPHA_FLAG;
 
         // assert(!m_timer.is_stopped());
         bucket.store(key, flag, best_score, ply, depth_stored, best_move, unadjusted_static_eval,
@@ -1092,6 +1086,11 @@ struct engine
             goto moves;
         }
 
+        // if (!is_pv_node && is_tt_capture && !ss->tt_hit && depth < 7)
+        // {
+        //     adjusted_static_eval = ss->static_eval = qsearch<NonPV>(alpha, beta, 0, ss);
+        // }
+
         // [razoring]
         if (!is_pv_node && param::IS_VALID(adjusted_static_eval) && !param::IS_DECISIVE(alpha) &&
             adjusted_static_eval <
@@ -1310,9 +1309,9 @@ struct engine
             if (!is_root && has_non_pawn && !param::IS_LOSS(best_score))
             {
                 // adjust the relevant depth
-                int32_t lmr_depth =
-                    std::max(0, depth - m_param.lookup(is_quiet, depth, move_count) - !improving +
-                                    history_score / 8000);
+                int32_t lmr_depth = std::max(depth - m_param.lookup(is_quiet, depth, move_count) -
+                                                 !improving + history_score / 10000,
+                                             1);
 
                 // [see pruning]
                 int see_margin =
@@ -1689,8 +1688,8 @@ struct engine
             assert((ss - i)->continuation != nullptr);
             if ((ss - i)->move != chess::Move::NO_MOVE)
             {
-                // if (ss->in_check && i > 2)
-                //     break;
+                if (ss->in_check && i > 2)
+                    break;
 
                 (*(ss - i)->continuation)[piece][to.index()].add_bonus(bonus * weights[i - 1] /
                                                                        1024);

@@ -158,7 +158,7 @@ class uci_handler
                 std::cout << "id author troppydash\n";
                 std::cout << "option name SyzygyPath type string default <empty>\n";
                 std::cout << "option name EVALFILE type string default <empty>\n";
-                std::cout << "option name Hash type spin default 128 min 8 max 4096\n";
+                std::cout << "option name Hash type spin default 128 min 8 max 16384\n";
                 std::cout << "option name Threads type spin default 1 min 1 max " << total_threads
                           << "\n";
                 std::cout << "option name CoreAff type spin default -1 min -1 max "
