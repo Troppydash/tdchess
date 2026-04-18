@@ -150,7 +150,7 @@ struct position_pawn_keys
         auto touch_piece = [&](chess::Piece piece, chess::Square sq) {
             if (piece.type() == chess::PieceType::PAWN || piece.type() == chess::PieceType::KING)
                 pawn_keys[head] ^= chess::Zobrist::piece(piece, sq);
-            
+
             if (piece.type() != chess::PieceType::PAWN)
                 non_pawn_keys[head][piece.color()] ^= chess::Zobrist::piece(piece, sq);
         };
@@ -224,7 +224,8 @@ struct position_pawn_keys
   private:
     [[nodiscard]] uint64_t get_pawn_key(const chess::Board &position) const
     {
-        auto pieces = position.pieces(chess::PieceType::PAWN) | position.pieces(chess::PieceType::KING);
+        auto pieces =
+            position.pieces(chess::PieceType::PAWN) | position.pieces(chess::PieceType::KING);
         uint64_t pawn_key = 0;
         while (pieces)
         {
@@ -988,6 +989,7 @@ struct engine
         int16_t unadjusted_static_eval = param::VALUE_NONE;
         int16_t adjusted_static_eval = param::VALUE_NONE;
         int complexity = 0;
+        bool good_static_eval = false;
         ss->in_check = m_position.inCheck();
         if (ss->in_check)
         {
@@ -997,6 +999,7 @@ struct engine
         {
             unadjusted_static_eval = adjusted_static_eval = ss->static_eval;
             m_nnue->catchup(m_position);
+            good_static_eval = true;
         }
         else if (ss->tt_hit)
         {
@@ -1019,6 +1022,7 @@ struct engine
                 bound_hit)
             {
                 adjusted_static_eval = tt_result.score;
+                good_static_eval = true;
             }
         }
         else
@@ -1070,9 +1074,9 @@ struct engine
         }
 
         // improving flag
-        bool improving = true;
+        bool improving = false;
         if (ss->in_check)
-            improving = false;
+            improving = (ss - 1)->in_check;
         else if (param::IS_VALID((ss - 2)->static_eval) && param::IS_VALID(ss->static_eval))
         {
             improving = ss->static_eval > (ss - 2)->static_eval;
@@ -1086,11 +1090,6 @@ struct engine
         {
             goto moves;
         }
-
-        // if (!is_pv_node && is_tt_capture && !ss->tt_hit && depth < 7)
-        // {
-        //     adjusted_static_eval = ss->static_eval = qsearch<NonPV>(alpha, beta, 0, ss);
-        // }
 
         // [razoring]
         if (!is_pv_node && param::IS_VALID(adjusted_static_eval) && !param::IS_DECISIVE(alpha) &&
