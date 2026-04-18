@@ -262,7 +262,7 @@ class movegen
                         if (killer != chess::Move::NO_MOVE && killer != m_pv_move &&
                             legal::is_legal_full(m_position, killer) &&
                             !m_heuristics.is_capture(m_position, killer))
-                        {  
+                        {
                             killer.setScore(10000);
                             return killer;
                         }
@@ -655,7 +655,7 @@ class movegen
         // }
     }
 
-    bool is_draw() const
+    bool is_draw()
     {
         assert(m_moves.empty());
         chess::movegen::legalmoves_quiet(m_moves, m_position, m_precompute);

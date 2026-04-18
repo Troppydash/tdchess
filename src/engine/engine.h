@@ -261,7 +261,6 @@ struct search_stack
     uint64_t key = 0;
     chess::Move excluded_move = chess::Move::NO_MOVE;
     bool in_check = false;
-    bool computed_check = false;
     bool tt_pv = false;
     bool tt_hit = false;
     bool is_cap = false;
@@ -276,7 +275,7 @@ struct search_stack
     bool verify_null = false;
 
     // records the pv line
-    std::array<chess::Move, chess::constants::MAX_MOVES> pv;
+    std::array<chess::Move, param::MAX_DEPTH + 4> pv;
     int pv_length;
 
     void reset(heuristics &heuristics)
@@ -296,7 +295,6 @@ struct search_stack
 
         complex = 0;
         key = 0;
-        computed_check = false;
 
         verify_null = false;
 
@@ -391,6 +389,41 @@ struct root_move_list
             }
             moves[j + 1] = key;
         }
+
+        // std::cout << '\n';
+        // for (int i = 0; i < std::min(4, size); ++i)
+        // {
+        //     auto m = moves[i];
+        //     std::cout << chess::uci::moveToUci(m.move) << "/" << m.score << ", ";
+        // }
+        // std::cout << '\n';
+    }
+
+    void partial_sort()
+    {
+        const int depth_cost = 10;
+        int best_index = 0;
+        for (int i = 1; i < size; ++i)
+        {
+            if (moves[i].score > moves[best_index].score)
+            {
+                if (moves[best_index].score > -param::INF)
+                {
+                    moves[best_index].score -= depth_cost;
+                }
+
+                best_index = i;
+            }
+            else
+            {
+                if (moves[i].score > -param::INF)
+                {
+                    moves[i].score -= depth_cost;
+                }
+            }
+        }
+
+        std::swap(moves[0], moves[best_index]);
     }
 };
 
@@ -587,7 +620,6 @@ struct engine
 
     void unmake_move(const chess::Move &move, search_stack *ss)
     {
-        (ss + 1)->computed_check = false;
         if (move == chess::Move::NO_MOVE)
         {
             m_position.unmakeNullMove();
@@ -606,6 +638,8 @@ struct engine
     template <bool is_pv_node>
     int16_t qsearch(int16_t alpha, int16_t beta, int depth, search_stack *ss)
     {
+        assert(alpha < beta);
+
         const int32_t ply = ss->ply;
         ss->pv_init();
         m_stats.sel_depth = std::max(m_stats.sel_depth, ply + 1);
@@ -666,13 +700,13 @@ struct engine
         }
 
         // [static evaluation]
-        int16_t best_score = -param::VALUE_INF;
-        int16_t futility_base = -param::VALUE_INF;
+        int16_t best_score = -param::INF;
+        int16_t futility_base = -param::INF;
         int16_t unadjusted_static_eval = param::VALUE_NONE;
-        ss->in_check = ss->computed_check ? ss->in_check : m_position.inCheck();
+        ss->in_check = m_position.inCheck();
         if (ss->in_check)
         {
-            best_score = futility_base = -param::VALUE_INF;
+            best_score = futility_base = -param::INF;
         }
         else
         {
@@ -828,6 +862,7 @@ struct engine
     // avoid draws in midgame by giving a negative draw score
     int16_t get_contempt() const
     {
+        // return 0;
         int piece_count = m_position.occ().count();
         return contempt_score[piece_count];
     }
@@ -869,6 +904,8 @@ struct engine
         const bool is_root = ply == 0 && is_pv_node;
         assert(!(ply == 0 && !is_pv_node));
         assert(!(is_pv_node && cut_node));
+        // if (alpha >= beta)
+        //     std::cout << alpha << ',' << beta << '\n';
         assert(alpha < beta);
 
         // [qsearch]
@@ -956,7 +993,7 @@ struct engine
         int16_t unadjusted_static_eval = param::VALUE_NONE;
         int16_t adjusted_static_eval = param::VALUE_NONE;
         int complexity = 0;
-        ss->in_check = ss->computed_check ? ss->in_check : m_position.inCheck();
+        ss->in_check = m_position.inCheck();
         if (ss->in_check)
         {
             ss->static_eval = adjusted_static_eval = param::VALUE_NONE;
@@ -1002,8 +1039,8 @@ struct engine
         }
 
         // [check syzygy endgame table]
-        int16_t best_score = -param::VALUE_INF;
-        int16_t max_score = param::VALUE_INF;
+        int16_t best_score = -param::INF;
+        int16_t max_score = param::INF;
         if (m_endgame != nullptr && !has_excluded && !is_root && depth >= features::TB_HIT_DEPTH &&
             m_endgame->is_stored(m_position) && m_position.halfMoveClock() <= 30)
         {
@@ -1017,8 +1054,9 @@ struct engine
             if (flag == param::EXACT_FLAG ||
                 (flag == param::BETA_FLAG ? score >= beta : score <= alpha))
             {
-                bucket.store(key, flag, score, ply, depth, chess::Move::NO_MOVE,
-                             unadjusted_static_eval, ss->tt_pv, m_table->m_generation, entry);
+                bucket.store(key, flag, score, ply, std::min(param::MAX_DEPTH, depth + 5),
+                             chess::Move::NO_MOVE, unadjusted_static_eval, ss->tt_pv,
+                             m_table->m_generation, entry);
                 return score;
             }
 
@@ -1220,53 +1258,6 @@ struct engine
         }
 
     moves:
-        // if (true)
-        // {
-        //     chess::Movelist actual_moves;
-        //     chess::movegen::legalmoves(actual_moves, m_position);
-        //
-        //     chess::Movelist test;
-        //     movegen gen{test,           m_position, *m_heuristics, tt_result.move,
-        //                 (ss - 1)->move, ply,        depth,         m_keys.get_pawn_key()};
-        //     chess::Movelist found_moves;
-        //     chess::Move move;
-        //     while ((move = gen.next_move()) != chess::Move::NO_MOVE)
-        //     {
-        //         found_moves.add(move);
-        //     }
-        //
-        //     for (auto &m : actual_moves)
-        //     {
-        //         assert(std::find(found_moves.begin(), found_moves.end(), m) !=
-        //         found_moves.end());
-        //     }
-        //
-        //     for (auto &m : found_moves)
-        //     {
-        //         assert(std::find(actual_moves.begin(), actual_moves.end(), m) !=
-        //                actual_moves.end());
-        //     }
-        //
-        //     // check dup moves
-        //     for (auto &m : found_moves)
-        //     {
-        //         int count = 0;
-        //         for (auto &m2 : found_moves)
-        //         {
-        //             if (m == m2)
-        //                 count += 1;
-        //         }
-        //
-        //         if (count > 1)
-        //         {
-        //             std::cout << m_position << std::endl;
-        //             std::cout << chess::uci::moveToUci(m) << std::endl;
-        //         }
-        //     }
-        //
-        //     assert(!(actual_moves.size() > found_moves.size()));
-        //     assert(!(actual_moves.size() < found_moves.size()));
-        // }
         std::array<const continuation_history *, NUM_CONTINUATION> conthist{
             (ss - 1)->continuation, (ss - 2)->continuation, (ss - 3)->continuation,
             (ss - 4)->continuation, (ss - 5)->continuation, (ss - 6)->continuation,
@@ -1381,8 +1372,6 @@ struct engine
                 }
             }
 
-            new_depth = depth - 1;
-
             m_table->prefetch(m_position.zobristAfter<false>(move) ^
                               util::ZOBRIST_50MR[m_position.halfMoveClock() + 1]);
             m_filter.prefetch(m_position.zobristAfter<false>(move));
@@ -1423,6 +1412,7 @@ struct engine
                     extension = -2;
             }
 
+            new_depth = depth - 1;
             new_depth = std::max(new_depth + extension, 0);
 
             make_move(move, ss);
@@ -1457,11 +1447,6 @@ struct engine
                 reduction -= history_score /
                              (is_quiet ? features::QUIET_LMR_DIV : features::CAPTURE_LMR_DIV);
 
-                // extend if checking
-                (ss + 1)->in_check = m_position.inCheck();
-                (ss + 1)->computed_check = true;
-                reduction -= (ss + 1)->in_check;
-
                 int32_t reduced_depth = std::clamp(new_depth - reduction, 1, new_depth + 1);
                 score = -negamax<false>(-(alpha + 1), -alpha, reduced_depth, ss + 1, true);
                 if (score > alpha && reduced_depth < new_depth)
@@ -1486,6 +1471,8 @@ struct engine
             if (is_pv_node && (move_count == 1 || score > alpha))
                 score = -negamax<true>(-beta, -alpha, new_depth, ss + 1, false);
 
+            // if (chess::uci::moveToUci(move) == "g2f3" && is_root)
+            //     std::cout << score << "," << new_depth << std::endl;
             unmake_move(move, ss);
 
             if (m_timer.is_stopped())
@@ -1497,9 +1484,8 @@ struct engine
             if (is_root)
             {
                 root_move_list::root_move &root = m_root_moves.get_by_move(move);
-                root.average_score = root.average_score == param::VALUE_NONE
-                                         ? score
-                                         : (score + root.average_score) / 2;
+                root.average_score =
+                    !param::IS_VALID(root.average_score) ? score : (score + root.average_score) / 2;
 
                 if (score >= alpha)
                 {
@@ -1518,9 +1504,6 @@ struct engine
 
                 if (score > alpha)
                 {
-                    if (!has_excluded)
-                        ss->complex += 1;
-
                     best_move = move;
                     if (is_pv_node)
                         ss->pv_update(best_move, (ss + 1));
@@ -1579,10 +1562,20 @@ struct engine
                     // [main history]
                     m_heuristics->update_main_history(m_position, best_move, ply,
                                                       m_keys.get_pawn_key(), main_history_bonus);
+                }
 
-                    // [continuation history]
-                    update_continuation_history(ss, m_position.at(best_move.from()), best_move.to(),
-                                                main_history_bonus);
+                // [continuation history]
+                update_continuation_history(ss, m_position.at(best_move.from()), best_move.to(),
+                                            main_history_bonus);
+                // [killer moves update]
+                m_heuristics->store_killer(best_move, ply, param::IS_WIN(best_score));
+
+                // [countermove]
+                auto prev_move = (ss - 1)->move;
+                if (prev_move != chess::Move::NO_MOVE)
+                {
+                    m_heuristics->counter[heuristics::get_prev_piece(m_position, prev_move)]
+                                         [prev_move.to().index()] = best_move;
                 }
 
                 // malus apply
@@ -1595,17 +1588,6 @@ struct engine
                     update_continuation_history(
                         ss, m_position.at(ss->quiet_moves[has_excluded][j].from()),
                         ss->quiet_moves[has_excluded][j].to(), -main_history_malus);
-                }
-
-                // [killer moves update]
-                m_heuristics->store_killer(best_move, ply, param::IS_WIN(best_score));
-
-                // [countermove]
-                auto prev_move = (ss - 1)->move;
-                if (prev_move != chess::Move::NO_MOVE)
-                {
-                    m_heuristics->counter[heuristics::get_prev_piece(m_position, prev_move)]
-                                         [prev_move.to().index()] = best_move;
                 }
             }
             else
@@ -1689,11 +1671,10 @@ struct engine
         if (prev_move != chess::Move::NO_MOVE)
         {
             auto piece = heuristics::get_prev_piece(m_position, prev_move);
-            if ((ss - 2)->move != chess::Move::NO_MOVE)
-                value +=
-                    24 * (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
+            value += 24 * (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
         }
 
+        value = std::clamp(value, -4096, 4096);
         int scaled_value = (value * (200 - (int32_t)m_position.halfMoveClock())) / 200;
         static_eval += scaled_value;
         return {std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX), scaled_value};
@@ -1708,8 +1689,8 @@ struct engine
             assert((ss - i)->continuation != nullptr);
             if ((ss - i)->move != chess::Move::NO_MOVE)
             {
-                if (ss->in_check && i > 2)
-                    break;
+                // if (ss->in_check && i > 2)
+                //     break;
 
                 (*(ss - i)->continuation)[piece][to.index()].add_bonus(bonus * weights[i - 1] /
                                                                        1024);
@@ -1820,8 +1801,13 @@ struct engine
 
             // scale window by score, larger scores warrants higher window
             constexpr int MOD = 8;
+            int average_score = 0;
+            if (param::IS_VALID(pv.average_score))
+                average_score = pv.average_score;
+
             int window = 10 + (param.thread_index + MOD - param.main_thread_index) % MOD +
-                         pv.average_score * pv.average_score / 12000;
+                         average_score * average_score / 12000;
+            assert(window > 0);
 
             int alpha = -param::INF;
             int beta = param::INF;
@@ -1830,12 +1816,16 @@ struct engine
             {
                 alpha = std::max(-param::INF, pv.score - window);
                 beta = std::min((int)param::INF, pv.score + window);
+                assert(alpha < beta);
             }
 
             int32_t score = 0;
             int fail_highs = 0;
             while (true)
             {
+                // if (alpha >= beta)
+                //     std::cout << alpha << "," << beta << "\n";
+                assert(alpha < beta);
                 int adjusted_depth = std::max(1, depth - fail_highs);
                 score = negamax<true>(alpha, beta, adjusted_depth, root_ss, false);
                 m_root_moves.sort();
@@ -1845,14 +1835,16 @@ struct engine
 
                 if (score <= alpha)
                 {
-                    beta = alpha;
+                    beta = alpha + 1;
                     alpha = std::max(-param::INF, score - window);
+                    // std::cout << window << "\n";
+                    // std::cout << score << "," << alpha << "," << beta << "\n";
 
                     fail_highs = 0;
                 }
                 else if (score >= beta)
                 {
-                    alpha = beta;
+                    alpha = beta - 1;
                     beta = std::min((int)param::INF, score + window);
 
                     if (score < 2000)
@@ -1866,7 +1858,8 @@ struct engine
                     break;
                 }
 
-                window += window / 2;
+                if (window < 20000)
+                    window += window / 2;
             }
 
             // update lines always, since root moves are updated only when timer ok
@@ -1876,24 +1869,6 @@ struct engine
             // exit if max time exceeded
             if (m_timer.is_stopped())
                 break;
-
-            // complexity
-            // double opt_time_scale = 1.0;
-            // {
-            //     if (result.pv_line[0] != last_move)
-            //         complexity += 1;
-            //     error += (last_score - result.score);
-            // }
-            // if (depth >= 5 && control.comp)
-            // {
-            //     // TODO: fix
-            //     // opt_time_scale += 5.0 * ((double)complexity / depth - 0.2) / 100.0;
-            //     // if (result.score < -100)
-            //     // opt_time_scale += -result.score / 10.0 / 100.0;
-            //     // opt_time_scale = std::clamp(opt_time_scale, 0.6, 1.4);
-            // }
-            // last_move = result.pv_line[0];
-            // last_score = result.score;
 
             // optimum time check, after asp window re-search
             if (param.is_main_thread && !result.pv_line.empty() && m_timer.is_opt_time_stop())

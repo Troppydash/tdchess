@@ -1,6 +1,6 @@
 #pragma once
-#include <cstdint>
 #include <algorithm>
+#include <cstdint>
 
 namespace param
 {
@@ -12,13 +12,12 @@ constexpr int32_t UNSEARCHED_DEPTH = -19;
 constexpr int32_t UNINIT_DEPTH = -20;
 constexpr int32_t DEPTH_OFFSET = 100;
 
-constexpr int16_t INF = 32760;
+constexpr int16_t INF = 32700;
 constexpr int16_t CHECKMATE = INF - MAX_DEPTH - 10;
 // Higher than NNUE but below CHECKMATE
 constexpr int16_t VALUE_SYZYGY = CHECKMATE - 1;
 constexpr int16_t NNUE_MAX = VALUE_SYZYGY - MAX_DEPTH;
-constexpr int16_t VALUE_INF = INF;
-constexpr int16_t VALUE_NONE = VALUE_INF + 1;
+constexpr int16_t VALUE_NONE = INF + 10;
 constexpr int16_t VALUE_DRAW = 0;
 
 constexpr size_t NUMBER_KILLERS = 2;

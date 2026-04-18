@@ -108,22 +108,23 @@ target_compile_options(tdchess_uci_tune PRIVATE
 add_executable(tdchess_test src/main.cpp)
 target_link_libraries(tdchess_test PRIVATE fathom)
 target_link_options(tdchess_test PRIVATE
-        # -fsanitize=undefined
-        # -fsanitize=address
+        -fsanitize=undefined
+        -fsanitize=address
 )
 target_compile_options(tdchess_test PRIVATE
-        # -fsanitize=undefined
-        # -fsanitize=address
-        # -g
-        # -fwrapv
-        # -D_GLIBCXX_DEBUG
-        "-O3"
-        "-march=native"
-        "-mtune=native"
-        "-fomit-frame-pointer"
-        "-Wall"
-        "-Wextra"
-        -DNDEBUG
-        -mcpu=native
-        -fno-exceptions
+        -fsanitize=undefined
+        -fsanitize=address
+        -g
+        -fwrapv
+        -D_GLIBCXX_DEBUG
+        -O1
+        # "-O3"
+        # "-march=native"
+        # "-mtune=native"
+        # "-fomit-frame-pointer"
+        # "-Wall"
+        # "-Wextra"
+        # -DNDEBUG
+        # -mcpu=native
+        # -fno-exceptions
 )

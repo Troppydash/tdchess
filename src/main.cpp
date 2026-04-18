@@ -1,6 +1,6 @@
-#include <iostream>
 #include "engine/engine.h"
 #include "engine/uci.h"
+#include <iostream>
 
 #ifdef TDCHESS_UCI
 int main(int argc, char **argv)
@@ -98,9 +98,9 @@ int main()
 
 #else
 #include "elo/agent.h"
-#include "engine/nnue.h"
-#include "engine/lazysmp.h"
 #include "engine/chessmap.h"
+#include "engine/lazysmp.h"
+#include "engine/nnue.h"
 
 int evaluate_bucket(const chess::Board &position)
 {
@@ -149,7 +149,7 @@ void position_test()
     // int c = t.lookup(1);
     // std::cout << c << std::endl;
     // exit(0);
-    
+
     // chessmap::net net{};
     // chess::Board pos{"1r3qk1/p2b3p/2pNrnp1/4pp2/B1P5/5P2/PP1Q2PP/2KRR3 b - - 3 22"};
     // // chess::Board pos{};
@@ -157,13 +157,15 @@ void position_test()
     // net.evaluate(pos, 0xFFFFFFFFFFFFFFFF);
     // net.show_evaluation(pos);
 
-    
     // exit(0);
-    
+
     std::vector<std::pair<std::string, std::string>> positions{
         // {"8/8/8/8/2k5/8/2K5/8 w - - 0 61", ""},
         // {"2r2nk1/4qb1p/p2p2pP/Pp1Pp3/1Q4P1/2rBB3/P1P5/1K1R3R w - - 0 27", "0 draw, or h1e1"},
-        {"r6q/pb1n1pk1/1p2p3/1NbnP1Nr/2p1QP2/8/PP1B2BP/R4R1K w - - 9 23", "even"},
+        // {"2br4/3q3k/2p1p1pp/4Bp2/Pn3PP1/1r1P1BQ1/R6P/6RK b - - 4 31", ""},
+        // {"2br4/3q3k/2p1p1pp/4Bp2/Pn3PP1/1r1P2Q1/R5BP/6RK w - - 3 31", ""},
+        {"8/5k2/R7/4K1p1/5p1n/7P/6P1/8 w - - 0 49", "even"},
+        // {"r6q/pb1n1pk1/1p2p3/1NbnP1Nr/2p1QP2/8/PP1B2BP/R4R1K w - - 9 23", "even"},
         // {"8/p1R4p/6pk/8/6KP/8/3r1P2/1B6 b - - 0 48", "0 draw"},
         // {"1k1br3/pp1R4/3nB3/1Pp2P2/2P5/1K2QP1p/P3N2q/8 b - - 1 36", "d8f8"},
         // {"r3q1k1/1R1b2rp/2p2Bn1/p1np3Q/5P2/b2B2N1/2P3PP/5R1K w - - 2 24", "no zero"}
@@ -194,7 +196,7 @@ void position_test()
     {
         tt.clear();
 
-        lazysmp engine{4, nnue, &tt, &m_table};
+        lazysmp engine{1, nnue, &tt, &m_table};
 
         chess::Board start{pos};
         search_param param;
@@ -203,7 +205,6 @@ void position_test()
 
         std::cout << "oracle " << target << std::endl;
     }
-
 
     delete nnue;
 }
