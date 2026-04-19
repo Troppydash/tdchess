@@ -1113,6 +1113,11 @@ struct engine
             }
         }
 
+        // iir
+        if ((is_pv_node || cut_node) && depth >= (2 + 2 * cut_node) &&
+            tt_result.move == chess::Move::NO_MOVE)
+            depth -= 1;
+
         // [null move pruning]
         {
             const bool has_non_pawns = m_position.hasNonPawnMaterial(m_position.sideToMove());
@@ -1164,11 +1169,6 @@ struct engine
                 }
             }
         }
-
-        // iir
-        if ((is_pv_node || cut_node) && depth >= (2 + 2 * cut_node) &&
-            tt_result.move == chess::Move::NO_MOVE)
-            depth -= 1;
 
         // [prob cut]
         // the score of a lower depth is likely similar to a score of higher depth
@@ -1512,6 +1512,9 @@ struct engine
                     }
 
                     alpha = score;
+
+                    if (depth > 4 && depth < 10 && !param::IS_LOSS(best_score))
+                        depth -= 1;
                 }
             }
 
@@ -1780,10 +1783,10 @@ struct engine
         }
 
         search_stack *root_ss = &m_stack[SEARCH_STACK_PREFIX];
-        
+
         chess::Move last_move = chess::Move::NO_MOVE;
         int move_changes = 0;
-        
+
         for (int32_t depth = 1; depth <= std::min(param::MAX_DEPTH - 4, control.depth); depth += 1)
         {
             const auto &pv = m_root_moves.get_pv();
@@ -1871,17 +1874,17 @@ struct engine
             // optimum time check, after asp window re-search
             if (param.is_main_thread && !result.pv_line.empty() && m_timer.is_opt_time_stop())
                 break;
-            
+
             // complexity check
             if (depth >= 12)
             {
                 if (last_move != result.pv_line[0])
                     move_changes += 1;
-                
+
                 double move_change_extension = std::max(0, move_changes - 1) * 0.1;
                 m_timer.set_mult_optimal(1.0 + move_change_extension);
             }
-            
+
             last_move = result.pv_line[0];
 
             // display info
