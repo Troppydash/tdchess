@@ -222,7 +222,7 @@ class rep_filter
         if (current.lookup(key))
             return true;
 
-        if ((bloom_filter[0] & key) == key && history.lookup(key))
+        if (history.lookup(key))
             return true;
 
         return false;
@@ -237,7 +237,7 @@ class rep_filter
         for (int i = 1; i <= maxDist; ++i)
         {
             history.set(states[states.size() - i].hash);
-            bloom_filter[0] |= states[states.size() - i].hash;
+            // bloom_filter[0] |= states[states.size() - i].hash;
         }
     }
 

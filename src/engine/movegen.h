@@ -171,7 +171,7 @@ class movegen
                 if (m_pv_move != chess::Move::NO_MOVE &&
                     legal::is_legal_full(m_position, m_pv_move))
                 {
-                    m_pv_move.setScore(10000);
+                    m_pv_move.setScore(0);
                     return m_pv_move;
                 }
 
@@ -262,7 +262,6 @@ class movegen
                             legal::is_legal_full(m_position, killer) &&
                             !m_heuristics.is_capture(m_position, killer))
                         {
-                            killer.setScore(10000);
                             return killer;
                         }
                     }

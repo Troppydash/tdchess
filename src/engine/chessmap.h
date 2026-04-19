@@ -26,7 +26,7 @@ constexpr int SCALE = 5000;
 
 #define INCBIN_SILENCE_BITCODE_WARNING
 #include "../hpplib/incbin.h"
-INCBIN(Chessmap, "../nets/chessmap/chessmap_1.8.22.bin");
+INCBIN(Chessmap, "../nets/chessmap/chessmap_86.bin");
 
 struct network
 {
