@@ -5,7 +5,7 @@
 #include "param.h"
 #include "chess.h"
 
-constexpr int CURRENT_BUCKET_SIZE = 1 << 15;
+constexpr int CURRENT_BUCKET_SIZE = 1 << 13;
 constexpr int CURRENT_BUCKET_MASK = CURRENT_BUCKET_SIZE - 1;
 
 struct bucket_map

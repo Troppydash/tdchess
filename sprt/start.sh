@@ -1,7 +1,7 @@
 set -ex
 
-NEW="1.9.1"
-OLD="1.9.0"
+NEW="1.9.2"
+OLD="1.9.1"
 mkdir -p ./logs/${NEW}_${OLD}
 ./fastchess \
   -engine cmd=../builds/${NEW}/tdchess name=${NEW} option.DrawContempt=0 option.MoveOverhead=5 option.Hash=32 option.SyzygyPath=/Users/troppydash/Downloads/syzygy \
@@ -11,6 +11,6 @@ mkdir -p ./logs/${NEW}_${OLD}
   -each tc=20+0.2 \
   -resign movecount=3 score=600 -draw movenumber=40 movecount=6 score=20 \
   -sprt elo0=0 elo1=5 alpha=0.15 beta=0.15 \
-  -rounds 1000 -concurrency 6 -pgnout notation=san nodes=true file=./logs/${NEW}_${OLD}/games.pgn append=false \
+  -rounds 1000 -concurrency 10 -pgnout notation=san nodes=true file=./logs/${NEW}_${OLD}/games.pgn append=false \
   -show-latency  -recover -ratinginterval 1 \
   -log file=./logs/${NEW}_${OLD}/debug.log append=false realtime=true engine=true level=warn
