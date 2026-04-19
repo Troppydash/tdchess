@@ -1366,7 +1366,6 @@ struct engine
                 if (is_capture && lmr_depth <= 14 && !ss->in_check &&
                     ss->static_eval + 200 + 200 * lmr_depth + see::PIECE_VALUES[captured] <= alpha)
                 {
-                    // gen.skip_quiet();
                     continue;
                 }
             }
@@ -1430,7 +1429,7 @@ struct engine
                 reduction += !improving;
 
                 // high complexity extends
-                reduction -= complexity / 200;
+                reduction -= complexity / 500;
 
                 // reduce if in cut node
                 if (cut_node)
@@ -1673,10 +1672,10 @@ struct engine
             value += 24 * (*(ss - 2)->cont_corr)[piece][prev_move.to().index()].get_value() / 512;
         }
 
-        value = std::clamp(value, -4096, 4096);
-        int scaled_value = (value * (200 - (int32_t)m_position.halfMoveClock())) / 200;
-        static_eval += scaled_value;
-        return {std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX), scaled_value};
+        // value = std::clamp(value, -4096, 4096);
+        // int scaled_value = (value * (200 - (int32_t)m_position.halfMoveClock())) / 200;
+        static_eval += value;
+        return {std::clamp((int)static_eval, -param::NNUE_MAX, (int)param::NNUE_MAX), value};
     }
 
     void update_continuation_history(search_stack *ss, chess::Piece piece, chess::Square to,
