@@ -1780,10 +1780,10 @@ struct engine
         }
 
         search_stack *root_ss = &m_stack[SEARCH_STACK_PREFIX];
+        
         chess::Move last_move = chess::Move::NO_MOVE;
-        int last_score = 0;
-        int complexity = 0;
-        int error = 0;
+        int move_changes = 0;
+        
         for (int32_t depth = 1; depth <= std::min(param::MAX_DEPTH - 4, control.depth); depth += 1)
         {
             const auto &pv = m_root_moves.get_pv();
@@ -1871,6 +1871,18 @@ struct engine
             // optimum time check, after asp window re-search
             if (param.is_main_thread && !result.pv_line.empty() && m_timer.is_opt_time_stop())
                 break;
+            
+            // complexity check
+            if (depth >= 12)
+            {
+                if (last_move != result.pv_line[0])
+                    move_changes += 1;
+                
+                double move_change_extension = std::max(0, move_changes - 1) * 0.1;
+                m_timer.set_mult_optimal(1.0 + move_change_extension);
+            }
+            
+            last_move = result.pv_line[0];
 
             // display info
             m_stats.total_time = timer::now() - reference_time;

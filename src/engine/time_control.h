@@ -100,7 +100,7 @@ struct search_param
 
         double opt_scale = std::min(0.025, 0.21 * time / double(time_left));
         int64_t optimum_time = opt_scale * time_left;
-        int64_t max_time = std::min((double)optimum_time * 3.0, time * 0.7 - move_overhead);
+        int64_t max_time = std::min((double)optimum_time * 5.0, time * 0.8 - move_overhead);
 
         return {depth, std::max((int64_t)1, max_time), std::max((int64_t)1, optimum_time), true};
     }
