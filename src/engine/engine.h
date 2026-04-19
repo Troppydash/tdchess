@@ -1113,11 +1113,6 @@ struct engine
             }
         }
 
-        // iir
-        if ((is_pv_node || cut_node) && depth >= (2 + 2 * cut_node) &&
-            tt_result.move == chess::Move::NO_MOVE)
-            depth -= 1;
-
         // [null move pruning]
         {
             const bool has_non_pawns = m_position.hasNonPawnMaterial(m_position.sideToMove());
@@ -1169,6 +1164,11 @@ struct engine
                 }
             }
         }
+
+        // iir
+        if ((is_pv_node || cut_node) && depth >= (2 + 2 * cut_node) &&
+            tt_result.move == chess::Move::NO_MOVE)
+            depth -= 1;
 
         // [prob cut]
         // the score of a lower depth is likely similar to a score of higher depth
