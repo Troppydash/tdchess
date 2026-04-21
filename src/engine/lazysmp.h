@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine.h"
+#include <map>
 #include <thread>
 
 struct lazysmp
@@ -198,7 +199,7 @@ struct lazysmp
         int best_thread = main_thread_index;
         if (num_threads > 1)
         {
-            std::unordered_map<uint16_t, long long> votes{};
+            std::map<uint16_t, long long> votes{};
 
             int min_score = param::INF;
             for (int i = 0; i < num_threads; ++i)
@@ -207,6 +208,7 @@ struct lazysmp
                     min_score = std::min(min_score, (int)search_threads[i]->s_result.score);
             }
 
+            const int MULT = 50;
             for (int i = 0; i < num_threads; ++i)
             {
                 const auto &result = search_threads[i]->s_result;
@@ -214,7 +216,7 @@ struct lazysmp
                 {
                     assert(!result.pv_line.empty());
                     votes[result.pv_line[0].move()] +=
-                        (result.score - min_score + 100) * (result.depth);
+                        (result.score - min_score + MULT) * (result.depth);
                 }
             }
 
@@ -235,6 +237,11 @@ struct lazysmp
                     long long best_vote =
                         votes[search_threads[best_thread]->s_result.pv_line[0].move()];
 
+                    long long current_mult = result.depth * (MULT + result.score - min_score);
+                    long long best_mult =
+                        search_threads[best_thread]->s_result.depth *
+                        (MULT + search_threads[best_thread]->s_result.score - min_score);
+
                     if (std::abs(best_score) >= param::CHECKMATE)
                     {
                         if (current_score > best_score)
@@ -244,7 +251,9 @@ struct lazysmp
                     {
                         best_thread = i;
                     }
-                    else if (current_score > -param::CHECKMATE && current_vote > best_vote)
+                    else if (current_score > -param::CHECKMATE &&
+                             (current_vote > best_vote ||
+                              (current_vote == best_vote && current_score > best_score)))
                     {
                         best_thread = i;
                     }
