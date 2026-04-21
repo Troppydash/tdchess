@@ -1806,8 +1806,7 @@ struct engine
             if (param::IS_VALID(pv.average_score))
                 average_score = pv.average_score;
 
-            int window = 10 + (param.thread_index + MOD - param.main_thread_index) % MOD +
-                         average_score * average_score / 12000;
+            int window = 10 + average_score * average_score / 12000;
             assert(window > 0);
 
             int alpha = -param::INF;
