@@ -121,9 +121,10 @@ class uci_handler
                 param.movetime = 1000;
                 chess::Board position{positions[i]};
 
-                m_engine = std::make_unique<lazysmp>(3, m_nnue, m_tt, m_endgame_table);
+                m_engine = std::make_unique<lazysmp>(4, m_nnue, m_tt, m_endgame_table);
                 m_engine->search(position, param, true);
                 m_tt->clear();
+                m_nnue->clear();
             }
 
             return;

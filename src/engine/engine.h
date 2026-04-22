@@ -333,9 +333,35 @@ struct root_move_list
 {
     struct root_move
     {
-        chess::Move move;
-        int average_score;
-        int score;
+        chess::Move move = chess::Move::NO_MOVE;
+        int average_score = param::VALUE_NONE;
+        int score = -param::INF;
+        int64_t nodes = 0;
+
+        std::vector<chess::Move> pv;
+        int pv_length = 0;
+
+        root_move() : pv(param::MAX_DEPTH)
+        {
+        }
+
+        std::vector<chess::Move> get_pv() const
+        {
+            std::vector<chess::Move> out(pv_length);
+            for (int i = 0; i < pv_length; ++i)
+                out[i] = pv[i];
+            return out;
+        }
+
+        void load(chess::Move move)
+        {
+            this->move = move;
+            average_score = param::VALUE_NONE;
+            score = -param::INF;
+            nodes = 0;
+            pv_length = 0;
+            pv[0] = move;
+        }
     };
 
     std::array<root_move, chess::constants::MAX_MOVES> moves{};
@@ -349,11 +375,7 @@ struct root_move_list
         size = 0;
         for (auto m : tmp)
         {
-            moves[size++] = {
-                .move = m,
-                .average_score = param::VALUE_NONE,
-                .score = -param::INF,
-            };
+            moves[size++].load(m);
         }
     }
 
@@ -380,17 +402,27 @@ struct root_move_list
     void sort()
     {
         // insertion sort
+        // for (int i = 1; i < size; ++i)
+        // {
+        //     auto key = moves[i];
+        //     int j = i - 1;
+        //     while (j >= 0 && moves[j].score < key.score)
+        //     {
+        //         moves[j + 1] = moves[j];
+        //         --j;
+        //     }
+        //     moves[j + 1] = key;
+        // }
+
+        // check if this copies
+        int best_i = 0;
         for (int i = 1; i < size; ++i)
         {
-            auto key = moves[i];
-            int j = i - 1;
-            while (j >= 0 && moves[j].score < key.score)
-            {
-                moves[j + 1] = moves[j];
-                --j;
-            }
-            moves[j + 1] = key;
+            if (moves[i].score > moves[best_i].score)
+                best_i = i;
         }
+
+        std::swap(moves[best_i], moves[0]);
 
         // std::cout << '\n';
         // for (int i = 0; i < std::min(4, size); ++i)
@@ -399,33 +431,6 @@ struct root_move_list
         //     std::cout << chess::uci::moveToUci(m.move) << "/" << m.score << ", ";
         // }
         // std::cout << '\n';
-    }
-
-    void partial_sort()
-    {
-        const int depth_cost = 10;
-        int best_index = 0;
-        for (int i = 1; i < size; ++i)
-        {
-            if (moves[i].score > moves[best_index].score)
-            {
-                if (moves[best_index].score > -param::INF)
-                {
-                    moves[best_index].score -= depth_cost;
-                }
-
-                best_index = i;
-            }
-            else
-            {
-                if (moves[i].score > -param::INF)
-                {
-                    moves[i].score -= depth_cost;
-                }
-            }
-        }
-
-        std::swap(moves[0], moves[best_index]);
     }
 };
 
@@ -1299,6 +1304,8 @@ struct engine
             move_count += 1;
             ss->move_count = move_count;
 
+            int64_t old_nodes_searched = m_stats.nodes_searched;
+
             bool is_capture = m_heuristics->is_capture(m_position, move);
             bool is_quiet = !is_capture;
 
@@ -1482,12 +1489,18 @@ struct engine
             if (is_root)
             {
                 root_move_list::root_move &root = m_root_moves.get_by_move(move);
+                root.nodes += m_stats.nodes_searched - old_nodes_searched;
                 root.average_score =
                     !param::IS_VALID(root.average_score) ? score : (score + root.average_score) / 2;
 
-                if (score >= alpha)
+                if (score > alpha)
                 {
                     root.score = score;
+
+                    for (int i = 0; i < (ss + 1)->pv_length; ++i)
+                        root.pv[1 + i] = (ss + 1)->pv[i];
+
+                    root.pv_length = (ss + 1)->pv_length + 1;
                 }
                 else
                 {
@@ -1863,28 +1876,36 @@ struct engine
             }
 
             // update lines always, since root moves are updated only when timer ok
-            if (!root_ss->get_pv().empty())
-                result.pv_line = root_ss->get_pv();
+            result.pv_line = m_root_moves.get_pv().get_pv();
 
             // exit if max time exceeded
             if (m_timer.is_stopped())
                 break;
 
-            // optimum time check, after asp window re-search
-            if (param.is_main_thread && !result.pv_line.empty() && m_timer.is_opt_time_stop())
-                break;
-
-            // complexity check
-            if (depth >= 12)
+            if (depth >= 4)
             {
                 if (last_move != result.pv_line[0])
                     move_changes += 1;
 
-                double move_change_extension = std::max(0, move_changes - 1) * 0.1;
-                m_timer.set_mult_optimal(1.0 + move_change_extension);
+                // stability by move changes
+                double move_change_extension = std::max(0, move_changes - 4) * 0.1;
+
+                // score loss by last search and last depth
+
+                // node factor by root nodes
+                double node_error =
+                    1.0 - double(m_root_moves.moves[0].nodes) / m_stats.nodes_searched;
+                double node_factor = node_error / 2.0;
+
+                // std::cout << move_change_extension << ", " << node_factor << "\n";
+                m_timer.set_mult_optimal(1.0 + move_change_extension + node_factor);
             }
 
             last_move = result.pv_line[0];
+
+            // optimum time check, after asp window re-search
+            if (param.is_main_thread && !result.pv_line.empty() && m_timer.is_opt_time_stop())
+                break;
 
             // display info
             m_stats.total_time = timer::now() - reference_time;
