@@ -1108,7 +1108,7 @@ struct engine
         {
             // less strict if improving
             int margin =
-                std::max(20, features::SNM_MARGIN * (depth - improving + complexity / 300));
+                std::max(0, features::SNM_MARGIN * (depth - improving + complexity / 300));
             if (!is_pv_node && param::IS_VALID(adjusted_static_eval) &&
                 adjusted_static_eval - margin >= beta && !param::IS_LOSS(beta) && depth <= 14 &&
                 (tt_result.move == chess::Move::NO_MOVE || is_tt_capture) &&
@@ -1516,7 +1516,7 @@ struct engine
                 if (score > alpha)
                 {
                     best_move = move;
-                    if (is_pv_node)
+                    if (is_pv_node && !is_root)
                         ss->pv_update(best_move, (ss + 1));
 
                     if (score >= beta)
