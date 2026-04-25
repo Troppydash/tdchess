@@ -120,10 +120,6 @@ struct heuristics
         // update pawn history
         pawn[pawn_key & PAWN_STRUCTURE_SIZE_M1][position.at(move.from())][move.to().index()]
             .add_bonus(bonus);
-
-        // king[get_king_bucket(position, chess::Color::WHITE)][get_king_bucket(
-        //     position, chess::Color::BLACK)][position.at(move.from())][move.to().index()]
-        //     .add_bonus(bonus);
     }
 
     static constexpr chess::Piece get_prev_piece(const chess::Board &position, chess::Move move)

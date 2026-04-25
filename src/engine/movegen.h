@@ -109,10 +109,10 @@ class movegen
     explicit movegen(chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
                      chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth,
                      uint64_t pawn_key, const continuation_history *continuation1,
-                     movegen_stage stage = movegen_stage::PV)
+                     chessmap::net *chessmap, movegen_stage stage = movegen_stage::PV)
         : m_stage{static_cast<int>(stage)}, m_moves{moves}, m_position(position),
           m_heuristics(heuristics), m_pv_move(pv_move), m_ply(ply), m_depth(depth),
-          m_prev_move{prev_move}, m_pawn_key(pawn_key)
+          m_prev_move{prev_move}, m_pawn_key(pawn_key), chessmap(chessmap)
     {
         m_continuations[0] = continuation1;
     }
@@ -467,6 +467,9 @@ class movegen
                 chess::movegen::legalmoves_quiet(m_moves, m_position, m_precompute);
                 auto counter = get_counter();
 
+                if (m_depth >= -1)
+                    chessmap->catchup(m_position);
+
                 for (int i = m_capture_end;; ++i)
                 {
                     if (i >= m_moves.size())
@@ -504,7 +507,7 @@ class movegen
                         continue;
                     }
 
-                    int32_t score = 0;
+                    int32_t score = m_depth >= -1 ? chessmap->evaluate_cached(m_position, move) : 0;
 
                     // normal
                     score += m_heuristics

@@ -766,11 +766,17 @@ struct engine
 
         int16_t score;
         chess::Move best_move = chess::Move::NO_MOVE;
-        movegen gen{ss->moves[0],           m_position,
-                    (*m_heuristics),        tt_result.move,
-                    (ss - 1)->move,         ply,
-                    param::QDEPTH,          m_keys.get_pawn_key(),
-                    (ss - 1)->continuation, ss->in_check ? movegen_stage::EPV : movegen_stage::QPV};
+        movegen gen{ss->moves[0],
+                    m_position,
+                    (*m_heuristics),
+                    tt_result.move,
+                    (ss - 1)->move,
+                    ply,
+                    param::QDEPTH,
+                    m_keys.get_pawn_key(),
+                    (ss - 1)->continuation,
+                    m_chessmap.get(),
+                    ss->in_check ? movegen_stage::EPV : movegen_stage::QPV};
         chess::Move move{};
         int move_count = 0;
         while ((move = gen.next_move()) != chess::Move::NO_MOVE)
@@ -1100,8 +1106,8 @@ struct engine
         // if (!(ss - 1)->is_cap && !(ss - 1)->in_check && (ss - 1)->move != chess::Move::NO_MOVE &&
         //     param::IS_VALID((ss - 1)->static_eval))
         // {
-        //     int their_loss = (ss - 1)->static_eval + ss->static_eval - 200;
-        //     int bonus = std::clamp(-their_loss / 4, -500, 500);
+        //     int their_loss = (ss - 1)->static_eval + ss->static_eval - 100;
+        //     int bonus = std::clamp(-their_loss * 4, -500, 500);
         //     // std::cout << bonus << "," << (ss - 1)->static_eval << "," << -ss->static_eval
         //     // << std::endl;
         //     m_heuristics
@@ -1329,9 +1335,9 @@ struct engine
             if (!is_root && has_non_pawn && !param::IS_LOSS(best_score))
             {
                 // adjust the relevant depth
-                int32_t lmr_depth = std::max(depth - m_param.lookup(is_quiet, depth, move_count) -
-                                                 !improving + history_score / 10000,
-                                             1);
+                int32_t lmr_depth = std::clamp(depth - m_param.lookup(is_quiet, depth, move_count) -
+                                                   !improving + history_score / 10000,
+                                               1, depth + 1);
 
                 // [see pruning]
                 int see_margin =
