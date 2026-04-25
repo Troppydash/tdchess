@@ -963,7 +963,8 @@ struct engine
 
         if (is_root)
         {
-            tt_result.move = m_root_moves.get_pv().move;
+            if (m_root_moves.get_pv().score != -param::INF)
+                tt_result.move = m_root_moves.get_pv().move;
         }
 
         bool is_tt_capture = tt_result.move != chess::Move::NO_MOVE &&
@@ -1096,6 +1097,19 @@ struct engine
             goto moves;
         }
 
+        // if (!(ss - 1)->is_cap && !(ss - 1)->in_check && (ss - 1)->move != chess::Move::NO_MOVE &&
+        //     param::IS_VALID((ss - 1)->static_eval))
+        // {
+        //     int their_loss = (ss - 1)->static_eval + ss->static_eval - 200;
+        //     int bonus = std::clamp(-their_loss / 4, -500, 500);
+        //     // std::cout << bonus << "," << (ss - 1)->static_eval << "," << -ss->static_eval
+        //     // << std::endl;
+        //     m_heuristics
+        //         ->main_history[m_position.sideToMove() ^ 1][(ss - 1)->move.from().index()]
+        //                       [(ss - 1)->move.to().index()]
+        //         .add_bonus(bonus);
+        // }
+
         // [razoring]
         if (!is_pv_node && param::IS_VALID(adjusted_static_eval) && !param::IS_DECISIVE(alpha) &&
             adjusted_static_eval <
@@ -1107,8 +1121,7 @@ struct engine
         // [static null move pruning]
         {
             // less strict if improving
-            int margin =
-                std::max(0, features::SNM_MARGIN * (depth - improving + complexity / 300));
+            int margin = std::max(0, features::SNM_MARGIN * (depth - improving + complexity / 300));
             if (!is_pv_node && param::IS_VALID(adjusted_static_eval) &&
                 adjusted_static_eval - margin >= beta && !param::IS_LOSS(beta) && depth <= 14 &&
                 (tt_result.move == chess::Move::NO_MOVE || is_tt_capture) &&
@@ -1493,7 +1506,7 @@ struct engine
                 root.average_score =
                     !param::IS_VALID(root.average_score) ? score : (score + root.average_score) / 2;
 
-                if (score > alpha)
+                if (move_count == 1 || score > alpha)
                 {
                     root.score = score;
 
@@ -1825,7 +1838,7 @@ struct engine
             int alpha = -param::INF;
             int beta = param::INF;
 
-            if (depth >= 2)
+            if (depth >= 4)
             {
                 alpha = std::max(-param::INF, pv.score - window);
                 beta = std::min((int)param::INF, pv.score + window);
