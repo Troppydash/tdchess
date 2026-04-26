@@ -1297,7 +1297,8 @@ struct engine
                     conthist,
                     m_nnue,
                     m_chessmap.get(),
-                    m_table};
+                    m_table,
+                    ss->in_check};
 
         chess::Move best_move = chess::Move::NO_MOVE;
         // track quiet/capture moves for malus

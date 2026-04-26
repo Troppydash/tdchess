@@ -21,12 +21,11 @@ constexpr int HL = 128;
 constexpr int OUTPUTS = 64;
 constexpr int QA = 255;
 constexpr int QB = 64;
-constexpr int SCALE = 5000;
-
+constexpr int SCALE = 10000;
 
 #define INCBIN_SILENCE_BITCODE_WARNING
 #include "../hpplib/incbin.h"
-INCBIN(Chessmap, "../nets/chessmap/chessmap_1.8.29.bin");
+INCBIN(Chessmap, "../nets/chessmap/chessmap_1.9.8.bin");
 
 struct network
 {

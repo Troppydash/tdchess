@@ -60,6 +60,7 @@ class movegen
     int32_t m_ply;
     int32_t m_depth;
     chess::Move m_prev_move;
+    bool in_check;
 
     std::array<const continuation_history *, NUM_CONTINUATION> m_continuations{nullptr};
 
@@ -95,12 +96,12 @@ class movegen
         chess::Movelist &moves, chess::Board &position, const heuristics &heuristics,
         chess::Move pv_move, chess::Move prev_move, int32_t ply, int depth, uint64_t pawn_key,
         const std::array<const continuation_history *, NUM_CONTINUATION> &continuations,
-        nnue2::net *nnue, chessmap::net *chessmap, table *tt,
+        nnue2::net *nnue, chessmap::net *chessmap, table *tt, bool in_check,
         movegen_stage stage = movegen_stage::PV)
         : m_stage{static_cast<int>(stage)}, m_moves{moves}, m_position(position),
           m_heuristics(heuristics), m_pv_move(pv_move), m_ply(ply), m_depth(depth),
           m_prev_move{prev_move}, m_continuations{continuations}, m_pawn_key(pawn_key), nnue(nnue),
-          chessmap(chessmap), tt(tt)
+          chessmap(chessmap), tt(tt), in_check(in_check)
     {
         assert(stage == movegen_stage::PV);
     }
@@ -379,7 +380,8 @@ class movegen
 
                         if (use_chessmap)
                         {
-                            score += chessmap->evaluate_cached(m_position, move) / (1 + m_depth);
+                            score += chessmap->evaluate_cached(m_position, move) /
+                                     (1 + m_depth + in_check);
                         }
 
                         score = std::clamp(score, -32000, 32000);
