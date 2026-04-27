@@ -6,6 +6,24 @@
 #include "lazysmp.h"
 #include <thread>
 
+std::string timestamp()
+{
+    using namespace std::chrono;
+    using clock = system_clock;
+
+    const auto current_time_point{clock::now()};
+    const auto current_time{clock::to_time_t(current_time_point)};
+    const auto current_localtime{*std::localtime(&current_time)};
+    const auto current_time_since_epoch{current_time_point.time_since_epoch()};
+    const auto current_milliseconds{duration_cast<milliseconds>(current_time_since_epoch).count() %
+                                    1000};
+
+    std::ostringstream stream;
+    stream << std::put_time(&current_localtime, "%T") << "." << std::setw(3) << std::setfill('0')
+           << current_milliseconds;
+    return stream.str();
+}
+
 inline void pin_thread_to_processor(int logical_processor)
 {
 #ifdef __linux__
@@ -310,7 +328,7 @@ class uci_handler
 
                 // to reset tt to empty
                 m_tt->clear();
-                
+
                 // also reset nnue
                 m_nnue->clear();
 
@@ -324,6 +342,7 @@ class uci_handler
             }
             else if (lead == "go")
             {
+                std::cout << "debug " << timestamp() << " go start\n";
                 m_param.clear_some();
 
                 for (size_t i = 1; i < parts.size(); i++)
@@ -467,6 +486,7 @@ class uci_handler
                 std::cout << std::flush;
                 exit(0);
             }
+            std::cout << "debug " << timestamp() << " go done\n";
 
             // display results
             std::cout << "bestmove " << chess::uci::moveToUci(result.pv_line[0], global::chess_960);
