@@ -284,8 +284,8 @@ class movegen
                     auto counter = get_counter();
 
                     // chessmap limit
-                    const int CHESSMAP_DEPTH_LIMIT = 10;
-                    bool use_chessmap = m_depth < CHESSMAP_DEPTH_LIMIT;
+                    const int CHESSMAP_DEPTH_LIMIT = 8;
+                    bool use_chessmap = m_depth < CHESSMAP_DEPTH_LIMIT && !in_check;
                     if (use_chessmap)
                         chessmap->catchup(m_position);
 
@@ -381,7 +381,7 @@ class movegen
                         if (use_chessmap)
                         {
                             score += chessmap->evaluate_cached(m_position, move) /
-                                     (1 + m_depth + in_check);
+                                     (1 + m_depth);
                         }
 
                         score = std::clamp(score, -32000, 32000);
@@ -438,7 +438,7 @@ class movegen
                     return m.score() < features::QUIET_BAD_THRESHOLD;
                 });
                 if (m_move_index < m_moves.size())
-                    return m_moves[m_move_index++];
+                   return m_moves[m_move_index++];
 
                 m_stage = static_cast<int>(movegen_stage::DONE);
                 break;
