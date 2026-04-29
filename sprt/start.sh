@@ -1,7 +1,7 @@
 set -ex
 
-NEW="1.9.14"
-OLD="1.9.13"
+NEW="1.9.15"
+OLD="1.9.14"
 mkdir -p ./logs/${NEW}_${OLD}
 ./fastchess \
   -engine cmd=../builds/${NEW}/tdchess name=${NEW} option.DrawContempt=0 option.MoveOverhead=5 option.Hash=32 option.SyzygyPath=/Users/troppydash/Downloads/syzygy \
@@ -9,7 +9,7 @@ mkdir -p ./logs/${NEW}_${OLD}
   -openings file=UHO_Lichess_4852_v1.epd format=epd order=random \
   -each tc=15+0.2 \
   -resign movecount=3 score=600 -draw movenumber=40 movecount=6 score=20 \
-  -sprt elo0=0 elo1=5 alpha=0.15 beta=0.15 \
+  -sprt elo0=-4 elo1=0 alpha=0.15 beta=0.15 \
   -rounds 100000 -concurrency 8 -pgnout notation=san nodes=true file=./logs/${NEW}_${OLD}/games.pgn append=false \
   -show-latency  -recover -ratinginterval 1 \
   -log file=./logs/${NEW}_${OLD}/debug.log append=false realtime=true engine=true level=warn
