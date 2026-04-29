@@ -1273,7 +1273,7 @@ struct engine
                 }
 
                 // iir idea
-                if (best_score < alpha - 400 - 200 * improving && move_count >= 3 &&
+                if (best_score < alpha - 400 - 200 * improving && move_count >= 5 &&
                     !param::IS_LOSS(alpha))
                 {
                     depth -= 1;
