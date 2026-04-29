@@ -1018,7 +1018,9 @@ struct engine
             if (!param::IS_VALID(unadjusted_static_eval))
                 unadjusted_static_eval = evaluate(ss, tt_result.move);
             else if (is_pv_node)
+            {
                 m_nnue->catchup(m_position);
+            }
 
             auto [corrected, c] = to_corrected_static_eval(unadjusted_static_eval, ss);
             ss->static_eval = adjusted_static_eval = corrected;
@@ -1449,7 +1451,8 @@ struct engine
                 int32_t reduction = m_param.lookup(is_quiet, depth, move_count);
 
                 // check extension
-                reduction -= ss->in_check;
+                if (ply < 8)
+                    reduction -= ss->in_check;
 
                 // reduce if not improving
                 reduction += !improving;
